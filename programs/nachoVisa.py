@@ -180,6 +180,11 @@ try:
 except ImportError:
     psutil = None
 
+try:
+    from serial.tools import list_ports
+except ImportError:
+    list_ports = None
+
 
 LAN_PROBE_PORTS = (5025, 4880, 111)
 
@@ -206,6 +211,8 @@ def connection_type(resource_name: str) -> str:
         return "USB"
     if r.startswith("TCPIP"):
         return "Ethernet"
+    if r.startswith("ASRL"):
+        return "Serial"
     return "Other"
 
 
@@ -214,6 +221,53 @@ def parse_idn(idn: str):
     while len(parts) < 4:
         parts.append("")
     return parts[0], parts[1], parts[2], parts[3]
+
+
+def serial_device_from_resource(resource_name: str) -> str | None:
+    if not resource_name.upper().startswith("ASRL"):
+        return None
+
+    body = resource_name[4:]
+    if body.endswith("::INSTR"):
+        body = body[:-7]
+    return body or None
+
+
+def serial_port_metadata() -> dict:
+    if list_ports is None:
+        return {}
+
+    metadata = {}
+    try:
+        ports = list(list_ports.comports())
+    except Exception:
+        return metadata
+
+    for port in ports:
+        metadata[port.device] = {
+            "description": port.description,
+            "hwid": port.hwid,
+            "vid": port.vid,
+            "pid": port.pid,
+            "serial_number": port.serial_number,
+            "manufacturer": port.manufacturer,
+            "product": port.product,
+        }
+
+    return metadata
+
+
+def is_usb_serial_resource(resource_name: str, serial_metadata: dict) -> bool:
+    device = serial_device_from_resource(resource_name)
+    if not device:
+        return False
+
+    metadata = serial_metadata.get(device)
+    if metadata and (metadata.get("vid") is not None or metadata.get("pid") is not None):
+        return True
+
+    basename = os.path.basename(device).lower()
+    return basename.startswith(("ttyusb", "ttyacm", "cu.usb", "tty.usb"))
 
 
 def build_arg_parser():
@@ -566,9 +620,62 @@ def configure_instrument(inst, resource_name: str):
     inst.write_termination = "\n"
 
 
+def query_serial_identity_raw_once(inst) -> str:
+    inst.flush(pyvisa.constants.BufferOperation.discard_read_buffer)
+
+    original_timeout = inst.timeout
+    try:
+        inst.timeout = 1000
+        inst.baud_rate = 9600
+        inst.data_bits = 8
+        inst.parity = pyvisa.constants.Parity.none
+        inst.stop_bits = pyvisa.constants.StopBits.one
+        inst.read_termination = None
+        inst.write_termination = None
+
+        inst.write_raw(b"*IDN?")
+        time.sleep(0.05)
+        inst.timeout = 200
+
+        data = bytearray()
+        while True:
+            try:
+                chunk = inst.read_bytes(1, break_on_termchar=False)
+                if not chunk:
+                    break
+                data.extend(chunk)
+            except pyvisa.errors.VisaIOError:
+                break
+
+        text = bytes(data).replace(b"\x00", b"").decode("ascii", errors="replace")
+        return "".join(ch for ch in text if ch.isprintable()).strip()
+    finally:
+        inst.timeout = original_timeout
+
+
+def query_serial_identity_raw(inst) -> str:
+    responses = []
+    for _ in range(3):
+        response = query_serial_identity_raw_once(inst)
+        if response:
+            responses.append(response)
+        time.sleep(0.1)
+
+    if not responses:
+        return ""
+    return max(responses, key=len)
+
+
 def query_identity(inst, resource_name: str) -> str:
     configure_instrument(inst, resource_name)
-    return inst.query("*IDN?").strip()
+    try:
+        return inst.query("*IDN?").strip()
+    except Exception:
+        if resource_name.upper().startswith("ASRL"):
+            identity = query_serial_identity_raw(inst)
+            if identity:
+                return identity
+        raise
 
 
 def probe_usb_devices() -> Tuple[List[dict], List[str]]:
@@ -857,6 +964,7 @@ def main():
             return
 
         resources, discovery_notes = discover_resources(rm, spinner)
+        serial_metadata = serial_port_metadata()
 
         lan_hosts, lan_scan_notes = discover_lan_hosts(
             hosts=args.host,
@@ -879,6 +987,7 @@ def main():
                 name
                 for name in resources
                 if name.upper().startswith(("TCPIP", "USB"))
+                or is_usb_serial_resource(name, serial_metadata)
             ]
 
         if args.usb_only:
@@ -894,6 +1003,7 @@ def main():
             for resource_name in resources:
                 conn = connection_type(resource_name)
                 status(f"Querying identity for {resource_name}")
+                inst = None
 
                 try:
                     inst = rm.open_resource(resource_name)
@@ -909,16 +1019,22 @@ def main():
                             f"Firmware        : {firmware or 'Unknown'}\n"
                         )
                     )
-                    inst.close()
 
                 except Exception as e:
+                    if inst is not None:
+                        error_text = f"Device found but limited VISA support (*IDN? failed: {e})"
+                    else:
+                        error_text = str(e)
                     instrument_reports.append(
                         (
                             f"Resource string : {resource_name}\n"
                             f"Connection      : {conn}\n"
-                            f"Error           : {e}\n"
+                            f"Error           : {error_text}\n"
                         )
                     )
+                finally:
+                    if inst is not None:
+                        inst.close()
 
         status("Scan complete")
 

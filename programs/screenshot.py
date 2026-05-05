@@ -9,7 +9,7 @@ import time
 
 rm = visa.ResourceManager()
 # the VISA adress for your scope can be found in using Keysight Connection Expert
-scope = rm.open_resource('USB0::10893::902::CN63126106::0::INSTR')
+scope = rm.open_resource('USB0::10893::907::CN63430308::0::INSTR')
 scope.timeout = 10000 #Always good to involve a time-out to avoid putting the scope into an endless waiting state.
 
 def get_screenshot(filename):
@@ -33,7 +33,7 @@ print('---')
 scope_idn = scope.query('*IDN?')
 print('[info] scope found: ' + scope_idn)
 
-scope.write(':DISPlay:ANNotation:TEXT "SCREEN TITLE"')
+scope.write(':DISPlay:ANNotation:TEXT "HEY YORBEN"')
 scope.write(':CHANnel1:LABel "CHANNEL 1 SIGNAL";:Display:LABel ON' )
 scope.write(':CHANnel2:LABel "CHANNEL 2 SIGNAL";:Display:LABel ON' )
 
