@@ -406,13 +406,12 @@ def discover_resources(rm, spinner: Spinner = None) -> Tuple[List[str], List[str
     resources.update(standard_resources)
     errors.extend(standard_errors)
 
-    if not any(name.upper().startswith("USB") for name in resources):
-        status("No USB VISA resources reported by backend, trying USB fallback")
-        if spinner:
-            spinner.update("Trying USB fallback")
-        usb_resources, usb_errors = list_usb_fallback_resources()
-        resources.update(usb_resources)
-        errors.extend(usb_errors)
+    status("Querying direct USB VISA resources")
+    if spinner:
+        spinner.update("Querying USB resources")
+    usb_resources, usb_errors = list_usb_fallback_resources()
+    resources.update(usb_resources)
+    errors.extend(usb_errors)
 
     return sorted(resources), errors
 
@@ -966,21 +965,22 @@ def main():
         resources, discovery_notes = discover_resources(rm, spinner)
         serial_metadata = serial_port_metadata()
 
-        lan_hosts, lan_scan_notes = discover_lan_hosts(
-            hosts=args.host,
-            subnets=args.subnet,
-            timeout=args.scan_timeout,
-            max_hosts=args.max_hosts,
-            workers=args.workers,
-            spinner=spinner,
-        )
-        discovery_notes.extend(lan_scan_notes)
+        if not args.usb_only:
+            lan_hosts, lan_scan_notes = discover_lan_hosts(
+                hosts=args.host,
+                subnets=args.subnet,
+                timeout=args.scan_timeout,
+                max_hosts=args.max_hosts,
+                workers=args.workers,
+                spinner=spinner,
+            )
+            discovery_notes.extend(lan_scan_notes)
 
-        if lan_hosts:
-            status(f"Found {len(lan_hosts)} LAN host(s) worth probing via VISA")
-        lan_resources, lan_notes = probe_lan_resources(rm, lan_hosts, spinner)
-        resources = sorted(set(resources) | set(lan_resources))
-        discovery_notes.extend(lan_notes)
+            if lan_hosts:
+                status(f"Found {len(lan_hosts)} LAN host(s) worth probing via VISA")
+            lan_resources, lan_notes = probe_lan_resources(rm, lan_hosts, spinner)
+            resources = sorted(set(resources) | set(lan_resources))
+            discovery_notes.extend(lan_notes)
 
         if not args.all_resources:
             resources = [
@@ -1042,7 +1042,6 @@ def main():
     print_discovery_notes(discovery_notes)
 
     if not instrument_reports:
-        print("No VISA instruments found.")
         print_usb_diagnostics()
         if sys.platform.startswith("linux") and _has_usb_permission_issue():
             print("USB permission issues detected. Run with --fix-udev to fix automatically.")
@@ -1053,6 +1052,7 @@ def main():
                 answer = ""
             if answer == "y":
                 fix_udev()
+        print("No VISA instruments found.")
         return
 
     print("Detected VISA instruments:\n")
