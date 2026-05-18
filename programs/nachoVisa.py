@@ -185,6 +185,11 @@ try:
 except ImportError:
     list_ports = None
 
+try:
+    from instruments import classify as _db_classify
+except ImportError:
+    _db_classify = None
+
 
 LAN_PROBE_PORTS = (5025, 4880, 111)
 
@@ -1009,12 +1014,18 @@ def main():
                     inst = rm.open_resource(resource_name)
                     idn = query_identity(inst, resource_name)
                     manufacturer, model, serial, firmware = parse_idn(idn)
+                    family = _db_classify(idn) if _db_classify else None
+                    if family:
+                        type_str = f"{family['type']}  ({family['vendor']} {family['series']})"
+                    else:
+                        type_str = "unknown"
                     instrument_reports.append(
                         (
                             f"Resource string : {resource_name}\n"
                             f"Connection      : {conn}\n"
                             f"Manufacturer    : {manufacturer or 'Unknown'}\n"
                             f"Model           : {model or 'Unknown'}\n"
+                            f"Type            : {type_str}\n"
                             f"Serial          : {serial or 'Unknown'}\n"
                             f"Firmware        : {firmware or 'Unknown'}\n"
                         )

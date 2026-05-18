@@ -117,24 +117,39 @@ class Spinner:
 # Instrument classification
 # ---------------------------------------------------------------------------
 
-_SCOPE_PATTERNS = [
-    "DS1052Z", "DS1104Z", "MSO5074",
-    "SDS1104X-E", "SDS1202X-E",
-    "DSOX1102G", "DSOX1204G", "DSOX1204A",
-    "DSOX", "EDUX",
-    "TBS1052B", "MSO24",
-    "RTB2004",
-    "INFINIIVISION",
-]
+try:
+    from instruments import classify as _db_classify
+except ImportError:
+    _db_classify = None
+
+# Maps instruments.json family IDs to the handler keys used by APPLY/RESET_HANDLERS.
+# Families not listed here fall back to their generic type (e.g. "scope").
+_FAMILY_TO_HANDLER = {
+    "keysight_edu36311a": "edu36311a",
+    "keysight_e36300":    "edu36311a",
+    "keysight_edu33211a": "edu33211a",
+}
 
 
 def classify(idn: str) -> str:
+    if _db_classify is not None:
+        family = _db_classify(idn)
+        if family is not None:
+            fid = family["id"]
+            if fid in _FAMILY_TO_HANDLER:
+                return _FAMILY_TO_HANDLER[fid]
+            ftype = family.get("type", "unknown")
+            if ftype in APPLY_HANDLERS:
+                return ftype
+            return "unknown"
+    # fallback if instruments.py is unavailable
     u = idn.upper()
     if "EDU36311A" in u:
         return "edu36311a"
     if "EDU33211A" in u:
         return "edu33211a"
-    for pat in _SCOPE_PATTERNS:
+    for pat in ["DSOX", "EDUX", "INFINIIVISION", "MSO5074", "SDS1104X-E",
+                "SDS1202X-E", "TBS1052B", "MSO24", "RTB2004"]:
         if pat.upper() in u:
             return "scope"
     return "unknown"

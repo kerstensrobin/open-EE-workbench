@@ -1,0 +1,427 @@
+{
+  "version": "2.0",
+  "note": "Keysight families are the canonical base. Other vendors use 'inherits' + 'overrides': a key replacing an existing parent command = dialect override; null = command not supported on this device (removed); a key not present in the parent = vendor-specific extension (added). Placeholders use Python str.format(): {ch}=channel (1-indexed), {value}=numeric, {voltage}, {current}, {freq}=Hz, {amp}=amplitude, {offset}=DC offset V, {unit}=VPP|VRMS|DBM, {func}=SIN|SQU|RAMP|PULS|NOIS|DC, {coupling}=AC|DC|GND, {slope}=POS|NEG|EITH, {attenuation}=probe ratio, {label}=string max 10 chars, {text}=annotation string. Command spec: plain string=write; [...]= sequential steps; {query:...}=query returning value; {write:...,query:...}=settable+readable; {raw_query:...}=binary read via read_raw().",
+
+  "families": [
+
+    {
+      "id": "keysight_infiniivision",
+      "vendor": "Keysight",
+      "series": "InfiniiVision 1000/1200 X-Series",
+      "type": "scope",
+      "patterns": ["DSOX", "EDUX", "INFINIIVISION"],
+      "commands": {
+        "reset":              ["*CLS", ":SYSTem:PRESet"],
+        "run":                ":RUN",
+        "stop":               ":STOP",
+        "single":             ":SINGle",
+        "autoscale":          ":AUToscale",
+        "channel_on":         ":CHANnel{ch}:DISPlay ON",
+        "channel_off":        ":CHANnel{ch}:DISPlay OFF",
+        "channel_scale":      {"write": ":CHANnel{ch}:SCALe {value}",       "query": ":CHANnel{ch}:SCALe?"},
+        "channel_offset":     {"write": ":CHANnel{ch}:OFFSet {value}",      "query": ":CHANnel{ch}:OFFSet?"},
+        "channel_coupling":   {"write": ":CHANnel{ch}:COUPling {coupling}", "query": ":CHANnel{ch}:COUPling?"},
+        "channel_probe":      {"write": ":CHANnel{ch}:PROBe {attenuation}", "query": ":CHANnel{ch}:PROBe?"},
+        "channel_label":      ":CHANnel{ch}:LABel \"{label}\"",
+        "labels_on":          ":DISPlay:LABel ON",
+        "labels_off":         ":DISPlay:LABel OFF",
+        "annotation_text":    ":DISPlay:ANNotation:TEXT \"{text}\"",
+        "annotation_on":      ":DISPlay:ANNotation ON",
+        "annotation_off":     ":DISPlay:ANNotation OFF",
+        "timebase_scale":     {"write": ":TIMebase:SCALe {value}",          "query": ":TIMebase:SCALe?"},
+        "timebase_position":  {"write": ":TIMebase:POSition {value}",       "query": ":TIMebase:POSition?"},
+        "trigger_source":     ":TRIGger:EDGE:SOURce CHANnel{ch}",
+        "trigger_level":      {"write": ":TRIGger:EDGE:LEVel {value}",      "query": ":TRIGger:EDGE:LEVel?"},
+        "trigger_slope":      {"write": ":TRIGger:EDGE:SLOPe {slope}",      "query": ":TRIGger:EDGE:SLOPe?"},
+        "measure_vpp":        {"query": ":MEASure:VPP? CHANnel{ch}"},
+        "measure_freq":       {"query": ":MEASure:FREQuency? CHANnel{ch}"},
+        "measure_period":     {"query": ":MEASure:PERiod? CHANnel{ch}"},
+        "measure_vavg":       {"query": ":MEASure:VAVerage? CHANnel{ch}"},
+        "measure_vrms":       {"query": ":MEASure:VRMS? CHANnel{ch}"},
+        "measure_vmax":       {"query": ":MEASure:VMAX? CHANnel{ch}"},
+        "measure_vmin":       {"query": ":MEASure:VMIN? CHANnel{ch}"},
+        "measure_risetime":   {"query": ":MEASure:RISetime? CHANnel{ch}"},
+        "measure_falltime":   {"query": ":MEASure:FALLtime? CHANnel{ch}"},
+        "measure_dutycycle":  {"query": ":MEASure:DUTYcycle? CHANnel{ch}"},
+        "screenshot":         {"raw_query": ":DISPlay:DATA? PNG,COLor"}
+      }
+    },
+
+    {
+      "id": "rigol_ds1000z",
+      "vendor": "Rigol",
+      "series": "DS1000Z Series",
+      "type": "scope",
+      "inherits": "keysight_infiniivision",
+      "patterns": ["DS1054Z", "DS1074Z", "DS1104Z", "DS1064Z"],
+      "overrides": {
+        "reset":              "*RST",
+        "timebase_scale":     {"write": ":TIMebase:MAIN:SCALe {value}",     "query": ":TIMebase:MAIN:SCALe?"},
+        "timebase_position":  {"write": ":TIMebase:MAIN:OFFSet {value}",    "query": ":TIMebase:MAIN:OFFSet?"},
+        "trigger_source":     ":TRIGger:EDGe:SOURce CHANnel{ch}",
+        "trigger_level":      {"write": ":TRIGger:EDGe:LEVel {value}",      "query": ":TRIGger:EDGe:LEVel?"},
+        "trigger_slope":      {"write": ":TRIGger:EDGe:SLOPe {slope}",      "query": ":TRIGger:EDGe:SLOPe?"},
+        "measure_vpp":        {"query": ":MEASure:ITEM? VPP,CHANnel{ch}"},
+        "measure_freq":       {"query": ":MEASure:ITEM? FREQuency,CHANnel{ch}"},
+        "measure_period":     {"query": ":MEASure:ITEM? PERIOD,CHANnel{ch}"},
+        "measure_vavg":       {"query": ":MEASure:ITEM? VAVG,CHANnel{ch}"},
+        "measure_vrms":       {"query": ":MEASure:ITEM? VRMS,CHANnel{ch}"},
+        "measure_vmax":       {"query": ":MEASure:ITEM? VMAX,CHANnel{ch}"},
+        "measure_vmin":       {"query": ":MEASure:ITEM? VMIN,CHANnel{ch}"},
+        "measure_risetime":   {"query": ":MEASure:ITEM? RTIM,CHANnel{ch}"},
+        "measure_falltime":   {"query": ":MEASure:ITEM? FTIM,CHANnel{ch}"},
+        "measure_dutycycle":  {"query": ":MEASure:ITEM? DUTY,CHANnel{ch}"},
+        "screenshot":         {"raw_query": ":DISPlay:DATA?"},
+        "annotation_text":    null,
+        "annotation_on":      null,
+        "annotation_off":     null
+      }
+    },
+
+    {
+      "id": "rigol_ds2000",
+      "vendor": "Rigol",
+      "series": "DS2000 Series",
+      "type": "scope",
+      "inherits": "rigol_ds1000z",
+      "patterns": ["DS2072", "DS2102", "DS2202", "DS2302"]
+    },
+
+    {
+      "id": "tektronix_tbs",
+      "vendor": "Tektronix",
+      "series": "TBS1000 / TBS2000 Series",
+      "type": "scope",
+      "inherits": "keysight_infiniivision",
+      "patterns": ["TBS1052", "TBS1072", "TBS1102", "TBS1152", "TBS1202", "TBS2012", "TBS2014", "TBS2022", "TBS2024", "TBS2072", "TBS2074", "TBS2102", "TBS2104"],
+      "overrides": {
+        "reset":              ["*RST", "*CLS"],
+        "run":                ":ACQuire:STATE RUN",
+        "stop":               ":ACQuire:STATE STOP",
+        "single":             ":ACQuire:STOPAfter SEQuence",
+        "autoscale":          ":AUTOSet EXECute",
+        "channel_on":         ":SELect:CH{ch} ON",
+        "channel_off":        ":SELect:CH{ch} OFF",
+        "channel_scale":      {"write": ":CH{ch}:SCAle {value}",            "query": ":CH{ch}:SCAle?"},
+        "channel_offset":     {"write": ":CH{ch}:POSition {value}",         "query": ":CH{ch}:POSition?"},
+        "channel_coupling":   {"write": ":CH{ch}:COUPling {coupling}",      "query": ":CH{ch}:COUPling?"},
+        "channel_probe":      {"write": ":CH{ch}:PRObe {attenuation}",      "query": ":CH{ch}:PRObe?"},
+        "channel_label":      null,
+        "labels_on":          null,
+        "labels_off":         null,
+        "annotation_text":    null,
+        "annotation_on":      null,
+        "annotation_off":     null,
+        "timebase_scale":     {"write": ":HORizontal:SCAle {value}",        "query": ":HORizontal:SCAle?"},
+        "timebase_position":  {"write": ":HORizontal:DELay:TIMe {value}",   "query": ":HORizontal:DELay:TIMe?"},
+        "trigger_source":     ":TRIGger:A:EDGE:SOURce CH{ch}",
+        "trigger_level":      {"write": ":TRIGger:A:LEVel {value}",         "query": ":TRIGger:A:LEVel?"},
+        "trigger_slope":      {"write": ":TRIGger:A:EDGE:SLOpe {slope}",    "query": ":TRIGger:A:EDGE:SLOpe?"},
+        "measure_vpp": [
+          ":MEASUrement:IMMed:TYPe PKPK",
+          ":MEASUrement:IMMed:SOUrce CH{ch}",
+          {"query": ":MEASUrement:IMMed:VALue?"}
+        ],
+        "measure_freq": [
+          ":MEASUrement:IMMed:TYPe FREQ",
+          ":MEASUrement:IMMed:SOUrce CH{ch}",
+          {"query": ":MEASUrement:IMMed:VALue?"}
+        ],
+        "measure_period": [
+          ":MEASUrement:IMMed:TYPe PERIod",
+          ":MEASUrement:IMMed:SOUrce CH{ch}",
+          {"query": ":MEASUrement:IMMed:VALue?"}
+        ],
+        "measure_vavg": [
+          ":MEASUrement:IMMed:TYPe MEAN",
+          ":MEASUrement:IMMed:SOUrce CH{ch}",
+          {"query": ":MEASUrement:IMMed:VALue?"}
+        ],
+        "measure_vrms": [
+          ":MEASUrement:IMMed:TYPe RMS",
+          ":MEASUrement:IMMed:SOUrce CH{ch}",
+          {"query": ":MEASUrement:IMMed:VALue?"}
+        ],
+        "measure_vmax": [
+          ":MEASUrement:IMMed:TYPe HIGH",
+          ":MEASUrement:IMMed:SOUrce CH{ch}",
+          {"query": ":MEASUrement:IMMed:VALue?"}
+        ],
+        "measure_vmin": [
+          ":MEASUrement:IMMed:TYPe LOW",
+          ":MEASUrement:IMMed:SOUrce CH{ch}",
+          {"query": ":MEASUrement:IMMed:VALue?"}
+        ],
+        "measure_risetime": [
+          ":MEASUrement:IMMed:TYPe RISe",
+          ":MEASUrement:IMMed:SOUrce CH{ch}",
+          {"query": ":MEASUrement:IMMed:VALue?"}
+        ],
+        "measure_falltime": [
+          ":MEASUrement:IMMed:TYPe FALL",
+          ":MEASUrement:IMMed:SOUrce CH{ch}",
+          {"query": ":MEASUrement:IMMed:VALue?"}
+        ],
+        "measure_dutycycle": [
+          ":MEASUrement:IMMed:TYPe PDUTY",
+          ":MEASUrement:IMMed:SOUrce CH{ch}",
+          {"query": ":MEASUrement:IMMed:VALue?"}
+        ],
+        "screenshot":         null
+      }
+    },
+
+    {
+      "id": "rs_rtb2000",
+      "vendor": "Rohde & Schwarz",
+      "series": "RTB2000 / RTA4000 Series",
+      "type": "scope",
+      "inherits": "keysight_infiniivision",
+      "patterns": ["RTB2002", "RTB2004", "RTA4004"],
+      "overrides": {
+        "channel_on":         ":CHANnel{ch}:STATe ON",
+        "channel_off":        ":CHANnel{ch}:STATe OFF",
+        "channel_probe":      {"write": ":CHANnel{ch}:PROBe:ATTenuation {attenuation}", "query": ":CHANnel{ch}:PROBe:ATTenuation?"},
+        "annotation_text":    null,
+        "annotation_on":      null,
+        "annotation_off":     null,
+        "trigger_source":     ":TRIGger1:SOURce C{ch}WL",
+        "trigger_level":      {"write": ":TRIGger1:LEVel{ch} {value}",      "query": ":TRIGger1:LEVel{ch}?"},
+        "trigger_slope":      {"write": ":TRIGger1:EDGE:SLOPe {slope}",     "query": ":TRIGger1:EDGE:SLOPe?"},
+        "measure_vpp": [
+          ":MEASurement:SOURce C{ch}WL",
+          ":MEASurement:MAIN VPP",
+          {"query": ":MEASurement:RESult:MAIN?"}
+        ],
+        "measure_freq": [
+          ":MEASurement:SOURce C{ch}WL",
+          ":MEASurement:MAIN FREQuency",
+          {"query": ":MEASurement:RESult:MAIN?"}
+        ],
+        "measure_period": [
+          ":MEASurement:SOURce C{ch}WL",
+          ":MEASurement:MAIN PERiod",
+          {"query": ":MEASurement:RESult:MAIN?"}
+        ],
+        "measure_vavg": [
+          ":MEASurement:SOURce C{ch}WL",
+          ":MEASurement:MAIN MEAN",
+          {"query": ":MEASurement:RESult:MAIN?"}
+        ],
+        "measure_vrms": [
+          ":MEASurement:SOURce C{ch}WL",
+          ":MEASurement:MAIN RMS",
+          {"query": ":MEASurement:RESult:MAIN?"}
+        ],
+        "measure_vmax": [
+          ":MEASurement:SOURce C{ch}WL",
+          ":MEASurement:MAIN UPEakvalue",
+          {"query": ":MEASurement:RESult:MAIN?"}
+        ],
+        "measure_vmin": [
+          ":MEASurement:SOURce C{ch}WL",
+          ":MEASurement:MAIN LPEakvalue",
+          {"query": ":MEASurement:RESult:MAIN?"}
+        ],
+        "measure_risetime": [
+          ":MEASurement:SOURce C{ch}WL",
+          ":MEASurement:MAIN RISetime",
+          {"query": ":MEASurement:RESult:MAIN?"}
+        ],
+        "measure_falltime": [
+          ":MEASurement:SOURce C{ch}WL",
+          ":MEASurement:MAIN FALLtime",
+          {"query": ":MEASurement:RESult:MAIN?"}
+        ],
+        "measure_dutycycle": [
+          ":MEASurement:SOURce C{ch}WL",
+          ":MEASurement:MAIN PDCYcle",
+          {"query": ":MEASurement:RESult:MAIN?"}
+        ],
+        "screenshot":         {"raw_query": ":HCOPy:DATA?"}
+      }
+    },
+
+    {
+      "id": "siglent_sds",
+      "vendor": "Siglent",
+      "series": "SDS1000 / SDS2000 X-E Series",
+      "type": "scope",
+      "inherits": "keysight_infiniivision",
+      "patterns": ["SDS1052", "SDS1104", "SDS1202", "SDS2072", "SDS2102", "SDS2202", "SDS2304"],
+      "overrides": {
+        "channel_on":         ":CHANnel{ch}:SWITch ON",
+        "channel_off":        ":CHANnel{ch}:SWITch OFF",
+        "annotation_text":    null,
+        "annotation_on":      null,
+        "annotation_off":     null,
+        "measure_vpp":        {"query": ":MEASure:ITEM? VPP,CHANnel{ch}"},
+        "measure_freq":       {"query": ":MEASure:ITEM? FREQuency,CHANnel{ch}"},
+        "measure_period":     {"query": ":MEASure:ITEM? PERiod,CHANnel{ch}"},
+        "measure_vavg":       {"query": ":MEASure:ITEM? MEAN,CHANnel{ch}"},
+        "measure_vrms":       {"query": ":MEASure:ITEM? RMS,CHANnel{ch}"},
+        "measure_vmax":       {"query": ":MEASure:ITEM? MAX,CHANnel{ch}"},
+        "measure_vmin":       {"query": ":MEASure:ITEM? MIN,CHANnel{ch}"},
+        "measure_risetime":   {"query": ":MEASure:ITEM? RISE,CHANnel{ch}"},
+        "measure_falltime":   {"query": ":MEASure:ITEM? FALL,CHANnel{ch}"},
+        "measure_dutycycle":  {"query": ":MEASure:ITEM? DUTY,CHANnel{ch}"},
+        "screenshot":         {"raw_query": ":DISPlay:DATA?"}
+      }
+    },
+
+    {
+      "id": "keysight_edu36311a",
+      "vendor": "Keysight",
+      "series": "EDU36311A Triple-Output Power Supply",
+      "type": "psu",
+      "patterns": ["EDU36311A"],
+      "commands": {
+        "reset":              ["*RST", "*CLS"],
+        "set_voltage":        "VOLT {value},(@{ch})",
+        "set_current_limit":  "CURR {value},(@{ch})",
+        "output_on":          "OUTP ON,(@{ch})",
+        "output_off":         "OUTP OFF,(@{ch})",
+        "measure_voltage":    {"query": "MEAS:VOLT? (@{ch})"},
+        "measure_current":    {"query": "MEAS:CURR? (@{ch})"},
+        "measure_power":      {"query": "MEAS:POW? (@{ch})"}
+      }
+    },
+
+    {
+      "id": "keysight_e36300",
+      "vendor": "Keysight",
+      "series": "E36300 Series Triple-Output Power Supply",
+      "type": "psu",
+      "inherits": "keysight_edu36311a",
+      "patterns": ["E36311A", "E36312A", "E36313A"]
+    },
+
+    {
+      "id": "rigol_dp800",
+      "vendor": "Rigol",
+      "series": "DP800 Series Programmable Power Supply",
+      "type": "psu",
+      "inherits": "keysight_edu36311a",
+      "patterns": ["DP811", "DP821", "DP831", "DP832"],
+      "overrides": {
+        "set_voltage":        [":INSTrument CH{ch}", ":VOLTage {value}"],
+        "set_current_limit":  [":INSTrument CH{ch}", ":CURRent {value}"],
+        "output_on":          ":OUTPut CH{ch},ON",
+        "output_off":         ":OUTPut CH{ch},OFF",
+        "measure_voltage":    {"query": ":MEASure:VOLTage? CH{ch}"},
+        "measure_current":    {"query": ":MEASure:CURRent? CH{ch}"},
+        "measure_power":      {"query": ":MEASure:POWer? CH{ch}"}
+      }
+    },
+
+    {
+      "id": "korad_ka",
+      "vendor": "Korad",
+      "series": "KA / KD / KWR Series Power Supply",
+      "type": "psu",
+      "inherits": "keysight_edu36311a",
+      "patterns": ["KORAD", "KA3005", "KA3010", "KA6002", "KWR103", "KD3005"],
+      "overrides": {
+        "reset":              null,
+        "set_voltage":        "VSET{ch}:{value}",
+        "set_current_limit":  "ISET{ch}:{value}",
+        "output_on":          "OUT1",
+        "output_off":         "OUT0",
+        "measure_voltage":    {"query": "VOUT{ch}?"},
+        "measure_current":    {"query": "IOUT{ch}?"},
+        "measure_power":      null,
+        "status":             {"query": "STATUS?"}
+      }
+    },
+
+    {
+      "id": "keysight_edu33211a",
+      "vendor": "Keysight",
+      "series": "EDU33211A / EDU33212A Waveform Generator",
+      "type": "awg",
+      "patterns": ["EDU33211A", "EDU33212A"],
+      "commands": {
+        "reset":              ["*RST", "*CLS"],
+        "apply":              "SOUR{ch}:APPL:{func} {freq},{amp},{offset}",
+        "set_function":       {"write": "SOUR{ch}:FUNC {func}",             "query": "SOUR{ch}:FUNC?"},
+        "set_frequency":      {"write": "SOUR{ch}:FREQ {freq}",             "query": "SOUR{ch}:FREQ?"},
+        "set_amplitude":      {"write": "SOUR{ch}:VOLT {amp}",              "query": "SOUR{ch}:VOLT?"},
+        "set_amplitude_unit": "SOUR{ch}:VOLT:UNIT {unit}",
+        "set_offset":         {"write": "SOUR{ch}:VOLT:OFFS {offset}",      "query": "SOUR{ch}:VOLT:OFFS?"},
+        "output_on":          "OUTP{ch} ON",
+        "output_off":         "OUTP{ch} OFF"
+      }
+    },
+
+    {
+      "id": "keysight_33500b",
+      "vendor": "Keysight",
+      "series": "33500B / 33600A Series Waveform Generator",
+      "type": "awg",
+      "inherits": "keysight_edu33211a",
+      "patterns": ["33509B", "33510B", "33511B", "33512B", "33519B", "33520B", "33521B", "33522B", "33600A", "33611A", "33612A", "33621A", "33622A"]
+    },
+
+    {
+      "id": "rigol_dg800",
+      "vendor": "Rigol",
+      "series": "DG800 / DG900 Series Waveform Generator",
+      "type": "awg",
+      "inherits": "keysight_edu33211a",
+      "patterns": ["DG811", "DG812", "DG821", "DG822", "DG831", "DG832", "DG952", "DG972", "DG992"],
+      "overrides": {
+        "apply":              null,
+        "set_function":       {"write": ":SOURce{ch}:FUNCtion:SHAPe {func}",                    "query": ":SOURce{ch}:FUNCtion:SHAPe?"},
+        "set_frequency":      {"write": ":SOURce{ch}:FREQuency:FIXed {freq}",                   "query": ":SOURce{ch}:FREQuency:FIXed?"},
+        "set_amplitude":      {"write": ":SOURce{ch}:VOLTage:LEVel:IMMediate:AMPLitude {amp}",  "query": ":SOURce{ch}:VOLTage:LEVel:IMMediate:AMPLitude?"},
+        "set_amplitude_unit": ":SOURce{ch}:VOLTage:UNIT {unit}",
+        "set_offset":         {"write": ":SOURce{ch}:VOLTage:LEVel:IMMediate:OFFSet {offset}",  "query": ":SOURce{ch}:VOLTage:LEVel:IMMediate:OFFSet?"},
+        "output_on":          ":OUTPut{ch}:STATe ON",
+        "output_off":         ":OUTPut{ch}:STATe OFF"
+      }
+    },
+
+    {
+      "id": "keysight_34461a",
+      "vendor": "Keysight",
+      "series": "34460A / 34461A / 34465A / 34470A Digital Multimeter",
+      "type": "dmm",
+      "patterns": ["34460A", "34461A", "34465A", "34470A"],
+      "commands": {
+        "reset":              ["*RST", "*CLS"],
+        "measure_vdc":        {"query": ":MEASure:VOLTage:DC?"},
+        "measure_vac":        {"query": ":MEASure:VOLTage:AC?"},
+        "measure_idc":        {"query": ":MEASure:CURRent:DC?"},
+        "measure_iac":        {"query": ":MEASure:CURRent:AC?"},
+        "measure_resistance": {"query": ":MEASure:RESistance?"},
+        "measure_fresistance":{"query": ":MEASure:FRESistance?"},
+        "measure_diode":      {"query": ":MEASure:DIODe?"},
+        "measure_continuity": {"query": ":MEASure:CONTinuity?"},
+        "measure_frequency":  {"query": ":MEASure:FREQuency?"},
+        "measure_capacitance":{"query": ":MEASure:CAPacitance?"},
+        "configure_vdc":      ":CONFigure:VOLTage:DC",
+        "configure_vac":      ":CONFigure:VOLTage:AC",
+        "configure_idc":      ":CONFigure:CURRent:DC",
+        "configure_resistance":":CONFigure:RESistance",
+        "read":               {"query": ":READ?"}
+      }
+    },
+
+    {
+      "id": "rigol_dm3058",
+      "vendor": "Rigol",
+      "series": "DM3058 / DM3068 Digital Multimeter",
+      "type": "dmm",
+      "inherits": "keysight_34461a",
+      "patterns": ["DM3058", "DM3068"],
+      "overrides": {
+        "configure_vdc":       ":FUNCtion:VOLTage:DC",
+        "configure_vac":       ":FUNCtion:VOLTage:AC",
+        "configure_idc":       ":FUNCtion:CURRent:DC",
+        "configure_resistance":":FUNCtion:RESistance",
+        "measure_capacitance": null
+      }
+    }
+
+  ]
+}
