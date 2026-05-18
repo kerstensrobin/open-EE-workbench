@@ -1,0 +1,36 @@
+{
+  "name": "Lab Ready",
+  "description": "General-purpose starting configuration. Outputs are pre-set but left off — enable manually.",
+
+  "hosts": ["143.129.36.135"],
+
+  "instruments": {
+
+    "edu36311a": {
+      "outputs": [
+        { "channel": 1, "voltage": 5.0,  "current_limit": 0.5, "enabled": false },
+        { "channel": 2, "voltage": 3.3,  "current_limit": 0.5, "enabled": false },
+        { "channel": 3, "voltage": 0.0,  "current_limit": 0.5, "enabled": false }
+      ]
+    },
+
+    "edu33211a": {
+      "channels": [
+        {
+          "channel": 1,
+          "function": "SIN",
+          "frequency": 1000,
+          "amplitude": 1.0,
+          "amplitude_unit": "VPP",
+          "offset": 0.0,
+          "enabled": false
+        }
+      ]
+    },
+
+    "scope": {
+      "reset": true
+    }
+
+  }
+}
