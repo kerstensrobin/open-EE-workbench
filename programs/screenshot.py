@@ -9,14 +9,15 @@ import time
 
 rm = visa.ResourceManager()
 # the VISA adress for your scope can be found in using Keysight Connection Expert
-scope = rm.open_resource('USB0::10893::907::CN63430308::0::INSTR')
+scope = rm.open_resource('USB0::10893::902::CN63126106::0::INSTR')
 scope.timeout = 10000 #Always good to involve a time-out to avoid putting the scope into an endless waiting state.
 
 def get_screenshot(filename):
     time.sleep(0.1) # Interacting with real equipment takes time. If some commands are not going through, consider adding a small pause to make sure your equipment has finished the previous task.
     # Send command to take a printscreen
     scope.write(":DISP:DATA? PNG")
-    # Read the binary data
+    # Read the binary data — chunk_size must exceed the full image size
+    scope.chunk_size = 1024 * 1024  # 1 MB
     data = scope.read_raw()
     # Find the start of the PNG file
     start = data.find(b'\x89PNG')
