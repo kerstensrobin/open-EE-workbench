@@ -193,6 +193,12 @@ try:
 except ImportError:
     _db_classify = None
 
+try:
+    from workbench import set_active as _wb_set_active, active_name as _wb_active_name
+except ImportError:
+    _wb_set_active = None
+    _wb_active_name = None
+
 
 LAN_PROBE_PORTS = (5025, 4880, 111)
 
@@ -352,6 +358,11 @@ def build_arg_parser():
         "--save",
         metavar="NAME",
         help="Save the scanned workbench under NAME without prompting.",
+    )
+    parser.add_argument(
+        "--set-active",
+        metavar="NAME",
+        help="Set the active workbench to an already-saved NAME and exit.",
     )
     return parser
 
@@ -996,6 +1007,17 @@ def main():
     args = build_arg_parser().parse_args()
     _debug = args.debug
 
+    if args.set_active:
+        if _wb_set_active is None:
+            print("Error: workbench.py not found next to this script.")
+            return
+        try:
+            _wb_set_active(args.set_active)
+            print(f"Active workbench set to {args.set_active!r}")
+        except FileNotFoundError as exc:
+            print(f"Error: {exc}")
+        return
+
     if args.fix_udev:
         fix_udev()
         return
@@ -1151,6 +1173,20 @@ def main():
             print(f"Workbench saved: {path}")
             if tests:
                 print(f"Suggested tests: {', '.join(tests)}")
+            if _wb_set_active:
+                current = _wb_active_name() if _wb_active_name else None
+                if current is None:
+                    _wb_set_active(save_name)
+                    print(f"Set as active workbench.")
+                else:
+                    try:
+                        ans = input(f"Set as active workbench? (current: {current}) [y/N] ").strip().lower()
+                    except (EOFError, KeyboardInterrupt):
+                        print()
+                        ans = ""
+                    if ans == "y":
+                        _wb_set_active(save_name)
+                        print(f"Active workbench updated to {save_name!r}.")
 
 
 if __name__ == "__main__":

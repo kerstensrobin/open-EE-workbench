@@ -1,70 +1,80 @@
-# This is an example script, setting up basic communication with an oscilloscope and taking a screenshot.
-# robin.kerstens@uantwerpen.be
-##
+#!/usr/bin/env python3
+# nacho.works — capture a screenshot from the active workbench scope
 
+import argparse
 import os
-import pyvisa as visa
 import sys
 import time
 
-rm = visa.ResourceManager()
-# the VISA adress for your scope can be found in using Keysight Connection Expert
-scope = rm.open_resource('USB0::10893::907::CN63430291::0::INSTR')
-scope.timeout = 10000 #Always good to involve a time-out to avoid putting the scope into an endless waiting state.
+import pyvisa
+from workbench import load_workbench, open_by_role
 
-def get_screenshot(filename):
-    time.sleep(0.1) # Interacting with real equipment takes time. If some commands are not going through, consider adding a small pause to make sure your equipment has finished the previous task.
-    # Send command to take a printscreen
+
+def get_screenshot(scope, filename: str):
+    time.sleep(0.1)
     scope.write(":DISP:DATA? PNG")
-    # Read the binary data — chunk_size must exceed the full image size
-    scope.chunk_size = 1024 * 1024  # 1 MB
+    scope.chunk_size = 1024 * 1024
     data = scope.read_raw()
-    # Find the start of the PNG file
     start = data.find(b'\x89PNG')
     if start != -1:
         data = data[start:]
-    # Save the binary data to a file with the specified filename
     with open(filename, "wb") as f:
         f.write(data)
     time.sleep(0.1)
-    print(f"Screenshot saved as {os.path.abspath(filename)}")
+    print(f"Screenshot saved: {os.path.abspath(filename)}")
 
-print('Taking Screenshot')
-print('---')
-scope_idn = scope.query('*IDN?')
-print('[info] scope found: ' + scope_idn)
 
-# Optional: add an annotation box to the screenshot (up to 254 chars)
-# scope.write(':DISPlay:ANNotation:TEXT "my note"')  # set text
-# scope.write(':DISPlay:ANNotation ON')              # show it; use OFF to hide
-#
-# Optional: label channels (max 10 characters each)
-# scope.write(':CHANnel1:LABel "CH1 label"')
-# scope.write(':CHANnel2:LABel "CH2 label"')
-# scope.write(':DISPlay:LABel ON')                   # show labels; use OFF to hide
+def main():
+    parser = argparse.ArgumentParser(description="Capture a screenshot from the workbench scope.")
+    parser.add_argument("filename", nargs="?", default="screenshot.png",
+                        help="Output filename (default: screenshot.png)")
+    parser.add_argument("--workbench", metavar="NAME",
+                        help="Workbench to use (default: active workbench)")
+    parser.add_argument("--backend", default="@py", metavar="BACKEND",
+                        help="PyVISA backend (default: @py)")
+    args = parser.parse_args()
 
-filename = sys.argv[1] if len(sys.argv) > 1 else 'screenshot.png'
-
-if os.path.exists(filename):
     try:
-        answer = input(f"'{filename}' already exists. Overwrite? [y/N] ").strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        print()
-        answer = ""
-    if answer != "y":
-        print("Aborted.")
-        scope.close()
+        wb = load_workbench(args.workbench)
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}")
+        sys.exit(1)
+
+    print(f"Workbench : {wb['name']}")
+
+    rm = pyvisa.ResourceManager(args.backend)
+    try:
+        scope = open_by_role(rm, wb, "scope")
+    except RuntimeError as exc:
+        print(f"Error: {exc}")
         rm.close()
-        sys.exit(0)
+        sys.exit(1)
 
-get_screenshot(filename)
+    print(f"Scope     : {scope.query('*IDN?').strip()}")
 
-# Always clean up your mess when you're done.
-print("[info] Took screenshot")
-scope.close()
-rm.close()
+    if os.path.exists(args.filename):
+        try:
+            answer = input(f"'{args.filename}' already exists. Overwrite? [y/N] ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            answer = ""
+        if answer != "y":
+            print("Aborted.")
+            scope.close()
+            rm.close()
+            sys.exit(0)
 
-print("[info] Done.")
+    # Optional: annotation and channel labels
+    # scope.write(':DISPlay:ANNotation:TEXT "my note"')
+    # scope.write(':DISPlay:ANNotation ON')
+    # scope.write(':CHANnel1:LABel "CH1"')
+    # scope.write(':DISPlay:LABel ON')
+
+    get_screenshot(scope, args.filename)
+
+    scope.close()
+    rm.close()
 
 
-
+if __name__ == "__main__":
+    main()
