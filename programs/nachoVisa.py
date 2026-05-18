@@ -5,13 +5,16 @@ import argparse
 import importlib.util
 import ipaddress
 import itertools
+import json
 import os
+import re
 import socket
 import subprocess
 import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 from typing import Iterable, List, Sequence, Tuple
 
 REQUIRED_PACKAGES = [
@@ -193,6 +196,11 @@ except ImportError:
 
 LAN_PROBE_PORTS = (5025, 4880, 111)
 
+WORKBENCH_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workbenches")
+
+# instruments.json uses "awg" as the type; map it to the conventional role name
+_TYPE_TO_ROLE = {"awg": "generator"}
+
 
 def status(message: str):
     if _debug:
@@ -339,6 +347,11 @@ def build_arg_parser():
         "--debug",
         action="store_true",
         help="Print verbose scan progress instead of the animated spinner.",
+    )
+    parser.add_argument(
+        "--save",
+        metavar="NAME",
+        help="Save the scanned workbench under NAME without prompting.",
     )
     return parser
 
@@ -942,6 +955,38 @@ def print_discovery_notes(notes: Sequence[str]):
     print()
 
 
+def _safe_name(name: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9_.-]+", "_", name.strip()).strip("_") or "workbench"
+
+
+def suggest_tests(instruments: List[dict]) -> List[str]:
+    roles = {i["role"] for i in instruments if i.get("role")}
+    tests = []
+    if {"scope", "generator"}.issubset(roles):
+        tests.append("ac_frequency_sweep")
+    if {"scope", "psu"}.issubset(roles):
+        tests.append("psu_ramp_capture")
+    if "dmm" in roles:
+        tests.append("dmm_logger")
+    return tests
+
+
+def save_workbench(name: str, instruments: List[dict]) -> str:
+    os.makedirs(WORKBENCH_DIR, exist_ok=True)
+    payload = {
+        "schema_version": "1.0",
+        "name": name,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "host": socket.gethostname(),
+        "instruments": instruments,
+        "suggested_tests": suggest_tests(instruments),
+    }
+    path = os.path.join(WORKBENCH_DIR, f"{_safe_name(name)}.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+    return path
+
+
 def main():
     global _debug
 
@@ -999,6 +1044,7 @@ def main():
             resources = [name for name in resources if name.upper().startswith("USB")]
 
         instrument_reports = []
+        instrument_data = []
 
         if resources:
             status("Collecting identity information for discovered resources")
@@ -1017,8 +1063,10 @@ def main():
                     family = _db_classify(idn) if _db_classify else None
                     if family:
                         type_str = f"{family['type']}  ({family['vendor']} {family['series']})"
+                        role = _TYPE_TO_ROLE.get(family["type"], family["type"])
                     else:
                         type_str = "unknown"
+                        role = None
                     instrument_reports.append(
                         (
                             f"Resource string : {resource_name}\n"
@@ -1030,6 +1078,17 @@ def main():
                             f"Firmware        : {firmware or 'Unknown'}\n"
                         )
                     )
+                    instrument_data.append({
+                        "resource": resource_name,
+                        "connection": conn,
+                        "manufacturer": manufacturer,
+                        "model": model,
+                        "serial": serial,
+                        "firmware": firmware,
+                        "type": family["type"] if family else None,
+                        "role": role,
+                        "family_id": family["id"] if family else None,
+                    })
 
                 except Exception as e:
                     if inst is not None:
@@ -1071,6 +1130,27 @@ def main():
         print_usb_diagnostics()
     for report in instrument_reports:
         print(report)
+
+    if instrument_data:
+        save_name = args.save
+        if save_name is None:
+            try:
+                answer = input("Save this workbench? [y/N] ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                answer = ""
+            if answer == "y":
+                try:
+                    save_name = input("Workbench name: ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    save_name = ""
+        if save_name:
+            path = save_workbench(save_name, instrument_data)
+            tests = suggest_tests(instrument_data)
+            print(f"Workbench saved: {path}")
+            if tests:
+                print(f"Suggested tests: {', '.join(tests)}")
 
 
 if __name__ == "__main__":
