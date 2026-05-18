@@ -227,11 +227,10 @@ def apply_edu33211a(inst, config: dict):
 
 def apply_scope(inst, config: dict):
     if config.get("reset", False):
-        inst.clear()
         inst.timeout = 15000
+        inst.write("*CLS")
         inst.write(":SYSTem:PRESet")
         inst.query("*OPC?")
-        inst.write("*CLS")
 
 
 APPLY_HANDLERS = {
@@ -246,11 +245,11 @@ APPLY_HANDLERS = {
 # ---------------------------------------------------------------------------
 
 def reset_scope(inst):
-    inst.clear()
     inst.timeout = 15000
+    inst.write("*CLS")
     inst.write(":SYSTem:PRESet")
     inst.query("*OPC?")
-    inst.write("*CLS")
+    inst.write(":CHANnel2:DISPlay OFF")
 
 
 def reset_edu36311a(inst):
@@ -272,7 +271,7 @@ def reset_edu33211a(inst):
 
 
 RESET_HANDLERS = {
-    "scope":     (reset_scope,     "oscilloscope → factory default setup"),
+    "scope":     (reset_scope,     "oscilloscope → factory default setup, CH2 off"),
     "edu36311a": (reset_edu36311a, "EDU36311A → all outputs 0 V / 500 mA / off"),
     "edu33211a": (reset_edu33211a, "EDU33211A → CH1 1 kHz / 1 Vpp sine / 0 V offset / off"),
 }
