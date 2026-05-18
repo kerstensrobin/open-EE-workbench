@@ -5,7 +5,7 @@
 #
 # Usage:
 #   python setWorkbench.py                       # apply workbench_config.json
-#   python setWorkbench.py --config foo.json     # apply a specific config file
+#   python setWorkbench.py --set foo.json        # apply a specific config file
 #   python setWorkbench.py --reset-bench         # reset all instruments to safe defaults
 
 import argparse
@@ -527,7 +527,7 @@ def main():
         description="Configure workbench instruments from a JSON workflow file."
     )
     parser.add_argument(
-        "--config",
+        "--set",
         metavar="FILE",
         default=None,
         help="Workflow config JSON file (default: workbench_config.json next to this script).",
@@ -564,7 +564,7 @@ def main():
         except Exception:
             pass
     else:
-        config_path = args.config or default_config
+        config_path = args.set or default_config
         try:
             with open(config_path) as f:
                 workflow = json.load(f)
