@@ -7,9 +7,9 @@
     {
       "id": "keysight_infiniivision",
       "vendor": "Keysight",
-      "series": "InfiniiVision 1000/1200 X-Series",
+      "series": "InfiniiVision X-Series (1000/1200/3000/4000/6000)",
       "type": "scope",
-      "patterns": ["DSOX", "EDUX", "INFINIIVISION"],
+      "patterns": ["DSOX", "MSOX", "EDUX", "INFINIIVISION"],
       "commands": {
         "reset":              ["*CLS", ":SYSTem:PRESet"],
         "run":                ":RUN",
@@ -420,6 +420,515 @@
         "configure_idc":       ":FUNCtion:CURRent:DC",
         "configure_resistance":":FUNCtion:RESistance",
         "measure_capacitance": null
+      }
+    },
+
+    {
+      "id": "keysight_infiniium_s",
+      "vendor": "Keysight",
+      "series": "Infiniium S-Series High-Definition Oscilloscope",
+      "type": "scope",
+      "inherits": "keysight_infiniivision",
+      "patterns": ["DSOS054A", "DSOS104A", "DSOS204A", "DSOS254A", "DSOS404A", "DSOS604A", "DSOS804A",
+                   "MSOS054A", "MSOS104A", "MSOS204A", "MSOS254A", "MSOS404A", "MSOS604A", "MSOS804A"]
+    },
+
+    {
+      "id": "rigol_ds4000",
+      "vendor": "Rigol",
+      "series": "DS4000 / MSO4000 Series",
+      "type": "scope",
+      "inherits": "rigol_ds1000z",
+      "patterns": ["DS4012", "DS4014", "DS4022", "DS4024", "DS4032", "DS4034", "DS4052", "DS4054",
+                   "MSO4012", "MSO4014", "MSO4022", "MSO4024", "MSO4032", "MSO4034", "MSO4052", "MSO4054"]
+    },
+
+    {
+      "id": "rigol_ds7000",
+      "vendor": "Rigol",
+      "series": "DS7000 / MSO7000 Series",
+      "type": "scope",
+      "inherits": "rigol_ds4000",
+      "patterns": ["DS7014", "DS7024", "DS7034", "DS7054", "MSO7014", "MSO7024", "MSO7034", "MSO7054"]
+    },
+
+    {
+      "id": "rigol_ds8000r",
+      "vendor": "Rigol",
+      "series": "DS8000-R Series",
+      "type": "scope",
+      "inherits": "rigol_ds7000",
+      "patterns": ["DS8034-R", "DS8104-R", "DS8204-R"]
+    },
+
+    {
+      "id": "tektronix_mso_dpo2000",
+      "vendor": "Tektronix",
+      "series": "MSO/DPO2000 Series",
+      "type": "scope",
+      "inherits": "tektronix_tbs",
+      "patterns": ["MSO2002B", "MSO2004B", "MSO2012", "MSO2012B", "MSO2014", "MSO2014B", "MSO2022B",
+                   "MSO2024", "MSO2024B", "DPO2012", "DPO2012B", "DPO2014", "DPO2014B", "DPO2022B",
+                   "DPO2024", "DPO2024B"]
+    },
+
+    {
+      "id": "tektronix_mso_dpo3000",
+      "vendor": "Tektronix",
+      "series": "MSO/DPO3000 Series",
+      "type": "scope",
+      "inherits": "tektronix_mso_dpo2000",
+      "patterns": ["MSO3012", "MSO3014", "MSO3032", "MSO3034", "MSO3052", "MSO3054",
+                   "DPO3012", "DPO3014", "DPO3032", "DPO3034", "DPO3052", "DPO3054"]
+    },
+
+    {
+      "id": "tektronix_mdo3000",
+      "vendor": "Tektronix",
+      "series": "MDO3000 Series",
+      "type": "scope",
+      "inherits": "tektronix_mso_dpo2000",
+      "patterns": ["MDO3012", "MDO3014", "MDO3022", "MDO3024", "MDO3032", "MDO3034",
+                   "MDO3052", "MDO3054", "MDO3102", "MDO3104"]
+    },
+
+    {
+      "id": "tektronix_mdo4000",
+      "vendor": "Tektronix",
+      "series": "MDO4000B/C / MSO4000B / DPO4000B Series",
+      "type": "scope",
+      "inherits": "tektronix_mso_dpo2000",
+      "patterns": ["MSO4014B", "MSO4034B", "MSO4054B", "MSO4104B",
+                   "DPO4014B", "DPO4034B", "DPO4054B", "DPO4104B",
+                   "MDO4014B", "MDO4034B", "MDO4054B", "MDO4104B",
+                   "MDO4024C", "MDO4034C", "MDO4054C", "MDO4104C"]
+    },
+
+    {
+      "id": "rs_rtc1000",
+      "vendor": "Rohde&Schwarz",
+      "series": "RTC1000 Series",
+      "type": "scope",
+      "inherits": "rs_rtb2000",
+      "patterns": ["RTC1002", "RTC1004"]
+    },
+
+    {
+      "id": "rs_rte1000",
+      "vendor": "Rohde&Schwarz",
+      "series": "RTE1000 Series",
+      "type": "scope",
+      "inherits": "rs_rtb2000",
+      "patterns": ["RTE1022", "RTE1032", "RTE1052", "RTE1102", "RTE1104", "RTE1154", "RTE1204"]
+    },
+
+    {
+      "id": "rs_rto1000",
+      "vendor": "Rohde&Schwarz",
+      "series": "RTO1000 Series",
+      "type": "scope",
+      "inherits": "rs_rte1000",
+      "patterns": ["RTO1002", "RTO1004", "RTO1012", "RTO1014", "RTO1022", "RTO1024", "RTO1044"]
+    },
+
+    {
+      "id": "siglent_sds5000x",
+      "vendor": "Siglent",
+      "series": "SDS5000X Series",
+      "type": "scope",
+      "inherits": "siglent_sds",
+      "patterns": ["SDS5034X", "SDS5054X", "SDS5104X"]
+    },
+
+    {
+      "id": "gwinstek_gds2000a",
+      "vendor": "GW INSTEK",
+      "series": "GDS-2000A Series",
+      "type": "scope",
+      "inherits": "keysight_infiniivision",
+      "patterns": ["GDS-2072A", "GDS-2074A", "GDS-2102A", "GDS-2104A",
+                   "GDS-2202A", "GDS-2204A", "GDS-2302A", "GDS-2304A"],
+      "overrides": {
+        "screenshot": null
+      }
+    },
+
+    {
+      "id": "gwinstek_gds3000",
+      "vendor": "GW INSTEK",
+      "series": "GDS-3000 Series",
+      "type": "scope",
+      "inherits": "gwinstek_gds2000a",
+      "patterns": ["GDS-3152", "GDS-3154", "GDS-3252", "GDS-3254",
+                   "GDS-3352", "GDS-3354", "GDS-3502", "GDS-3504"]
+    },
+
+    {
+      "id": "hantek_dso2000",
+      "vendor": "Hantek",
+      "series": "DSO2000 Series",
+      "type": "scope",
+      "inherits": "keysight_infiniivision",
+      "patterns": ["DSO2C10", "DSO2C15", "DSO2D10", "DSO2D15"],
+      "overrides": {
+        "annotation_text": null,
+        "annotation_on":   null,
+        "annotation_off":  null,
+        "labels_on":       null,
+        "labels_off":      null,
+        "channel_label":   null,
+        "screenshot":      {"raw_query": ":DISPlay:DATA?"}
+      }
+    },
+
+    {
+      "id": "owon_xds3000",
+      "vendor": "OWON",
+      "series": "XDS3000 Series",
+      "type": "scope",
+      "inherits": "siglent_sds",
+      "patterns": ["XDS3102", "XDS3102A", "XDS3104", "XDS3104A", "XDS3204", "XDS3204A"]
+    },
+
+    {
+      "id": "keysight_e36200",
+      "vendor": "Keysight",
+      "series": "E36200 Series Autoranging Power Supply",
+      "type": "psu",
+      "inherits": "keysight_edu36311a",
+      "patterns": ["E36231A", "E36232A", "E36233A", "E36234A"]
+    },
+
+    {
+      "id": "rigol_dp700",
+      "vendor": "Rigol",
+      "series": "DP700 Series Programmable Power Supply",
+      "type": "psu",
+      "inherits": "rigol_dp800",
+      "patterns": ["DP711", "DP712", "DP721", "DP722"]
+    },
+
+    {
+      "id": "siglent_spd",
+      "vendor": "Siglent",
+      "series": "SPD Series Programmable DC Power Supply",
+      "type": "psu",
+      "inherits": "keysight_edu36311a",
+      "patterns": ["SPD1305X", "SPD3303C", "SPD3303X", "SPD3303X-E"],
+      "overrides": {
+        "reset":             "*RST",
+        "set_voltage":       "CH{ch}:VOLTage {value}",
+        "set_current_limit": "CH{ch}:CURRent {value}",
+        "output_on":         "OUTPut CH{ch},ON",
+        "output_off":        "OUTPut CH{ch},OFF",
+        "measure_voltage":   {"query": "MEASure:VOLTage? CH{ch}"},
+        "measure_current":   {"query": "MEASure:CURRent? CH{ch}"},
+        "measure_power":     null
+      }
+    },
+
+    {
+      "id": "gwinstek_gpd",
+      "vendor": "GW INSTEK",
+      "series": "GPD Series Programmable DC Power Supply",
+      "type": "psu",
+      "inherits": "korad_ka",
+      "patterns": ["GPD-2303S", "GPD-3303D", "GPD-3303S", "GPD-4303S"]
+    },
+
+    {
+      "id": "rs_hmc804x",
+      "vendor": "Rohde&Schwarz",
+      "series": "HMC8041 / HMC8042 / HMC8043 Power Supply",
+      "type": "psu",
+      "inherits": "keysight_edu36311a",
+      "patterns": ["HMC8041", "HMC8042", "HMC8043"],
+      "overrides": {
+        "reset":             ["*RST", "*CLS"],
+        "set_voltage":       [":INSTrument:NSELect {ch}", ":VOLTage {value}"],
+        "set_current_limit": [":INSTrument:NSELect {ch}", ":CURRent {value}"],
+        "output_on":         [":INSTrument:NSELect {ch}", ":OUTPut ON"],
+        "output_off":        [":INSTrument:NSELect {ch}", ":OUTPut OFF"],
+        "measure_voltage":   [":INSTrument:NSELect {ch}", {"query": ":MEASure:SCALar:VOLTage:DC?"}],
+        "measure_current":   [":INSTrument:NSELect {ch}", {"query": ":MEASure:SCALar:CURRent:DC?"}],
+        "measure_power":     null
+      }
+    },
+
+    {
+      "id": "keithley_2200psu",
+      "vendor": "Keithley Instruments",
+      "series": "2220 / 2230 / 2231A Dual/Triple-Output Power Supply",
+      "type": "psu",
+      "inherits": "keysight_edu36311a",
+      "patterns": ["2220-30-1", "2230-30-1", "2231A-30-3"],
+      "overrides": {
+        "set_voltage":       [":INSTrument:NSELect {ch}", ":SOURce:VOLTage {value}"],
+        "set_current_limit": [":INSTrument:NSELect {ch}", ":SOURce:CURRent {value}"],
+        "output_on":         [":INSTrument:NSELect {ch}", ":OUTPut ON"],
+        "output_off":        [":INSTrument:NSELect {ch}", ":OUTPut OFF"],
+        "measure_voltage":   [":INSTrument:NSELect {ch}", {"query": ":MEASure:VOLTage:DC?"}],
+        "measure_current":   [":INSTrument:NSELect {ch}", {"query": ":MEASure:CURRent:DC?"}],
+        "measure_power":     null
+      }
+    },
+
+    {
+      "id": "owon_odp",
+      "vendor": "OWON",
+      "series": "ODP Series Programmable DC Power Supply",
+      "type": "psu",
+      "inherits": "keysight_edu36311a",
+      "patterns": ["ODP3033", "ODP3063", "ODP6033"],
+      "overrides": {
+        "set_voltage":       [":OUTPut:CHANnel CH{ch}", ":SOURce:VOLTage:LEVel:IMMediate:AMPLitude {value}"],
+        "set_current_limit": [":OUTPut:CHANnel CH{ch}", ":SOURce:CURRent:LEVel:IMMediate:AMPLitude {value}"],
+        "output_on":         ":OUTPut ON",
+        "output_off":        ":OUTPut OFF",
+        "measure_voltage":   {"query": ":MEASure:VOLTage:DC?"},
+        "measure_current":   {"query": ":MEASure:CURRent:DC?"},
+        "measure_power":     null
+      }
+    },
+
+    {
+      "id": "rigol_dg4000",
+      "vendor": "Rigol",
+      "series": "DG4000 Series Waveform Generator",
+      "type": "awg",
+      "inherits": "rigol_dg800",
+      "patterns": ["DG4062", "DG4102", "DG4162", "DG4202"]
+    },
+
+    {
+      "id": "siglent_sdg1000x",
+      "vendor": "Siglent",
+      "series": "SDG1000X Series Waveform Generator",
+      "type": "awg",
+      "inherits": "rigol_dg800",
+      "patterns": ["SDG1032X", "SDG1062X"]
+    },
+
+    {
+      "id": "siglent_sdg2000x",
+      "vendor": "Siglent",
+      "series": "SDG2000X Series Waveform Generator",
+      "type": "awg",
+      "inherits": "siglent_sdg1000x",
+      "patterns": ["SDG2042X", "SDG2082X", "SDG2122X"]
+    },
+
+    {
+      "id": "siglent_sdg6000x",
+      "vendor": "Siglent",
+      "series": "SDG6000X Series Waveform Generator",
+      "type": "awg",
+      "inherits": "siglent_sdg2000x",
+      "patterns": ["SDG6022X", "SDG6032X", "SDG6052X"]
+    },
+
+    {
+      "id": "tektronix_afg1000",
+      "vendor": "Tektronix",
+      "series": "AFG1000 Series Arbitrary Function Generator",
+      "type": "awg",
+      "inherits": "keysight_edu33211a",
+      "patterns": ["AFG1022", "AFG1062"],
+      "overrides": {
+        "apply":              ":SOURce{ch}:APPLy:{func} {freq},{amp},{offset}",
+        "set_function":       {"write": ":SOURce{ch}:FUNCtion:SHAPe {func}",                   "query": ":SOURce{ch}:FUNCtion:SHAPe?"},
+        "set_frequency":      {"write": ":SOURce{ch}:FREQuency:FIXed {freq}",                  "query": ":SOURce{ch}:FREQuency:FIXed?"},
+        "set_amplitude":      {"write": ":SOURce{ch}:VOLTage:LEVel:IMMediate:AMPLitude {amp}", "query": ":SOURce{ch}:VOLTage:LEVel:IMMediate:AMPLitude?"},
+        "set_amplitude_unit": ":SOURce{ch}:VOLTage:UNIT {unit}",
+        "set_offset":         {"write": ":SOURce{ch}:VOLTage:LEVel:IMMediate:OFFSet {offset}", "query": ":SOURce{ch}:VOLTage:LEVel:IMMediate:OFFSet?"},
+        "output_on":          ":OUTPut{ch}:STATe ON",
+        "output_off":         ":OUTPut{ch}:STATe OFF"
+      }
+    },
+
+    {
+      "id": "tektronix_afg3000",
+      "vendor": "Tektronix",
+      "series": "AFG3000 / AFG3000C Series Arbitrary Function Generator",
+      "type": "awg",
+      "inherits": "tektronix_afg1000",
+      "patterns": ["AFG3011", "AFG3011C", "AFG3021B", "AFG3021C", "AFG3022B", "AFG3022C",
+                   "AFG3051C", "AFG3052C", "AFG3101", "AFG3101C", "AFG3102", "AFG3102C",
+                   "AFG3151C", "AFG3152C", "AFG3251", "AFG3251C", "AFG3252", "AFG3252C"]
+    },
+
+    {
+      "id": "tektronix_afg31000",
+      "vendor": "Tektronix",
+      "series": "AFG31000 Series Arbitrary Function Generator",
+      "type": "awg",
+      "inherits": "tektronix_afg3000",
+      "patterns": ["AFG31021", "AFG31022", "AFG31051", "AFG31052", "AFG31101",
+                   "AFG31102", "AFG31151", "AFG31152", "AFG31251", "AFG31252"]
+    },
+
+    {
+      "id": "gwinstek_afg",
+      "vendor": "GW INSTEK",
+      "series": "AFG Series Arbitrary Function Generator",
+      "type": "awg",
+      "inherits": "keysight_edu33211a",
+      "patterns": ["AFG-2225", "AFG-3031"],
+      "overrides": {
+        "apply": null
+      }
+    },
+
+    {
+      "id": "aimtti_tg",
+      "vendor": "AIM-TTI",
+      "series": "TG / TGF Series Function / Arbitrary Waveform Generator",
+      "type": "awg",
+      "inherits": "keysight_edu33211a",
+      "patterns": ["TG2511A", "TG2512A", "TG5011A", "TG5012A"]
+    },
+
+    {
+      "id": "keysight_34410a",
+      "vendor": "Keysight",
+      "series": "34410A / 34411A Digital Multimeter",
+      "type": "dmm",
+      "inherits": "keysight_34461a",
+      "patterns": ["34410A", "34411A"]
+    },
+
+    {
+      "id": "siglent_sdm",
+      "vendor": "Siglent",
+      "series": "SDM Series Digital Multimeter",
+      "type": "dmm",
+      "inherits": "keysight_34461a",
+      "patterns": ["SDM3045X", "SDM3055", "SDM3065X"]
+    },
+
+    {
+      "id": "gwinstek_gdm",
+      "vendor": "GW INSTEK",
+      "series": "GDM Series Digital Multimeter",
+      "type": "dmm",
+      "inherits": "keysight_34461a",
+      "patterns": ["GDM-8341", "GDM-8342", "GDM-8351"],
+      "overrides": {
+        "measure_capacitance": null,
+        "measure_fresistance": null
+      }
+    },
+
+    {
+      "id": "rs_hmc8012",
+      "vendor": "Rohde&Schwarz",
+      "series": "HMC8012 Digital Multimeter",
+      "type": "dmm",
+      "inherits": "keysight_34461a",
+      "patterns": ["HMC8012"],
+      "overrides": {
+        "configure_vdc":        ":SENSe:FUNCtion:ON \"VOLTage:DC\"",
+        "configure_vac":        ":SENSe:FUNCtion:ON \"VOLTage:AC\"",
+        "configure_idc":        ":SENSe:FUNCtion:ON \"CURRent:DC\"",
+        "configure_resistance": ":SENSe:FUNCtion:ON \"RESistance\"",
+        "measure_fresistance":  null,
+        "measure_capacitance":  null,
+        "measure_continuity":   null
+      }
+    },
+
+    {
+      "id": "fluke_884xa",
+      "vendor": "Fluke",
+      "series": "8845A / 8846A Bench Digital Multimeter",
+      "type": "dmm",
+      "inherits": "keysight_34461a",
+      "patterns": ["8845A", "8846A"],
+      "overrides": {
+        "measure_fresistance":  null,
+        "measure_capacitance":  null,
+        "measure_continuity":   null
+      }
+    },
+
+    {
+      "id": "aimtti_1908",
+      "vendor": "AIM-TTI",
+      "series": "1908P Digital Multimeter",
+      "type": "dmm",
+      "inherits": "keysight_34461a",
+      "patterns": ["1908P"],
+      "overrides": {
+        "measure_capacitance":  null,
+        "measure_fresistance":  null
+      }
+    },
+
+    {
+      "id": "keithley_2000",
+      "vendor": "Keithley Instruments",
+      "series": "Model 2000 / 2100 / 2110 Digital Multimeter",
+      "type": "dmm",
+      "inherits": "keysight_34461a",
+      "patterns": ["MODEL 2000", "MODEL 2100", "MODEL 2110"],
+      "overrides": {
+        "configure_vdc":        ":SENSe:FUNCtion \"VOLTage:DC\"",
+        "configure_vac":        ":SENSe:FUNCtion \"VOLTage:AC\"",
+        "configure_idc":        ":SENSe:FUNCtion \"CURRent:DC\"",
+        "configure_resistance": ":SENSe:FUNCtion \"RESistance\"",
+        "measure_fresistance":  null,
+        "measure_capacitance":  null
+      }
+    },
+
+    {
+      "id": "keithley_2400",
+      "vendor": "Keithley Instruments",
+      "series": "Series 2400 SourceMeter SMU",
+      "type": "smu",
+      "patterns": ["MODEL 2400", "MODEL 2401", "MODEL 2410", "MODEL 2420", "MODEL 2425", "MODEL 2430", "MODEL 2440"],
+      "commands": {
+        "reset":                  ["*RST", "*CLS"],
+        "set_source_mode":        ":SOURce:FUNCtion:MODE {mode}",
+        "set_voltage":            ":SOURce:VOLTage:LEVel:IMMediate:AMPLitude {value}",
+        "set_current":            ":SOURce:CURRent:LEVel:IMMediate:AMPLitude {value}",
+        "set_current_compliance": ":SENSe:CURRent:PROTection:LEVel {value}",
+        "set_voltage_compliance": ":SENSe:VOLTage:PROTection:LEVel {value}",
+        "output_on":              ":OUTPut:STATe ON",
+        "output_off":             ":OUTPut:STATe OFF",
+        "measure_voltage":        {"query": ":MEASure:VOLTage?"},
+        "measure_current":        {"query": ":MEASure:CURRent?"},
+        "measure_resistance":     {"query": ":MEASure:RESistance?"}
+      }
+    },
+
+    {
+      "id": "keithley_2450",
+      "vendor": "Keithley Instruments",
+      "series": "Model 2450 Interactive SourceMeter SMU",
+      "type": "smu",
+      "inherits": "keithley_2400",
+      "patterns": ["MODEL 2450"]
+    },
+
+    {
+      "id": "rigol_dl3000",
+      "vendor": "Rigol",
+      "series": "DL3000 Series Programmable Electronic Load",
+      "type": "load",
+      "patterns": ["DL3021", "DL3021A", "DL3031", "DL3031A", "DL3041"],
+      "commands": {
+        "reset":          ["*RST", "*CLS"],
+        "set_mode":       ":INPut:MODE {mode}",
+        "set_current":    ":INPut:CURRent:LEVel:IMMediate:AMPLitude {value}",
+        "set_voltage":    ":INPut:VOLTage:LEVel:IMMediate:AMPLitude {value}",
+        "set_resistance": ":INPut:RESistance:LEVel:IMMediate:AMPLitude {value}",
+        "set_power":      ":INPut:POWer:LEVel:IMMediate:AMPLitude {value}",
+        "input_on":       ":INPut:STATe ON",
+        "input_off":      ":INPut:STATe OFF",
+        "measure_voltage":{"query": ":MEASure:VOLTage?"},
+        "measure_current":{"query": ":MEASure:CURRent?"},
+        "measure_power":  {"query": ":MEASure:POWer?"}
       }
     }
 
