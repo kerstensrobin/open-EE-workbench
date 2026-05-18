@@ -21,11 +21,16 @@ _IMAGE_FORMATS = [
     (b'BM',      '.bmp'),
 ]
 
-SCREENSHOT_TIMEOUT_MS = 30_000
+SCREENSHOT_TIMEOUT_MS = 10_000
+# The Rigol DS1000Z (and likely other USBTMC scopes) only respond to
+# REQUEST_DEV_DEP_MSG_IN in small increments via pyvisa-py. Read in 4 KB
+# chunks until we receive a short packet (end of data).
+USBTMC_CHUNK_SIZE = 4096
+RENDER_SLEEP = 1.0  # seconds for scope to finish rendering before first read
 
 
 def _detect_format(data: bytes) -> tuple[int, str]:
-    """Return (offset, extension) of the first recognised image magic in data."""
+    """Return (offset, extension) for the first recognised image magic in data."""
     for magic, ext in _IMAGE_FORMATS:
         idx = data.find(magic)
         if idx != -1:
@@ -34,13 +39,12 @@ def _detect_format(data: bytes) -> tuple[int, str]:
 
 
 def _screenshot_command(idn: str) -> str:
-    """Return the SCPI write string to request a screenshot for this IDN."""
+    """Return the SCPI command string to request a screenshot for this IDN."""
     if classify and get_command:
         family = classify(idn)
         if family:
             try:
                 steps = get_command(family, 'screenshot')
-                # raw_query step: the string is the command to write
                 for _action, scpi in steps:
                     return scpi
             except KeyError:
@@ -50,17 +54,24 @@ def _screenshot_command(idn: str) -> str:
 
 def get_screenshot(scope, idn: str, filename: str):
     cmd = _screenshot_command(idn)
-    time.sleep(0.1)
 
     scope.timeout = SCREENSHOT_TIMEOUT_MS
-    scope.chunk_size = 1024 * 1024
+    scope.chunk_size = USBTMC_CHUNK_SIZE
     scope.write(cmd)
-    data = scope.read_raw()
+    time.sleep(RENDER_SLEEP)
+
+    chunks = []
+    while True:
+        chunk = scope.read_raw()
+        chunks.append(chunk)
+        if len(chunk) < USBTMC_CHUNK_SIZE:
+            break  # short packet signals end of transfer
+
+    data = b''.join(chunks)
 
     offset, detected_ext = _detect_format(data)
     data = data[offset:]
 
-    # If the caller gave a bare name with no extension, add the detected one
     base, ext = os.path.splitext(filename)
     if not ext and detected_ext:
         filename = base + detected_ext

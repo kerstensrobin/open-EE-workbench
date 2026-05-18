@@ -71,7 +71,7 @@
         "measure_risetime":   {"query": ":MEASure:ITEM? RTIM,CHANnel{ch}"},
         "measure_falltime":   {"query": ":MEASure:ITEM? FTIM,CHANnel{ch}"},
         "measure_dutycycle":  {"query": ":MEASure:ITEM? DUTY,CHANnel{ch}"},
-        "screenshot":         {"raw_query": ":DISPlay:DATA? ON,OFF,PNG"},
+        "screenshot":         {"raw_query": ":DISPlay:DATA?"},
         "annotation_text":    null,
         "annotation_on":      null,
         "annotation_off":     null,
