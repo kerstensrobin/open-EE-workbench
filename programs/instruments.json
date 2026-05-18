@@ -74,7 +74,9 @@
         "screenshot":         {"raw_query": ":DISPlay:DATA?"},
         "annotation_text":    null,
         "annotation_on":      null,
-        "annotation_off":     null
+        "annotation_off":     null,
+        "labels_on":          null,
+        "labels_off":         null
       }
     },
 

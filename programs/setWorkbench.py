@@ -256,6 +256,55 @@ APPLY_HANDLERS = {
 
 
 # ---------------------------------------------------------------------------
+# Save handlers — read current settings from instruments
+# ---------------------------------------------------------------------------
+
+def save_edu36311a(inst) -> dict:
+    outputs = []
+    for ch in (1, 2, 3):
+        v     = float(inst.query(f"VOLT? (@{ch})").strip())
+        i_lim = float(inst.query(f"CURR? (@{ch})").strip())
+        state = inst.query(f"OUTP? (@{ch})").strip()
+        outputs.append({
+            "channel":       ch,
+            "voltage":       round(v, 4),
+            "current_limit": round(i_lim, 4),
+            "enabled":       state in ("1", "ON"),
+        })
+    return {"outputs": outputs}
+
+
+def save_edu33211a(inst) -> dict:
+    channels = []
+    for ch in (1, 2):
+        try:
+            func   = inst.query(f"SOUR{ch}:FUNC?").strip()
+            freq   = float(inst.query(f"SOUR{ch}:FREQ?").strip())
+            amp    = float(inst.query(f"SOUR{ch}:VOLT?").strip())
+            unit   = inst.query(f"SOUR{ch}:VOLT:UNIT?").strip()
+            offset = float(inst.query(f"SOUR{ch}:VOLT:OFFS?").strip())
+            state  = inst.query(f"OUTP{ch}?").strip()
+            channels.append({
+                "channel":        ch,
+                "function":       func,
+                "frequency":      round(freq, 6),
+                "amplitude":      round(amp, 6),
+                "amplitude_unit": unit,
+                "offset":         round(offset, 6),
+                "enabled":        state in ("1", "ON"),
+            })
+        except Exception:
+            break  # single-channel device or channel out of range
+    return {"channels": channels}
+
+
+SAVE_HANDLERS = {
+    "edu36311a": save_edu36311a,
+    "edu33211a": save_edu33211a,
+}
+
+
+# ---------------------------------------------------------------------------
 # Reset handlers — safe defaults
 # ---------------------------------------------------------------------------
 
@@ -434,6 +483,39 @@ def run_reset(rm, discovered: dict, spinner: Spinner) -> list:
     return results
 
 
+def run_save(rm, discovered: dict, spinner: Spinner) -> tuple[dict, list]:
+    """Query current settings from all instruments; return (config_dict, results)."""
+    instruments_config = {}
+    results = []
+
+    for serial, (resource, idn) in discovered.items():
+        model = model_from_idn(idn)
+        kind  = classify(idn)
+        spinner.update(f"Reading {model}")
+
+        if kind not in SAVE_HANDLERS:
+            results.append((model, resource, None, f"save not supported for '{kind}' — skipped"))
+            continue
+
+        save_fn = SAVE_HANDLERS[kind]
+        inst = None
+        try:
+            inst = open_inst(rm, resource)
+            config = save_fn(inst)
+            instruments_config[kind] = config
+            results.append((model, resource, True, f"settings read OK"))
+        except Exception as exc:
+            results.append((model, resource, False, str(exc)))
+        finally:
+            if inst is not None:
+                try:
+                    inst.close()
+                except Exception:
+                    pass
+
+    return instruments_config, results
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -455,13 +537,33 @@ def main():
         action="store_true",
         help="Reset all instruments to safe defaults instead of applying a config.",
     )
+    parser.add_argument(
+        "--save-current",
+        metavar="NAME",
+        help="Read current instrument settings and write them to <NAME>.json.",
+    )
     args = parser.parse_args()
 
     workflow = None
     extra_hosts = []
     default_config = os.path.join(os.path.dirname(__file__), "workbench_config.json")
 
-    if not args.reset_bench:
+    if args.save_current:
+        _subtitle = f"saving: {args.save_current}"
+        try:
+            with open(default_config) as f:
+                extra_hosts = json.load(f).get("hosts", [])
+        except Exception:
+            pass
+    elif args.reset_bench:
+        _subtitle = "workbench reset"
+        # Load hosts from default config even in reset mode so LAN instruments are reached.
+        try:
+            with open(default_config) as f:
+                extra_hosts = json.load(f).get("hosts", [])
+        except Exception:
+            pass
+    else:
         config_path = args.config or default_config
         try:
             with open(config_path) as f:
@@ -474,14 +576,6 @@ def main():
             sys.exit(1)
         _subtitle = f"workflow: {workflow.get('name', os.path.basename(config_path))}"
         extra_hosts = workflow.get("hosts", [])
-    else:
-        _subtitle = "workbench reset"
-        # Load hosts from default config even in reset mode so LAN instruments are reached.
-        try:
-            with open(default_config) as f:
-                extra_hosts = json.load(f).get("hosts", [])
-        except Exception:
-            pass
 
     try:
         rm = pyvisa.ResourceManager("@py")
@@ -489,11 +583,15 @@ def main():
         print(f"Error opening VISA resource manager: {exc}")
         sys.exit(1)
 
+    instruments_config = {}
+
     with Spinner("Scanning instruments") as spinner:
         discovered = discover(rm, spinner, extra_hosts)
 
         if not discovered:
             pass  # handled after spinner exits
+        elif args.save_current:
+            instruments_config, results = run_save(rm, discovered, spinner)
         elif args.reset_bench:
             results = run_reset(rm, discovered, spinner)
         else:
@@ -505,7 +603,20 @@ def main():
         print("No VISA instruments found.")
         return
 
-    if workflow and not args.reset_bench:
+    if args.save_current:
+        outfile = f"{args.save_current}.json"
+        output = {
+            "name": args.save_current,
+            "description": f"Saved from connected instruments — {time.strftime('%Y-%m-%d %H:%M')}",
+            "instruments": instruments_config,
+        }
+        if extra_hosts:
+            output["hosts"] = extra_hosts
+        with open(outfile, "w") as f:
+            json.dump(output, f, indent=2)
+        print(f"Saved to {os.path.abspath(outfile)}")
+        print()
+    elif workflow:
         print(f"Workflow : {workflow.get('name', '—')}")
         if workflow.get("description"):
             print(f"          {workflow['description']}")
