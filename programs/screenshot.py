@@ -56,18 +56,26 @@ def get_screenshot(scope, idn: str, filename: str):
     cmd = _screenshot_command(idn)
 
     scope.timeout = SCREENSHOT_TIMEOUT_MS
-    scope.chunk_size = USBTMC_CHUNK_SIZE
+
+    # USBTMC delivers data in small increments; loop until a short packet signals EOF.
+    # VXI-11 (TCPIP inst0) and raw SOCKET connections return the full payload in one read.
+    is_usbtmc = scope.resource_name.upper().startswith('USB')
+    if is_usbtmc:
+        scope.chunk_size = USBTMC_CHUNK_SIZE
+
     scope.write(cmd)
     time.sleep(RENDER_SLEEP)
 
-    chunks = []
-    while True:
-        chunk = scope.read_raw()
-        chunks.append(chunk)
-        if len(chunk) < USBTMC_CHUNK_SIZE:
-            break  # short packet signals end of transfer
-
-    data = b''.join(chunks)
+    if is_usbtmc:
+        chunks = []
+        while True:
+            chunk = scope.read_raw()
+            chunks.append(chunk)
+            if len(chunk) < USBTMC_CHUNK_SIZE:
+                break  # short packet signals end of transfer
+        data = b''.join(chunks)
+    else:
+        data = scope.read_raw()
 
     offset, detected_ext = _detect_format(data)
     data = data[offset:]
