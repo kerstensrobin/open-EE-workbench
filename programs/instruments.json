@@ -169,7 +169,13 @@
           ":MEASUrement:IMMed:SOUrce CH{ch}",
           {"query": ":MEASUrement:IMMed:VALue?"}
         ],
-        "screenshot":         null
+        "screenshot": [
+          {"note": "Due to Tektronix inefficiencies, a USB stick must be inserted into the scope to be able to take a remote screenshot."},
+          ":SAVe:IMAGe:FILEFormat PNG",
+          ":SAVe:IMAGe \"TEKSCR.PNG\"",
+          {"raw_query": ":FILESystem:READFile \"TEKSCR.PNG\""},
+          ":FILESystem:DELEte \"TEKSCR.PNG\""
+        ]
       }
     },
 
@@ -461,6 +467,31 @@
       "type": "scope",
       "inherits": "rigol_ds7000",
       "patterns": ["DS8034-R", "DS8104-R", "DS8204-R"]
+    },
+
+    {
+      "id": "rigol_dho",
+      "vendor": "Rigol",
+      "series": "DHO800 / DHO900 / DHO1000 Series",
+      "type": "scope",
+      "inherits": "rigol_ds1000z",
+      "patterns": ["DHO802", "DHO804", "DHO812", "DHO814",
+                   "DHO912", "DHO914", "DHO914S", "DHO924", "DHO924S",
+                   "DHO1102", "DHO1104", "DHO1202", "DHO1204"],
+      "overrides": {
+        "timebase_scale":    {"write": ":TIMebase:SCALe {value}",   "query": ":TIMebase:SCALe?"},
+        "timebase_position": {"write": ":TIMebase:OFFSet {value}",  "query": ":TIMebase:OFFSet?"},
+        "screenshot":        {"raw_query": ":DISPlay:DATA? PNG"}
+      }
+    },
+
+    {
+      "id": "rigol_dho4000",
+      "vendor": "Rigol",
+      "series": "DHO4000 Series",
+      "type": "scope",
+      "inherits": "rigol_dho",
+      "patterns": ["DHO4204", "DHO4204S", "DHO4404", "DHO4404S", "DHO4804", "DHO4804S"]
     },
 
     {

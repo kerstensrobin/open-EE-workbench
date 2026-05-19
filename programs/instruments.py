@@ -83,7 +83,7 @@ def resolve_command(cmd, **kwargs) -> list[tuple[str, str]]:
         return [("write", cmd.format(**kwargs))]
     if isinstance(cmd, dict):
         steps = []
-        for action in ("write", "query", "raw_query"):
+        for action in ("write", "query", "raw_query", "note"):
             if action in cmd:
                 steps.append((action, cmd[action].format(**kwargs)))
         return steps

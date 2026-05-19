@@ -38,22 +38,42 @@ def _detect_format(data: bytes) -> tuple[int, str]:
     return 0, ''
 
 
-def _screenshot_command(idn: str) -> str:
-    """Return the SCPI command string to request a screenshot for this IDN."""
+def _screenshot_steps(idn: str) -> list[tuple[str, str]] | None:
+    """Return the screenshot step list for this IDN, or None if unsupported.
+
+    Falls back to a single :DISPlay:DATA? raw_query for unrecognised instruments.
+    Returns None only when the instrument is known and screenshot is explicitly null.
+    """
     if classify and get_command:
         family = classify(idn)
         if family:
             try:
-                steps = get_command(family, 'screenshot')
-                for _action, scpi in steps:
-                    return scpi
+                return get_command(family, 'screenshot')
             except KeyError:
-                pass
-    return ':DISPlay:DATA?'
+                return None  # known scope, screenshot explicitly unsupported
+    return [('raw_query', ':DISPlay:DATA?')]
 
 
 def get_screenshot(scope, idn: str, filename: str):
-    cmd = _screenshot_command(idn)
+    steps = _screenshot_steps(idn)
+    if steps is None:
+        raise RuntimeError(
+            f"Screenshot not supported over VISA for this scope ({idn}).\n"
+            f"  Use the front-panel Save button or :SAVe:IMAGe to save to USB."
+        )
+
+    for action, text in steps:
+        if action == 'note':
+            print(f"Note: {text}")
+
+    # Split into: writes before the binary read, the raw_query read, writes after.
+    raw_idx = next((i for i, (a, _) in enumerate(steps) if a == 'raw_query'), None)
+    if raw_idx is None:
+        raise RuntimeError(f"Screenshot command for {idn} has no data-read step.")
+
+    pre_steps  = [(a, s) for a, s in steps[:raw_idx]      if a == 'write']
+    read_cmd   = steps[raw_idx][1]
+    post_steps = [(a, s) for a, s in steps[raw_idx + 1:]  if a == 'write']
 
     scope.timeout = SCREENSHOT_TIMEOUT_MS
 
@@ -63,8 +83,11 @@ def get_screenshot(scope, idn: str, filename: str):
     if is_usbtmc:
         scope.chunk_size = USBTMC_CHUNK_SIZE
 
-    scope.write(cmd)
+    for _action, scpi in pre_steps:
+        scope.write(scpi)
+
     time.sleep(RENDER_SLEEP)
+    scope.write(read_cmd)
 
     if is_usbtmc:
         chunks = []
@@ -76,6 +99,9 @@ def get_screenshot(scope, idn: str, filename: str):
         data = b''.join(chunks)
     else:
         data = scope.read_raw()
+
+    for _action, scpi in post_steps:
+        scope.write(scpi)
 
     offset, detected_ext = _detect_format(data)
     data = data[offset:]
@@ -140,7 +166,22 @@ def main():
     # scope.write(':CHANnel1:LABel "CH1"')
     # scope.write(':DISPlay:LABel ON')
 
-    get_screenshot(scope, idn, args.filename)
+    try:
+        get_screenshot(scope, idn, args.filename)
+    except RuntimeError as exc:
+        print(f"Error: {exc}")
+        scope.close()
+        rm.close()
+        sys.exit(1)
+    except pyvisa.errors.VisaIOError as exc:
+        if 'timeout' in str(exc).lower() or 'VI_ERROR_TMO' in str(exc):
+            print("Error: Scope did not respond in time. "
+                  "Check that the scope is ready and (if applicable) a USB stick is inserted.")
+        else:
+            print(f"Error: VISA communication failed — {exc}")
+        scope.close()
+        rm.close()
+        sys.exit(1)
 
     scope.close()
     rm.close()
