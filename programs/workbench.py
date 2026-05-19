@@ -15,7 +15,7 @@ import json
 import os
 import re
 
-WORKBENCH_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workbenches")
+WORKBENCH_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "workbenches")
 
 
 def _safe_name(name: str) -> str:

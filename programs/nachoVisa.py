@@ -202,7 +202,7 @@ except ImportError:
 
 LAN_PROBE_PORTS = (5025, 4880, 111)
 
-WORKBENCH_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workbenches")
+WORKBENCH_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "workbenches")
 
 # instruments.json uses "awg" as the type; map it to the conventional role name
 _TYPE_TO_ROLE = {"awg": "generator"}

@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "name": "gu128desk",
+  "created_at": "2026-05-19T07:48:58.213973+00:00",
+  "host": "cachyos",
+  "instruments": [
+    {
+      "resource": "TCPIP0::143.129.36.133::5025::SOCKET",
+      "connection": "Ethernet",
+      "manufacturer": "Keysight Technologies",
+      "model": "EDU33212A",
+      "serial": "CN63430108",
+      "firmware": "K-01.03.04-01.00-01.04-01.00-01.00",
+      "type": "awg",
+      "role": "generator",
+      "family_id": "keysight_edu33211a"
+    },
+    {
+      "resource": "TCPIP0::143.129.36.135::inst0::INSTR",
+      "connection": "Ethernet",
+      "manufacturer": "KEYSIGHT TECHNOLOGIES",
+      "model": "DSOX1204A",
+      "serial": "CN63126106",
+      "firmware": "02.12.2021071625",
+      "type": "scope",
+      "role": "scope",
+      "family_id": "keysight_infiniivision"
+    },
+    {
+      "resource": "TCPIP0::143.129.36.142::5025::SOCKET",
+      "connection": "Ethernet",
+      "manufacturer": "Keysight Technologies",
+      "model": "EDU36311A",
+      "serial": "CN63420158",
+      "firmware": "K-01.08.03-01.00-01.08-02.00",
+      "type": "psu",
+      "role": "psu",
+      "family_id": "keysight_edu36311a"
+    },
+    {
+      "resource": "USB0::10893::36609::CN63420158::0::INSTR",
+      "connection": "USB",
+      "manufacturer": "Keysight Technologies",
+      "model": "EDU36311A",
+      "serial": "CN63420158",
+      "firmware": "K-01.08.03-01.00-01.08-02.00",
+      "type": "psu",
+      "role": "psu",
+      "family_id": "keysight_edu36311a"
+    }
+  ],
+  "suggested_tests": [
+    "ac_frequency_sweep",
+    "psu_ramp_capture"
+  ]
+}
