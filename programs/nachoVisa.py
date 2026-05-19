@@ -998,6 +998,23 @@ def save_workbench(name: str, instruments: List[dict]) -> str:
     return path
 
 
+def _write_active_unsaved(instruments: List[dict]):
+    os.makedirs(WORKBENCH_DIR, exist_ok=True)
+    payload = {
+        "schema_version": "1.0",
+        "name": None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "host": socket.gethostname(),
+        "instruments": instruments,
+        "suggested_tests": suggest_tests(instruments),
+    }
+    path = os.path.join(WORKBENCH_DIR, "active.json")
+    if os.path.lexists(path):
+        os.remove(path)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+
+
 def main():
     global _debug
 
@@ -1144,6 +1161,8 @@ def main():
                 answer = ""
             if answer == "y":
                 fix_udev()
+                print("Re-run this script after replugging the device to discover instruments.")
+                return
         print("No VISA instruments found.")
         return
 
@@ -1187,6 +1206,17 @@ def main():
                     if ans == "y":
                         _wb_set_active(save_name)
                         print(f"Active workbench updated to {save_name!r}.")
+        else:
+            current = _wb_active_name() if _wb_active_name else None
+            current_str = f" (current: {current})" if current else ""
+            try:
+                ans = input(f"Set as active workbench (unsaved){current_str}? [y/N] ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                ans = ""
+            if ans == "y":
+                _write_active_unsaved(instrument_data)
+                print("Set as active workbench.")
 
 
 if __name__ == "__main__":
