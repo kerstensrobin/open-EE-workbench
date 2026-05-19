@@ -370,6 +370,27 @@ def _probe_resource(rm, resource: str) -> tuple[str, str] | None:
                 pass
 
 
+def _list_usb_resources(rm) -> list:
+    """Return USB INSTR resource strings, using the pyvisa-py fallback if needed."""
+    resources = set()
+
+    try:
+        for r in rm.list_resources():
+            if r.upper().startswith("USB") and not r.upper().endswith("::RAW"):
+                resources.add(r)
+    except Exception:
+        pass
+
+    try:
+        from pyvisa_py.usb import USBInstrSession
+        resources.update(r for r in USBInstrSession.list_resources()
+                         if not r.upper().endswith("::RAW"))
+    except Exception:
+        pass
+
+    return sorted(resources)
+
+
 def discover(rm, spinner: Spinner, extra_hosts: list | None = None) -> dict:
     """Return {serial: (resource, idn)} for all reachable instruments.
 
@@ -384,14 +405,7 @@ def discover(rm, spinner: Spinner, extra_hosts: list | None = None) -> dict:
         if serial not in found or conn_priority(resource) < conn_priority(found[serial][0]):
             found[serial] = (resource, idn)
 
-    # USB auto-discovery via VISA resource manager
-    try:
-        usb_resources = [
-            r for r in rm.list_resources()
-            if r.upper().startswith("USB") and not r.upper().endswith("::RAW")
-        ]
-    except Exception:
-        usb_resources = []
+    usb_resources = _list_usb_resources(rm)
 
     for resource in usb_resources:
         spinner.update(f"Probing {resource}")

@@ -9,7 +9,7 @@
       "vendor": "Keysight",
       "series": "InfiniiVision X-Series (1000/1200/3000/4000/6000)",
       "type": "scope",
-      "patterns": ["DSOX", "MSOX", "EDUX", "INFINIIVISION"],
+      "patterns": ["DSOX", "MSOX", "MSO-X", "DSO-X", "EDUX", "INFINIIVISION"],
       "commands": {
         "reset":              ["*CLS", ":SYSTem:PRESet"],
         "run":                ":RUN",
