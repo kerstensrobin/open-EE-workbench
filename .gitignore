@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Workbench configs (device-specific, private)
+workbenches/*.json
+!workbenches/active.json
