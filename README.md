@@ -3,7 +3,7 @@ A non-proprietary, cross-compatible VISA toolset for automating the modern elect
 Open-EE-workbench analyses your bench and provides a standard set of workflows that work out of the box, regardless of the brand(s) of your test & measurement equipment.
 Built on pyVISA and pyVISA-py, with SCPI dialect coverage sourced from manufacturer programming manuals across Keysight, Tektronix, Rohde & Schwarz, Rigol, Siglent, and more.
 
-Very much a work in progress.
+Forever a work in progress.
 
 ## Folder structure
 
