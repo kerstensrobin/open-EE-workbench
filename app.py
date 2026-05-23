@@ -619,6 +619,268 @@ def api_scan_save():
         return jsonify({"error": str(exc)}), 500
 
 
+# ── Automation ────────────────────────────────────────────────────────────────
+_auto_stop    = threading.Event()
+_auto_running = False
+
+
+def _suggest_tests() -> list:
+    """Return tests available for the current workbench based on instrument types present."""
+    wb = _state.get("workbench")
+    if not wb:
+        return []
+    types = {instr.get("type") for instr in wb.get("_unique", [])}
+    tests = []
+
+    if "awg" in types and "scope" in types:
+        tests.append({
+            "id":          "ac_frequency_sweep",
+            "name":        "AC Frequency Sweep",
+            "description": "Sweep AWG frequency, measure Vpp on scope CH1 and CH2",
+            "requires":    ["awg", "scope"],
+            "params": [
+                {"id": "freq_start",  "label": "Start freq",  "unit": "Hz",  "default": 100,    "type": "number"},
+                {"id": "freq_stop",   "label": "Stop freq",   "unit": "Hz",  "default": 100000, "type": "number"},
+                {"id": "num_points",  "label": "Points",      "unit": "",    "default": 20,     "type": "number"},
+                {"id": "amplitude",   "label": "Amplitude",   "unit": "Vpp", "default": 1.0,    "type": "number"},
+                {"id": "settle_time", "label": "Settle",      "unit": "s",   "default": 0.2,    "type": "number"},
+            ],
+            "columns": ["set_freq_Hz", "meas_freq_Hz", "vpp_ch1_V", "vpp_ch2_V"],
+        })
+
+    if "psu" in types:
+        tests.append({
+            "id":          "iv_curve",
+            "name":        "I-V Curve",
+            "description": "Sweep PSU voltage and log V+I at each step",
+            "requires":    ["psu"],
+            "params": [
+                {"id": "ch",          "label": "Channel",     "unit": "",    "default": 1,   "type": "number"},
+                {"id": "v_start",     "label": "V start",     "unit": "V",   "default": 0,   "type": "number"},
+                {"id": "v_stop",      "label": "V stop",      "unit": "V",   "default": 5,   "type": "number"},
+                {"id": "v_step",      "label": "V step",      "unit": "V",   "default": 0.1, "type": "number"},
+                {"id": "i_limit",     "label": "I limit",     "unit": "A",   "default": 0.5, "type": "number"},
+                {"id": "settle_time", "label": "Settle",      "unit": "s",   "default": 0.1, "type": "number"},
+            ],
+            "columns": ["v_set_V", "v_meas_V", "i_meas_A"],
+        })
+
+    if "dmm" in types:
+        tests.append({
+            "id":          "dmm_logger",
+            "name":        "DMM Logger",
+            "description": "Log DMM measurements at a fixed interval",
+            "requires":    ["dmm"],
+            "params": [
+                {"id": "mode",        "label": "Mode",        "unit": "",    "default": "vdc", "type": "select",
+                 "options": ["vdc", "vac", "idc", "iac", "r", "r4w", "freq", "cap"]},
+                {"id": "interval",    "label": "Interval",    "unit": "s",   "default": 1.0,   "type": "number"},
+                {"id": "num_samples", "label": "Samples",     "unit": "",    "default": 60,    "type": "number"},
+            ],
+            "columns": ["elapsed_s", "value"],
+        })
+
+    return tests
+
+
+@flask_app.route("/api/automation/tests")
+def api_automation_tests():
+    return jsonify({"tests": _suggest_tests()})
+
+
+@flask_app.route("/api/automation/stop", methods=["POST"])
+def api_automation_stop():
+    global _auto_running
+    _auto_stop.set()
+    _auto_running = False
+    return jsonify({"status": "stopping"})
+
+
+@flask_app.route("/api/automation/run", methods=["POST"])
+def api_automation_run():
+    global _auto_running
+    if _auto_running:
+        return jsonify({"error": "A test is already running"}), 409
+
+    d       = request.json or {}
+    test_id = d.get("test_id")
+    params  = d.get("params", {})
+
+    if not test_id:
+        return jsonify({"error": "test_id required"}), 400
+    if not _state.get("connected"):
+        return jsonify({"error": "Not connected to instruments"}), 400
+
+    _auto_stop.clear()
+    _auto_running = True
+
+    def _emit_progress(msg: str):
+        sio.emit("automation_progress", {"test_id": test_id, "msg": msg})
+        _log(f"[auto] {msg}")
+
+    def _done(rows, columns, error=None):
+        global _auto_running
+        _auto_running = False
+        sio.emit("automation_done", {"test_id": test_id, "columns": columns,
+                                     "rows": rows, "error": error})
+
+    def _run_ac_sweep():
+        freq_start  = float(params.get("freq_start",  100))
+        freq_stop   = float(params.get("freq_stop",   100000))
+        n_pts       = max(2, int(params.get("num_points", 20)))
+        amplitude   = float(params.get("amplitude",   1.0))
+        settle_time = float(params.get("settle_time", 0.2))
+
+        awg_res,   awg_fam   = _find_instrument("awg")
+        scope_res, scope_fam = _find_instrument("scope")
+        if awg_res is None or scope_res is None:
+            _done([], [], "AWG or scope not connected"); return
+
+        cols = ["set_freq_Hz", "meas_freq_Hz", "vpp_ch1_V", "vpp_ch2_V"]
+        rows = []
+
+        # logarithmically spaced frequencies
+        import math
+        freqs = [freq_start * (freq_stop / freq_start) ** (i / (n_pts - 1)) for i in range(n_pts)]
+
+        # Configure AWG: sine wave, fixed amplitude
+        try:
+            _run_steps(awg_res, get_command(awg_fam, "set_function",       ch=1, func="SIN"))
+            _run_steps(awg_res, get_command(awg_fam, "set_amplitude",      ch=1, amp=f"{amplitude:.4f}"))
+            _run_steps(awg_res, get_command(awg_fam, "set_amplitude_unit", ch=1, unit="VPP"))
+            _run_steps(awg_res, get_command(awg_fam, "output_on",          ch=1))
+        except Exception as exc:
+            _done([], cols, f"AWG setup failed: {exc}"); return
+
+        _emit_progress(f"Sweep started: {n_pts} points, {freq_start:.0f}–{freq_stop:.0f} Hz, {amplitude} Vpp")
+
+        for i, freq in enumerate(freqs):
+            if _auto_stop.is_set():
+                _emit_progress("Stopped by user"); break
+            try:
+                _run_steps(awg_res, get_command(awg_fam, "set_frequency", ch=1, freq=f"{freq:.6g}"))
+                time.sleep(settle_time)
+                raw_vpp1 = _run_steps(scope_res, get_command(scope_fam, "measure_vpp",  ch=1))
+                raw_vpp2 = _run_steps(scope_res, get_command(scope_fam, "measure_vpp",  ch=2))
+                raw_freq = _run_steps(scope_res, get_command(scope_fam, "measure_freq", ch=1))
+
+                def _safe(r):
+                    try:
+                        v = float(r)
+                        return None if abs(v) > 1e30 else round(v, 6)
+                    except Exception:
+                        return None
+
+                row = [round(freq, 3), _safe(raw_freq), _safe(raw_vpp1), _safe(raw_vpp2)]
+                rows.append(row)
+                sio.emit("automation_row", {"test_id": test_id, "row": row, "columns": cols,
+                                            "progress": (i + 1) / n_pts})
+            except Exception as exc:
+                _log(f"[auto] step {i+1} error: {exc}")
+
+        try: _run_steps(awg_res, get_command(awg_fam, "output_off", ch=1))
+        except Exception: pass
+        _done(rows, cols)
+
+    def _run_iv_curve():
+        ch          = int(params.get("ch",          1))
+        v_start     = float(params.get("v_start",   0))
+        v_stop      = float(params.get("v_stop",    5))
+        v_step      = abs(float(params.get("v_step", 0.1))) or 0.1
+        i_limit     = float(params.get("i_limit",   0.5))
+        settle_time = float(params.get("settle_time", 0.1))
+
+        psu_res, psu_fam = _find_instrument("psu")
+        if psu_res is None:
+            _done([], [], "PSU not connected"); return
+
+        cols = ["v_set_V", "v_meas_V", "i_meas_A"]
+        rows = []
+
+        n    = round(abs(v_stop - v_start) / v_step)
+        sign = 1 if v_stop >= v_start else -1
+        voltages = [round(v_start + i * sign * v_step, 10) for i in range(n + 1)]
+
+        _emit_progress(f"I-V sweep: {len(voltages)} pts on CH{ch}, limit {i_limit} A")
+
+        try:
+            _run_steps(psu_res, get_command(psu_fam, "set_current_limit", ch=ch, value=f"{i_limit:.4f}"))
+            _run_steps(psu_res, get_command(psu_fam, "output_on",         ch=ch))
+        except Exception as exc:
+            _done([], cols, f"PSU setup failed: {exc}"); return
+
+        for i, v in enumerate(voltages):
+            if _auto_stop.is_set():
+                _emit_progress("Stopped by user"); break
+            try:
+                _run_steps(psu_res, get_command(psu_fam, "set_voltage",     ch=ch, value=f"{v:.6f}"))
+                time.sleep(settle_time)
+                raw_v = _run_steps(psu_res, get_command(psu_fam, "measure_voltage", ch=ch))
+                raw_i = _run_steps(psu_res, get_command(psu_fam, "measure_current", ch=ch))
+                v_m = round(float(raw_v), 6) if raw_v is not None else None
+                i_m = round(float(raw_i), 6) if raw_i is not None else None
+                row = [round(v, 6), v_m, i_m]
+                rows.append(row)
+                sio.emit("automation_row", {"test_id": test_id, "row": row, "columns": cols,
+                                            "progress": (i + 1) / len(voltages)})
+            except Exception as exc:
+                _log(f"[auto] step {i+1} error: {exc}")
+
+        try:
+            _run_steps(psu_res, get_command(psu_fam, "set_voltage", ch=ch, value="0.0"))
+            _run_steps(psu_res, get_command(psu_fam, "output_off",  ch=ch))
+        except Exception: pass
+        _done(rows, cols)
+
+    def _run_dmm_logger():
+        mode        = str(params.get("mode",       "vdc"))
+        interval    = float(params.get("interval",  1.0))
+        num_samples = int(params.get("num_samples", 60))
+
+        dmm_res, dmm_fam = _find_instrument("dmm")
+        if dmm_res is None:
+            _done([], [], "DMM not connected"); return
+
+        op = DMM_OPS.get(mode)
+        if not op:
+            _done([], [], f"Unknown mode {mode!r}"); return
+
+        cols = ["elapsed_s", "value"]
+        rows = []
+        _emit_progress(f"DMM logger: {num_samples} × {mode} at {interval}s interval")
+
+        t0 = time.time()
+        for i in range(num_samples):
+            if _auto_stop.is_set():
+                _emit_progress("Stopped by user"); break
+            try:
+                raw = _run_steps(dmm_res, get_command(dmm_fam, op))
+                val = round(float(raw), 8) if raw is not None else None
+                elapsed = round(time.time() - t0, 3)
+                row = [elapsed, val]
+                rows.append(row)
+                sio.emit("automation_row", {"test_id": test_id, "row": row, "columns": cols,
+                                            "progress": (i + 1) / num_samples})
+            except Exception as exc:
+                _log(f"[auto] sample {i+1} error: {exc}")
+            _auto_stop.wait(timeout=interval)
+
+        _done(rows, cols)
+
+    runners = {
+        "ac_frequency_sweep": _run_ac_sweep,
+        "iv_curve":           _run_iv_curve,
+        "dmm_logger":         _run_dmm_logger,
+    }
+    runner = runners.get(test_id)
+    if runner is None:
+        _auto_running = False
+        return jsonify({"error": f"Unknown test: {test_id!r}"}), 400
+
+    _executor.submit(runner)
+    return jsonify({"status": "running", "test_id": test_id})
+
+
 # ── Graceful shutdown ─────────────────────────────────────────────────────────
 def _cleanup():
     """Close all open VISA connections. Safe to call more than once."""
