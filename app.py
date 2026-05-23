@@ -13,6 +13,7 @@ Usage
 """
 
 import argparse
+import atexit
 import os
 import sys
 import threading
@@ -574,6 +575,30 @@ def api_scan_save():
         return jsonify({"error": str(exc)}), 500
 
 
+# ── Graceful shutdown ─────────────────────────────────────────────────────────
+def _cleanup():
+    """Close all open VISA connections. Safe to call more than once."""
+    _poll_stop.set()
+    with _lock:
+        resources = list(_state.get("resources", {}).values())
+        rm        = _state.get("rm")
+        _state["resources"]  = {}
+        _state["rm"]         = None
+        _state["connected"]  = False
+    for r in resources:
+        try:
+            r.close()
+        except Exception:
+            pass
+    if rm:
+        try:
+            rm.close()
+        except Exception:
+            pass
+
+atexit.register(_cleanup)   # covers Ctrl-C, sys.exit(), and normal process end
+
+
 # ── Static files ──────────────────────────────────────────────────────────────
 @flask_app.route("/")
 def index():
@@ -697,7 +722,10 @@ def main():
     if args.browser:
         import webbrowser
         webbrowser.open(url)
-        t.join()
+        try:
+            t.join()
+        finally:
+            _cleanup()
         return
 
     # ── Standalone window — try backends in order ─────────────────────────────
@@ -706,6 +734,7 @@ def main():
         proc = _open_chrome_app(url)
         print(f"[app] opened in Chrome app-mode (pid {proc.pid})")
         proc.wait()   # block until user closes the window
+        _cleanup()
         return
     except FileNotFoundError:
         pass
@@ -714,7 +743,7 @@ def main():
     try:
         from PyQt5.QtWebKitWidgets import QWebView  # noqa: F401 — check availability
         print("[app] opening with PyQt5 + QtWebKit")
-        _open_qtwebkit(url)
+        _open_qtwebkit(url)   # calls sys.exit() → atexit fires _cleanup
         return
     except ImportError:
         pass
@@ -723,7 +752,10 @@ def main():
     import webbrowser
     print(f"[app] no standalone window available — opening browser: {url}")
     webbrowser.open(url)
-    t.join()
+    try:
+        t.join()
+    finally:
+        _cleanup()
 
 
 if __name__ == "__main__":
