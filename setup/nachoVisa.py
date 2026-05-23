@@ -424,6 +424,27 @@ def list_usb_fallback_resources() -> Tuple[List[str], List[str]]:
     return sorted(resources), errors
 
 
+def discover_serial_resources() -> Tuple[List[str], List[str]]:
+    """Return ASRL resource strings for USB-connected serial ports.
+
+    pyvisa-py does NOT include serial ports in rm.list_resources(), so we
+    enumerate them explicitly via pyserial's list_ports helper.  Only ports
+    with a non-None VID are included (i.e. physically connected via USB-to-
+    serial adapters: Prolific PL2303, FTDI, CH340, Silabs CP210x, etc.).
+    """
+    if list_ports is None:
+        return [], []
+    try:
+        resources = [
+            f"ASRL{port.device}::INSTR"
+            for port in list_ports.comports()
+            if port.vid is not None
+        ]
+        return resources, []
+    except Exception as exc:
+        return [], [f"Serial port discovery: {exc}"]
+
+
 def discover_resources(rm, spinner: Spinner = None) -> Tuple[List[str], List[str]]:
     resources = set()
     errors = []
@@ -441,6 +462,13 @@ def discover_resources(rm, spinner: Spinner = None) -> Tuple[List[str], List[str
     usb_resources, usb_errors = list_usb_fallback_resources()
     resources.update(usb_resources)
     errors.extend(usb_errors)
+
+    status("Querying USB-serial ports")
+    if spinner:
+        spinner.update("Querying serial ports")
+    serial_resources, serial_errors = discover_serial_resources()
+    resources.update(serial_resources)
+    errors.extend(serial_errors)
 
     return sorted(resources), errors
 

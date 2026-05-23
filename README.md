@@ -29,8 +29,21 @@ open-EE-workbench/
 
 ## Setup
 
+### Dependencies
+
+```bash
+pip install pyvisa pyvisa-py pyusb pyserial
+```
+
+`pyserial` is required for USB-to-serial instruments (power supplies and DMMs that connect via a USB-serial adapter such as the Prolific PL2303, FTDI FT232, Silabs CP210x, or CH340/CH341 chips). Without it, those instruments will not be discovered.
+
+**Driver note — Prolific PL2303 (and clones):**
+- **Linux** — the `pl2303` kernel module is included in all mainstream distributions; plug in the cable and `/dev/ttyUSBx` appears immediately. Ensure your user is in the `dialout` group (`sudo usermod -aG dialout $USER`; re-login required).
+- **macOS** — Apple Silicon / macOS 12+ include a driver. Older macOS versions or clone chips (PL2303HXA, PL2303TA) may need the [Prolific macOS driver](https://www.prolific.com.tw/US/ShowProduct.aspx?p_id=229).
+- **Windows** — Windows 10/11 include a driver for genuine PL2303 chips. Clone chips may require the [Prolific Windows driver](https://www.prolific.com.tw/US/ShowProduct.aspx?p_id=225) or the [CH340 driver](https://www.wch-ic.com/downloads/CH341SER_EXE.html) if the adapter uses a CH340.
+
 ### nachoVisa.py
-Scans your local network and USB bus for VISA instruments. Includes dependency diagnostics and an automatic udev rule fix for Arch and Debian-based systems. After a successful scan it offers to save the result as a named **workbench** JSON file (see [Workbench files](#workbench-files) below).
+Scans your local network and USB bus for VISA instruments, including USB-serial instruments. Includes dependency diagnostics and an automatic udev rule fix for Arch and Debian-based systems. After a successful scan it offers to save the result as a named **workbench** JSON file (see [Workbench files](#workbench-files) below).
 
 ```
 python setup/nachoVisa.py                           # scan USB + LAN

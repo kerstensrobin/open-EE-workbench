@@ -344,9 +344,41 @@
 
     .auto-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; min-height:200px; color:var(--text-faint); }
     .auto-empty p { font-size:13px; color:var(--text-dim); }
+    .auto-select-hint { min-height:160px; }
 
-    /* test grid */
-    .test-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:12px; }
+    /* two-panel layout */
+    .auto-layout { display:grid; grid-template-columns:1fr 200px; gap:14px; align-items:start; }
+    .auto-detail  { display:flex; flex-direction:column; gap:12px; min-width:0; }
+
+    /* test sidebar */
+    .test-sidebar {
+      background:var(--surface); border:1px solid var(--border);
+      border-radius:var(--radius-lg); overflow:hidden;
+      display:flex; flex-direction:column;
+    }
+    .test-sidebar-hdr {
+      padding:8px 12px; font-size:10px; font-weight:700; letter-spacing:.08em;
+      text-transform:uppercase; color:var(--text-faint);
+      background:var(--surface2); border-bottom:1px solid var(--border);
+    }
+    .test-list-item {
+      display:flex; align-items:center; gap:8px;
+      padding:9px 12px; cursor:pointer;
+      border-left:2px solid transparent;
+      transition:background .12s, border-color .12s;
+    }
+    .test-list-item:hover  { background:var(--surface2); }
+    .test-list-item.active { background:var(--surface2); border-left-color:var(--accent); }
+    .test-list-item + .test-list-item { border-top:1px solid var(--border); }
+    .test-list-icon {
+      width:24px; height:24px; border-radius:6px; flex-shrink:0;
+      display:flex; align-items:center; justify-content:center;
+      font-size:13px; background:rgba(59,130,246,.1); color:var(--accent);
+    }
+    .test-list-name { font-size:12px; font-weight:500; color:var(--text); line-height:1.3; }
+
+    /* test cards inside detail column — no grid, just stacked */
+    #test-grid { display:flex; flex-direction:column; gap:0; }
 
     /* test card */
     .test-card {
@@ -519,7 +551,7 @@
     <!-- ── Automation tab ─────────────────────────────────────────── -->
     <div id="auto-tab">
 
-      <!-- no workbench -->
+      <!-- no workbench (full-width placeholder) -->
       <div class="auto-empty" id="auto-empty-nowb">
         <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <polygon points="5 3 19 12 5 21 5 3"/>
@@ -527,7 +559,7 @@
         <p>Load a workbench first</p>
       </div>
 
-      <!-- no tests available -->
+      <!-- no tests available (full-width placeholder) -->
       <div class="auto-empty hidden" id="auto-empty-notests">
         <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
@@ -537,31 +569,54 @@
         <small>Connect instruments with compatible types (scope+AWG, PSU, or DMM)</small>
       </div>
 
-      <!-- test grid -->
-      <div id="test-grid" class="test-grid hidden"></div>
+      <!-- ── Two-panel layout (detail + sidebar) ──────────────────── -->
+      <div id="auto-layout" class="auto-layout hidden">
 
-      <!-- results panel -->
-      <div id="results-panel">
-        <div class="results-header">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-          </svg>
-          <span class="results-title" id="results-title">Results</span>
-          <span class="results-count" id="results-count"></span>
-        </div>
-        <div class="results-table-wrap">
-          <table class="results-tbl" id="results-tbl">
-            <thead id="results-thead"></thead>
-            <tbody id="results-tbody"></tbody>
-          </table>
-        </div>
-        <div class="results-footer">
-          <span class="results-msg" id="results-msg"></span>
-          <button class="btn btn-ghost" style="font-size:11px;" onclick="exportCSV()" id="export-btn">
-            ⬇ Export CSV
-          </button>
-        </div>
-      </div>
+        <!-- centre: selected-test controls + inline results -->
+        <div class="auto-detail">
+
+          <!-- placeholder shown before any test is selected -->
+          <div class="auto-empty auto-select-hint" id="auto-empty-select">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <polyline points="9 12 12 15 15 12"/>
+              <line x1="12" y1="9" x2="12" y2="15"/>
+            </svg>
+            <p>Select a test from the list</p>
+          </div>
+
+          <!-- test cards injected here; only selected one is visible -->
+          <div id="test-grid"></div>
+
+          <!-- results panel (inline, below the selected card) -->
+          <div id="results-panel">
+            <div class="results-header">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+              <span class="results-title" id="results-title">Results</span>
+              <span class="results-count" id="results-count"></span>
+            </div>
+            <div class="results-table-wrap">
+              <table class="results-tbl" id="results-tbl">
+                <thead id="results-thead"></thead>
+                <tbody id="results-tbody"></tbody>
+              </table>
+            </div>
+            <div class="results-footer">
+              <span class="results-msg" id="results-msg"></span>
+              <button class="btn btn-ghost" style="font-size:11px;" onclick="exportCSV()" id="export-btn">
+                ⬇ Export CSV
+              </button>
+            </div>
+          </div>
+
+        </div><!-- /auto-detail -->
+
+        <!-- right: test list sidebar -->
+        <div class="test-sidebar" id="test-sidebar"></div>
+
+      </div><!-- /auto-layout -->
 
     </div>
   </div>
@@ -664,11 +719,12 @@ let state = {
   connecting:  false,
   instruments: [],
   activeTab:   "workbench",
-  autoTests:   [],
-  autoRunning: false,
-  autoRows:    [],
-  autoCols:    [],
-  autoTestId:  null,
+  autoTests:      [],
+  autoRunning:    false,
+  autoRows:       [],
+  autoCols:       [],
+  autoTestId:     null,
+  selectedTestId: null,
 };
 
 // ── Tab switching ──────────────────────────────────────────────────
@@ -1081,8 +1137,13 @@ function buildPSUCard(instr) {
     </div>
     <div class="card-body">
       <div class="psu-channels">${channelHTML}</div>
-      <div class="psu-footer mt8">
-        <button class="btn btn-ghost" style="width:100%;font-size:11px;" onclick="psuReset()">↺ Reset all outputs</button>
+      <div class="psu-footer mt8" style="display:flex;gap:6px;">
+        <button class="output-toggle" id="psu-out-all"
+                style="flex:1;justify-content:center;border-radius:var(--radius);padding:6px 12px;font-size:11px;"
+                data-on="false" onclick="psuToggleAll(this)">
+          <span class="tog-dot"></span>All OFF
+        </button>
+        <button class="btn btn-ghost" style="flex:1;font-size:11px;" onclick="psuReset()">↺ Reset all</button>
       </div>
     </div>`;
   return div;
@@ -1095,16 +1156,40 @@ function psuSet(ch) {
   if (i!==""&&i!==undefined) body.current=parseFloat(i);
   POST("/api/psu/set",body).catch(e=>toast(e.message,"error"));
 }
+function _psuRefreshAllBtn() {
+  const allBtn = document.getElementById("psu-out-all");
+  if (!allBtn) return;
+  const chBtns = [...document.querySelectorAll(".output-toggle[data-ch]")];
+  const allOn = chBtns.length > 0 && chBtns.every(b => b.dataset.on === "true");
+  allBtn.dataset.on = String(allOn);
+  allBtn.className = "output-toggle" + (allOn ? " on" : "");
+  allBtn.style.cssText = "flex:1;justify-content:center;border-radius:var(--radius);padding:6px 12px;font-size:11px;";
+  allBtn.innerHTML = `<span class="tog-dot"></span>${allOn ? "All ON" : "All OFF"}`;
+}
 function psuToggleOutput(btn) {
   const ch=parseInt(btn.dataset.ch), on=btn.dataset.on!=="true";
   btn.dataset.on=on; btn.className="output-toggle"+(on?" on":"");
   btn.innerHTML=`<span class="tog-dot"></span>${on?"ON":"OFF"}`;
   POST("/api/psu/output",{ch,state:on}).catch(e=>toast(e.message,"error"));
+  _psuRefreshAllBtn();
+}
+function psuToggleAll(btn) {
+  const chBtns = [...document.querySelectorAll(".output-toggle[data-ch]")];
+  const targetOn = !chBtns.every(b => b.dataset.on === "true");
+  chBtns.forEach(b => {
+    const ch = parseInt(b.dataset.ch);
+    b.dataset.on = String(targetOn);
+    b.className = "output-toggle" + (targetOn ? " on" : "");
+    b.innerHTML = `<span class="tog-dot"></span>${targetOn ? "ON" : "OFF"}`;
+    POST("/api/psu/output", {ch, state: targetOn}).catch(e => toast(e.message, "error"));
+  });
+  _psuRefreshAllBtn();
 }
 function psuReset() {
-  document.querySelectorAll(".output-toggle").forEach(btn=>{
+  document.querySelectorAll(".output-toggle[data-ch]").forEach(btn=>{
     btn.dataset.on="false"; btn.className="output-toggle"; btn.innerHTML=`<span class="tog-dot"></span>OFF`;
   });
+  _psuRefreshAllBtn();
   POST("/api/psu/reset").catch(e=>toast(e.message,"error"));
 }
 
@@ -1278,34 +1363,78 @@ async function refreshAutoTests() {
 }
 
 function refreshAutoTab() {
-  const noWb     = document.getElementById("auto-empty-nowb");
-  const noTests  = document.getElementById("auto-empty-notests");
-  const testGrid = document.getElementById("test-grid");
+  const noWb    = document.getElementById("auto-empty-nowb");
+  const noTests = document.getElementById("auto-empty-notests");
+  const layout  = document.getElementById("auto-layout");
 
   if (!state.workbench) {
     noWb.classList.remove("hidden");
     noTests.classList.add("hidden");
-    testGrid.classList.add("hidden");
+    layout.classList.add("hidden");
     return;
   }
   noWb.classList.add("hidden");
 
   if (!state.autoTests.length) {
-    // Try fetching if not yet loaded
     if (state.connected) refreshAutoTests();
     noTests.classList.remove("hidden");
-    testGrid.classList.add("hidden");
+    layout.classList.add("hidden");
     return;
   }
   noTests.classList.add("hidden");
-  testGrid.classList.remove("hidden");
+  layout.classList.remove("hidden");
   buildTestGrid(state.autoTests);
 }
 
 function buildTestGrid(tests) {
+  const icons = { ac_frequency_sweep:"〜", dc_sweep:"⚡", dmm_logger:"Ω",
+                  waveform_analysis:"∿",  harmonic_analysis:"≋" };
+
+  // ── Build test cards (all hidden; selected one revealed by selectTest) ──
   const grid = document.getElementById("test-grid");
   grid.innerHTML = "";
-  for (const test of tests) grid.appendChild(buildTestCard(test));
+  for (const test of tests) {
+    const card = buildTestCard(test);
+    card.classList.add("hidden");
+    grid.appendChild(card);
+  }
+
+  // ── Build sidebar ──────────────────��─────────────────────────────────────
+  const sidebar = document.getElementById("test-sidebar");
+  sidebar.innerHTML = '<div class="test-sidebar-hdr">Tests</div>';
+  for (const test of tests) {
+    const item = document.createElement("div");
+    item.className = "test-list-item";
+    item.dataset.testId = test.id;
+    item.onclick = () => selectTest(test.id);
+    item.innerHTML = `
+      <div class="test-list-icon">${icons[test.id] || "▶"}</div>
+      <div class="test-list-name">${escHtml(test.name)}</div>`;
+    sidebar.appendChild(item);
+  }
+
+  // Auto-select the first test (or reselect the previously active one)
+  const current = state.selectedTestId &&
+        tests.find(t => t.id === state.selectedTestId);
+  selectTest(current ? current.id : tests[0].id);
+}
+
+function selectTest(testId) {
+  state.selectedTestId = testId;
+
+  // Show the selected card, hide all others
+  document.querySelectorAll("#test-grid .test-card").forEach(card => {
+    card.classList.toggle("hidden", card.id !== `test-card-${testId}`);
+  });
+
+  // Update sidebar active state
+  document.querySelectorAll(".test-list-item").forEach(item => {
+    item.classList.toggle("active", item.dataset.testId === testId);
+  });
+
+  // Hide the "select a test" hint
+  const hint = document.getElementById("auto-empty-select");
+  if (hint) hint.classList.add("hidden");
 }
 
 function buildTestCard(test) {
@@ -1316,7 +1445,13 @@ function buildTestCard(test) {
   // Parameter inputs
   const paramRows = test.params.map(p => {
     if (p.type === "select") {
-      const opts = p.options.map(o => `<option value="${o}"${o===p.default?" selected":""}>${o}</option>`).join("");
+      // Options can be plain strings or {value, label} objects
+      const opts = p.options.map(o => {
+        const val = (o && typeof o === "object") ? o.value : o;
+        const lbl = (o && typeof o === "object") ? o.label : o;
+        const sel = (val === p.default || lbl === p.default) ? " selected" : "";
+        return `<option value="${escHtml(String(val))}"${sel}>${escHtml(String(lbl))}</option>`;
+      }).join("");
       return `
         <div class="test-param-row">
           <span class="test-param-label">${escHtml(p.label)}</span>
@@ -1336,10 +1471,9 @@ function buildTestCard(test) {
       </div>`;
   }).join("");
 
-  // Icon by type
-  const icons = { ac_frequency_sweep:"〜", iv_curve:"⚡", dmm_logger:"Ω",
-                  waveform_analysis:"∿",  harmonic_analysis:"≋" };
-  const icon = icons[test.id] || "▶";
+  const _testIcons = { ac_frequency_sweep:"〜", dc_sweep:"⚡", dmm_logger:"Ω",
+                       waveform_analysis:"∿",  harmonic_analysis:"≋" };
+  const icon = _testIcons[test.id] || "▶";
 
   div.innerHTML = `
     <div class="test-card-header">
@@ -1422,6 +1556,13 @@ socket.on("automation_progress", ({ test_id, msg }) => {
 
 socket.on("automation_row", ({ test_id, row, columns, progress }) => {
   if (!document.getElementById(`test-card-${test_id}`)) return;
+  // On the first row, update columns if the runner determined a different schema
+  // (e.g. dc_sweep changes columns based on sweep_mode at runtime)
+  if (state.autoRows.length === 0 && columns &&
+      columns.join("\0") !== state.autoCols.join("\0")) {
+    state.autoCols = columns;
+    initResultsPanel(test_id, columns);
+  }
   state.autoRows.push(row);
   // progress bar
   const fill = document.getElementById(`tprog-fill-${test_id}`);

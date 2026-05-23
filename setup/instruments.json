@@ -56,6 +56,7 @@
           "write": ":TIMebase:POSition {value}",
           "query": ":TIMebase:POSition?"
         },
+        "trigger_mode": ":TRIGger:MODE EDGE",
         "trigger_source": ":TRIGger:EDGE:SOURce CHANnel{ch}",
         "trigger_level": {
           "write": ":TRIGger:EDGE:LEVel {value}",
@@ -95,6 +96,12 @@
         "measure_dutycycle": {
           "query": ":MEASure:DUTYcycle? CHANnel{ch}"
         },
+        "measure_overshoot": {
+          "query": ":MEASure:OVERShoot? CHANnel{ch}"
+        },
+        "measure_preshoot": {
+          "query": ":MEASure:PREShoot? CHANnel{ch}"
+        },
         "screenshot": {
           "raw_query": ":DISPlay:DATA? PNG,COLor"
         }
@@ -114,6 +121,7 @@
       ],
       "overrides": {
         "reset": "*RST",
+        "trigger_mode": null,
         "timebase_scale": {
           "write": ":TIMebase:MAIN:SCALe {value}",
           "query": ":TIMebase:MAIN:SCALe?"
@@ -171,9 +179,18 @@
           "write": ":MEASure:ITEM DUTY,CHANnel{ch}",
           "query": ":MEASure:ITEM? DUTY,CHANnel{ch}"
         },
+        "measure_overshoot": {
+          "write": ":MEASure:ITEM OVERshoot,CHANnel{ch}",
+          "query": ":MEASure:ITEM? OVERshoot,CHANnel{ch}"
+        },
+        "measure_preshoot": {
+          "write": ":MEASure:ITEM PREShoot,CHANnel{ch}",
+          "query": ":MEASure:ITEM? PREShoot,CHANnel{ch}"
+        },
         "screenshot": {
           "raw_query": ":DISPlay:DATA?"
         },
+        "measure_clear_all": ":MEASure:CLEar ALL",
         "annotation_text": null,
         "annotation_on": null,
         "annotation_off": null,
