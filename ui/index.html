@@ -1,0 +1,1868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>open-EE-workbench</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & Base ────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:          #0d0e11;
+      --surface:     #13141a;
+      --surface2:    #1a1c24;
+      --surface3:    #21242f;
+      --surface4:    #272b38;
+      --border:      #2a2e3d;
+      --border2:     #373d52;
+      --text:        #c8cdd8;
+      --text-dim:    #636c82;
+      --text-faint:  #3a3f52;
+      --accent:      #3b82f6;
+      --accent-h:    #2563eb;
+      --accent-glow: rgba(59,130,246,0.18);
+      --green:       #4ade80;
+      --green-dim:   rgba(74,222,128,0.12);
+      --red:         #f87171;
+      --red-dim:     rgba(248,113,113,0.12);
+      --amber:       #fbbf24;
+      --amber-dim:   rgba(251,191,36,0.12);
+      --purple:      #a78bfa;
+      --sidebar-w:   300px;
+      --navbar-h:    56px;
+      --radius:      8px;
+      --radius-lg:   12px;
+      --font: 'Inter', system-ui, -apple-system, sans-serif;
+      --mono: 'JetBrains Mono', 'Fira Code', monospace;
+    }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: var(--font);
+      font-size: 13px;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Scrollbar ───────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+    /* ── Navbar ──────────────────────────────────────────────────── */
+    #navbar {
+      height: var(--navbar-h);
+      min-height: var(--navbar-h);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+      z-index: 100;
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+    #navbar * { -webkit-app-region: no-drag; }
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      text-decoration: none;
+      flex-shrink: 0;
+    }
+    .nav-logo img { height: 22px; opacity: 0.92; }
+    .nav-divider {
+      width: 1px;
+      height: 20px;
+      background: var(--border2);
+      flex-shrink: 0;
+    }
+    .nav-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .nav-spacer { flex: 1; }
+
+    /* workbench selector */
+    .wb-select-wrap { position: relative; }
+    .wb-select-wrap::after {
+      content: '';
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      border: 4px solid transparent;
+      border-top-color: var(--text-dim);
+      pointer-events: none;
+    }
+    #wb-select {
+      appearance: none;
+      background: var(--surface3);
+      color: var(--text);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius);
+      padding: 6px 28px 6px 10px;
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      outline: none;
+      min-width: 160px;
+      transition: border-color .15s;
+    }
+    #wb-select:hover { border-color: var(--border2); }
+    #wb-select:focus { border-color: var(--accent); }
+    #wb-select option { background: var(--surface2); }
+
+    /* status indicator */
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+      background: var(--surface3);
+      border: 1px solid var(--border);
+      white-space: nowrap;
+      transition: all .3s;
+    }
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      transition: background .3s, box-shadow .3s;
+    }
+    .status-badge.connecting .status-dot {
+      background: var(--amber);
+      animation: pulse 1s ease-in-out infinite;
+    }
+    .status-badge.connected .status-dot {
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+    }
+    .status-badge.error .status-dot { background: var(--red); }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+    #status-text { color: var(--text-dim); font-size: 11px; }
+    .status-badge.connected #status-text { color: var(--green); }
+    .status-badge.connecting #status-text { color: var(--amber); }
+    .status-badge.error #status-text { color: var(--red); }
+
+    /* nav buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border: none;
+      border-radius: var(--radius);
+      padding: 6px 14px;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all .15s;
+      white-space: nowrap;
+      letter-spacing: 0.02em;
+    }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-h); }
+    .btn-danger  { background: var(--red-dim); color: var(--red); border: 1px solid rgba(248,113,113,.3); }
+    .btn-danger:hover:not(:disabled) { background: rgba(248,113,113,.22); }
+    .btn-ghost   { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+    .btn-ghost:hover:not(:disabled) { background: var(--surface3); color: var(--text); border-color: var(--border2); }
+    .btn-green   { background: var(--green-dim); color: var(--green); border: 1px solid rgba(74,222,128,.25); }
+    .btn-green:hover:not(:disabled) { background: rgba(74,222,128,.2); }
+
+    /* ── Main Layout ─────────────────────────────────────────────── */
+    #layout {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* ── Content area ────────────────────────────────────────────── */
+    #content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+
+    /* ── Empty / connecting states ───────────────────────────────── */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      min-height: 260px;
+      color: var(--text-faint);
+    }
+    .empty-state svg { opacity: 0.3; }
+    .empty-state p { font-size: 13px; color: var(--text-dim); }
+    .empty-state small { font-size: 11px; }
+
+    /* ── Instrument grid ─────────────────────────────────────────── */
+    #instrument-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+
+    /* ── Cards ───────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      transition: border-color .2s;
+    }
+    .card:hover { border-color: var(--border2); }
+    .card.connected { border-color: rgba(59,130,246,.25); }
+    .card.error { border-color: rgba(248,113,113,.25); }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+    }
+    .card-icon {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+    .card-icon.scope  { background: rgba(59,130,246,.12);   color: var(--accent); }
+    .card-icon.psu    { background: rgba(74,222,128,.12);   color: var(--green); }
+    .card-icon.awg    { background: rgba(167,139,250,.12);  color: var(--purple); }
+    .card-icon.dmm    { background: rgba(251,191,36,.12);   color: var(--amber); }
+
+    .card-title-wrap { flex: 1; min-width: 0; }
+    .card-title {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text);
+    }
+    .card-subtitle {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 1px;
+      font-family: var(--mono);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .card-status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--text-faint);
+      flex-shrink: 0;
+      transition: all .3s;
+    }
+    .card.connected .card-status-dot {
+      background: var(--green);
+      box-shadow: 0 0 5px var(--green);
+    }
+    .card.error .card-status-dot { background: var(--red); }
+
+    .card-body { padding: 16px; }
+
+    /* ── Section label ───────────────────────────────────────────── */
+    .section-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      margin-bottom: 8px;
+    }
+
+    /* ── Button row ──────────────────────────────────────────────── */
+    .btn-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .btn-row .btn { flex: 1; min-width: 0; font-size: 11px; padding: 6px 8px; }
+
+    /* ── Scope Card ──────────────────────────────────────────────── */
+    .scope-controls { display: flex; flex-direction: column; gap: 12px; }
+    .transport-row { display: flex; gap: 6px; }
+    .transport-row .btn {
+      flex: 1;
+      font-size: 11px;
+      padding: 8px 4px;
+      background: var(--surface3);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .transport-row .btn:hover:not(:disabled) {
+      background: var(--surface4);
+      border-color: var(--border2);
+    }
+    .transport-row .btn.run  { color: var(--green); border-color: rgba(74,222,128,.2); }
+    .transport-row .btn.stop { color: var(--red);   border-color: rgba(248,113,113,.2); }
+    .screenshot-btn {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--surface3);
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      font-size: 11px;
+      padding: 8px 14px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: all .15s;
+      width: 100%;
+      justify-content: center;
+    }
+    .screenshot-btn:hover:not(:disabled) {
+      background: var(--surface4);
+      color: var(--text);
+      border-color: var(--border2);
+    }
+    .screenshot-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── PSU Card ────────────────────────────────────────────────── */
+    .psu-channels { display: flex; flex-direction: column; gap: 14px; }
+    .psu-channel {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .psu-ch-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--surface3);
+      border-bottom: 1px solid var(--border);
+    }
+    .psu-ch-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .ch-num {
+      font-weight: 700;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text);
+    }
+    .psu-ch-spacer { flex: 1; }
+    .output-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      background: var(--red-dim);
+      color: var(--red);
+      border: 1px solid rgba(248,113,113,.2);
+      transition: all .2s;
+    }
+    .output-toggle.on {
+      background: var(--green-dim);
+      color: var(--green);
+      border-color: rgba(74,222,128,.25);
+    }
+    .output-toggle .tog-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .psu-ch-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+    .psu-set-row { display: flex; gap: 8px; align-items: center; }
+    .psu-input-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: border-color .15s;
+    }
+    .psu-input-wrap:focus-within { border-color: var(--accent); }
+    .psu-input-unit {
+      padding: 5px 7px;
+      font-size: 10px;
+      font-family: var(--mono);
+      color: var(--text-dim);
+      background: var(--surface2);
+      border-right: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .psu-input {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--text);
+      font: inherit;
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 5px 8px;
+      outline: none;
+      min-width: 0;
+    }
+    .psu-set-btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      padding: 5px 10px;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+      flex-shrink: 0;
+    }
+    .psu-set-btn:hover { background: var(--accent-h); }
+    .psu-readings {
+      display: flex;
+      gap: 10px;
+    }
+    .psu-reading {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 8px;
+      text-align: center;
+    }
+    .psu-reading-label {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      margin-bottom: 3px;
+    }
+    .psu-reading-val {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-dim);
+      transition: color .3s;
+    }
+    .psu-reading-val.live { color: var(--text); }
+    .psu-footer { margin-top: 4px; }
+
+    /* ── AWG Card ────────────────────────────────────────────────── */
+    .awg-body { display: flex; flex-direction: column; gap: 14px; }
+    .ch-tabs { display: flex; gap: 4px; }
+    .ch-tab {
+      padding: 4px 12px;
+      border-radius: var(--radius);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--surface3);
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      transition: all .15s;
+    }
+    .ch-tab.active {
+      background: var(--accent-glow);
+      color: var(--accent);
+      border-color: rgba(59,130,246,.35);
+    }
+    .func-pills { display: flex; flex-wrap: wrap; gap: 5px; }
+    .func-pill {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      background: var(--surface3);
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      transition: all .15s;
+    }
+    .func-pill:hover { background: var(--surface4); color: var(--text); }
+    .func-pill.active {
+      background: rgba(167,139,250,.15);
+      color: var(--purple);
+      border-color: rgba(167,139,250,.3);
+    }
+    .param-rows { display: flex; flex-direction: column; gap: 8px; }
+    .param-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .param-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      width: 52px;
+      flex-shrink: 0;
+    }
+    .param-input-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: border-color .15s;
+    }
+    .param-input-wrap:focus-within { border-color: var(--accent); }
+    .param-input {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--text);
+      font: inherit;
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 6px 10px;
+      outline: none;
+      min-width: 0;
+    }
+    .param-unit {
+      padding: 6px 8px;
+      font-size: 10px;
+      font-family: var(--mono);
+      color: var(--text-dim);
+      background: var(--surface3);
+      border-left: 1px solid var(--border);
+    }
+    .awg-actions { display: flex; gap: 8px; }
+    .awg-actions .btn { flex: 1; }
+
+    /* ── DMM Card ────────────────────────────────────────────────── */
+    .dmm-body { display: flex; flex-direction: column; gap: 14px; }
+    .dmm-modes { display: flex; flex-wrap: wrap; gap: 5px; }
+    .dmm-mode {
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      background: var(--surface3);
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      transition: all .15s;
+    }
+    .dmm-mode:hover { background: var(--surface4); color: var(--text); }
+    .dmm-mode.active {
+      background: var(--amber-dim);
+      color: var(--amber);
+      border-color: rgba(251,191,36,.3);
+    }
+    .dmm-display {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      text-align: center;
+    }
+    .dmm-value {
+      font-family: var(--mono);
+      font-size: 32px;
+      font-weight: 500;
+      color: var(--amber);
+      letter-spacing: -0.02em;
+      line-height: 1;
+      min-height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .dmm-value.dim { color: var(--text-faint); font-size: 18px; }
+    .dmm-unit {
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--text-dim);
+      align-self: flex-end;
+      padding-bottom: 3px;
+    }
+    .dmm-actions { display: flex; gap: 8px; }
+    .dmm-actions .btn { flex: 1; }
+
+    /* ── Log panel ───────────────────────────────────────────────── */
+    #log-panel {
+      width: var(--sidebar-w);
+      min-width: var(--sidebar-w);
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .log-header {
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+    .log-header-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      flex: 1;
+    }
+    .log-clear-btn {
+      background: none;
+      border: none;
+      color: var(--text-faint);
+      cursor: pointer;
+      font-size: 11px;
+      padding: 2px 4px;
+      border-radius: 4px;
+      transition: color .15s;
+    }
+    .log-clear-btn:hover { color: var(--text-dim); }
+    #log-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+    .log-entry {
+      padding: 3px 14px;
+      line-height: 1.5;
+      color: var(--text-dim);
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .log-entry.info  { color: var(--text-dim); }
+    .log-entry.ok    { color: var(--green); }
+    .log-entry.error { color: var(--red); }
+    .log-entry.warn  { color: var(--amber); }
+    .log-entry.scpi  { color: #818cf8; }
+    .log-time {
+      color: var(--text-faint);
+      font-size: 9.5px;
+      margin-right: 6px;
+    }
+
+    /* ── Toast ───────────────────────────────────────────────────── */
+    #toast-container {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 9999;
+      pointer-events: none;
+    }
+    .toast {
+      background: var(--surface3);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius);
+      padding: 10px 16px;
+      font-size: 12px;
+      color: var(--text);
+      box-shadow: 0 8px 32px rgba(0,0,0,.4);
+      animation: toast-in .2s ease;
+      pointer-events: all;
+      max-width: 360px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .toast.ok    { border-color: rgba(74,222,128,.3); }
+    .toast.error { border-color: rgba(248,113,113,.3); }
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Spinner ─────────────────────────────────────────────────── */
+    .spinner {
+      width: 12px; height: 12px;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Scan modal ──────────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.65);
+      backdrop-filter: blur(4px);
+      z-index: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: fade-in .15s ease;
+    }
+    @keyframes fade-in { from { opacity:0 } to { opacity:1 } }
+    .modal {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius-lg);
+      width: min(680px, 95vw);
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 24px 64px rgba(0,0,0,.5);
+      animation: slide-up .15s ease;
+    }
+    @keyframes slide-up {
+      from { transform: translateY(12px); opacity: 0 }
+      to   { transform: translateY(0);    opacity: 1 }
+    }
+    .modal-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .modal-title {
+      font-size: 14px; font-weight: 600;
+      flex: 1;
+    }
+    .modal-body {
+      flex: 1; overflow-y: auto; padding: 16px 20px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .modal-footer {
+      padding: 12px 20px;
+      border-top: 1px solid var(--border);
+      display: flex; gap: 8px; align-items: center;
+      flex-shrink: 0;
+    }
+
+    /* scan progress */
+    .scan-phase {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--text-dim);
+      padding: 6px 10px;
+      background: var(--surface3);
+      border-radius: var(--radius);
+    }
+    .scan-phase .phase-text { flex: 1; }
+
+    /* scan results list */
+    .scan-results { display: flex; flex-direction: column; gap: 6px; }
+    .scan-instr {
+      background: var(--surface3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .scan-instr.ok   { border-color: rgba(74,222,128,.2); }
+    .scan-instr .instr-icon {
+      width: 28px; height: 28px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; flex-shrink: 0;
+    }
+    .scan-instr .instr-info { flex: 1; min-width: 0; }
+    .scan-instr .instr-model {
+      font-size: 12px; font-weight: 600; color: var(--text);
+    }
+    .scan-instr .instr-detail {
+      font-size: 10px; color: var(--text-dim);
+      font-family: var(--mono);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .scan-instr .instr-type {
+      font-size: 9px; font-weight: 700; letter-spacing: .07em;
+      text-transform: uppercase; padding: 2px 7px;
+      border-radius: 10px; background: var(--surface4);
+      color: var(--text-dim); flex-shrink: 0;
+    }
+    .scan-instr.ok .instr-type { background: var(--green-dim); color: var(--green); }
+
+    /* save form */
+    .save-form {
+      display: flex; gap: 8px; align-items: center;
+      padding: 10px 12px;
+      background: var(--surface3);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+    .save-form input {
+      flex: 1; background: var(--surface);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      color: var(--text); font: inherit; font-size: 12px;
+      padding: 6px 10px; outline: none;
+    }
+    .save-form input:focus { border-color: var(--accent); }
+
+    /* ── Utilities ───────────────────────────────────────────────── */
+    .hidden { display: none !important; }
+    .mt4 { margin-top: 4px; }
+    .mt8 { margin-top: 8px; }
+    .gap6 { gap: 6px; }
+    .flex { display: flex; }
+    .items-center { align-items: center; }
+
+    /* ── Responsive ──────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      #log-panel { display: none; }
+      #instrument-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      #content { padding: 12px; }
+      .nav-title { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Navbar ─────────────────────────────────────────────────────── -->
+<nav id="navbar">
+  <a class="nav-logo" href="https://nacho.works" target="_blank">
+    <img id="nav-logo-img" src="/assets/nacho_white.svg" alt="nacho.works" />
+  </a>
+  <div class="nav-divider"></div>
+  <span class="nav-title">open-EE-workbench</span>
+  <div class="nav-spacer"></div>
+
+  <!-- workbench selector -->
+  <div class="wb-select-wrap">
+    <select id="wb-select">
+      <option value="">— select workbench —</option>
+    </select>
+  </div>
+
+  <!-- scan button -->
+  <button class="btn btn-ghost" id="scan-btn" onclick="openScanModal()"
+          style="gap:5px;font-size:12px;">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+    Scan
+  </button>
+
+  <!-- status badge -->
+  <div class="status-badge" id="status-badge">
+    <div class="status-dot"></div>
+    <span id="status-text">Disconnected</span>
+  </div>
+
+  <!-- connect / disconnect button -->
+  <button class="btn btn-primary" id="connect-btn" disabled>Connect</button>
+</nav>
+
+<!-- ── Main layout ─────────────────────────────────────────────────── -->
+<div id="layout">
+
+  <!-- instrument content -->
+  <div id="content">
+
+    <!-- empty state: no workbench -->
+    <div class="empty-state" id="empty-nowb">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="2" y="7" width="20" height="14" rx="2"/>
+        <path d="M16 3H8M12 3v4"/>
+        <circle cx="12" cy="14" r="2"/>
+      </svg>
+      <p>No workbench selected</p>
+      <small>Choose a workbench from the dropdown above</small>
+    </div>
+
+    <!-- instrument grid -->
+    <div id="instrument-grid" class="hidden"></div>
+
+  </div>
+
+  <!-- log panel -->
+  <aside id="log-panel">
+    <div class="log-header">
+      <span class="log-header-title">Log</span>
+      <button class="log-clear-btn" id="log-clear-btn" title="Clear log">✕</button>
+    </div>
+    <div id="log-body"></div>
+  </aside>
+</div>
+
+<!-- toast container -->
+<div id="toast-container"></div>
+
+<!-- ── Scan modal ─────────────────────────────────────────────────── -->
+<div id="scan-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+           stroke="var(--accent)" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <span class="modal-title">Instrument Scan</span>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);cursor:pointer;">
+        <input type="checkbox" id="scan-usb-only" style="accent-color:var(--accent);" />
+        USB only
+      </label>
+      <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;"
+              onclick="closeScanModal()">✕</button>
+    </div>
+
+    <div class="modal-body" id="scan-modal-body">
+      <!-- idle state -->
+      <div id="scan-idle">
+        <p style="color:var(--text-dim);font-size:13px;line-height:1.6;">
+          Scans for VISA instruments over <strong style="color:var(--text)">USB</strong>
+          and <strong style="color:var(--text)">LAN</strong> using PyVISA.
+          Found instruments can be saved as a new workbench.
+        </p>
+        <p style="color:var(--text-faint);font-size:11px;margin-top:6px;">
+          LAN scan probes your local /24 subnet — takes ~10 seconds.
+        </p>
+      </div>
+
+      <!-- scanning state -->
+      <div id="scan-running" class="hidden">
+        <div class="scan-phase" id="scan-phase-row">
+          <span class="spinner" style="flex-shrink:0;"></span>
+          <span class="phase-text" id="scan-phase-text">Starting…</span>
+        </div>
+        <div id="scan-found-list" class="scan-results" style="margin-top:4px;"></div>
+      </div>
+
+      <!-- results state -->
+      <div id="scan-done" class="hidden">
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;"
+             id="scan-summary"></div>
+        <div id="scan-results-list" class="scan-results"></div>
+        <div id="scan-errors-wrap" class="hidden" style="margin-top:8px;">
+          <details>
+            <summary style="font-size:10px;color:var(--text-faint);cursor:pointer;">
+              Warnings / errors
+            </summary>
+            <div id="scan-errors-list"
+                 style="font-family:var(--mono);font-size:10px;color:var(--red);
+                        margin-top:6px;line-height:1.6;white-space:pre-wrap;"></div>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer" id="scan-footer">
+      <!-- idle footer -->
+      <div id="scan-footer-idle" style="display:flex;gap:8px;width:100%;align-items:center;">
+        <div style="flex:1"></div>
+        <button class="btn btn-ghost" onclick="closeScanModal()">Cancel</button>
+        <button class="btn btn-primary" id="scan-start-btn" onclick="startScan()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.5">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          Start Scan
+        </button>
+      </div>
+
+      <!-- done footer -->
+      <div id="scan-footer-done" class="hidden save-form" style="width:100%;">
+        <input id="scan-save-name" type="text" placeholder="workbench name…"
+               onkeydown="if(event.key==='Enter') saveScanWorkbench()" />
+        <button class="btn btn-primary" onclick="saveScanWorkbench()">Save workbench</button>
+        <button class="btn btn-ghost"   onclick="closeScanModal()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Scripts ────────────────────────────────────────────────────── -->
+<script src="/ui/socket.io.min.js"></script>
+<script>
+"use strict";
+
+// ── DOM refs ────────────────────────────────────────────────────────
+const $wbSelect    = document.getElementById("wb-select");
+const $connectBtn  = document.getElementById("connect-btn");
+const $statusBadge = document.getElementById("status-badge");
+const $statusText  = document.getElementById("status-text");
+const $grid        = document.getElementById("instrument-grid");
+const $emptyNowb   = document.getElementById("empty-nowb");
+const $logBody     = document.getElementById("log-body");
+
+// ── State ───────────────────────────────────────────────────────────
+let state = {
+  workbench:   null,
+  connected:   false,
+  connecting:  false,
+  instruments: [],   // populated after connection_result
+};
+
+// ── Helpers: channel count ──────────────────────────────────────────
+function inferPSUChannels(model) {
+  const m = (model || "").toUpperCase();
+  // Explicit 3-channel models
+  if (/EDU36311A|36311A|36312A|36313A|E3631A/.test(m)) return 3;
+  // Explicit 2-channel models
+  if (/E3646A|E3647A|E3648A|E3649A/.test(m)) return 2;
+  // Single-channel
+  if (/E3640A|E3641A|E3642A|E3643A|E3644A|E3645A|E3632A|E3633A|E3634A/.test(m)) return 1;
+  // Extract digits like "3" in "EDU36311A" before trailing suffix
+  const mx = m.match(/(\d)(?:11A|12A|13A)$/);
+  if (mx) { const n = parseInt(mx[1]); if (n >= 1 && n <= 4) return n; }
+  return 3; // safe default for most bench PSUs
+}
+
+function inferAWGChannels(model) {
+  const m = (model || "").toUpperCase();
+  if (/EDU33212A|33612A|33522B|33622A|4163|4165/.test(m)) return 2;
+  if (/33211A|33512B|4161|4162/.test(m)) return 1;
+  // Digit in model suffix
+  const mx = m.match(/(\d)(?:11A|12A|2A)$/);
+  if (mx) { const n = parseInt(mx[1]); if (n >= 1 && n <= 2) return n; }
+  return 2; // default 2ch
+}
+
+// ── Helpers: formatting ─────────────────────────────────────────────
+function fmtV(v)  { return typeof v === "number" ? v.toFixed(3) + " V"  : "—"; }
+function fmtI(v)  { return typeof v === "number" ? v.toFixed(4) + " A"  : "—"; }
+function fmtW(v)  { return typeof v === "number" ? v.toFixed(3) + " W"  : "—"; }
+function fmtDMM(v, mode) {
+  if (typeof v !== "number" || isNaN(v)) return "—";
+  const units = {
+    vdc:"V",vac:"V",idc:"A",iac:"A",r:"Ω",r4w:"Ω",
+    freq:"Hz",cont:"Ω",diode:"V",cap:"F"
+  };
+  const u = units[mode] || "";
+  if (Math.abs(v) >= 1e6)      return (v/1e6).toFixed(4) + " M" + u;
+  if (Math.abs(v) >= 1e3)      return (v/1e3).toFixed(4) + " k" + u;
+  if (Math.abs(v) < 0.001 && v !== 0) return (v*1e6).toFixed(4) + " µ" + u;
+  return v.toPrecision(6).replace(/\.?0+$/, "") + " " + u;
+}
+
+// ── Log ────────────────────────────────────────────────────────────
+function logMsg(msg, cls) {
+  const t = new Date();
+  const ts = t.toTimeString().slice(0,8);
+  const entry = document.createElement("div");
+  let type = "info";
+  if (msg.startsWith("✓") || msg.startsWith("[system]")) type = "ok";
+  else if (msg.startsWith("✗") || msg.toLowerCase().includes("error")) type = "error";
+  else if (msg.startsWith("⚠"))  type = "warn";
+  else if (msg.startsWith("→"))  type = "scpi";
+  entry.className = `log-entry ${cls || type}`;
+  entry.innerHTML = `<span class="log-time">${ts}</span>${escHtml(msg)}`;
+  $logBody.appendChild(entry);
+  $logBody.scrollTop = $logBody.scrollHeight;
+}
+
+document.getElementById("log-clear-btn").onclick = () => { $logBody.innerHTML = ""; };
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+// ── Toast ──────────────────────────────────────────────────────────
+function toast(msg, type="ok", duration=3500) {
+  const el = document.createElement("div");
+  el.className = `toast ${type}`;
+  const icon = type === "ok" ? "✓" : type === "error" ? "✗" : "ℹ";
+  el.innerHTML = `<span>${icon}</span><span>${escHtml(msg)}</span>`;
+  document.getElementById("toast-container").appendChild(el);
+  setTimeout(() => {
+    el.style.opacity = "0";
+    el.style.transition = "opacity .3s";
+    setTimeout(() => el.remove(), 300);
+  }, duration);
+}
+
+// ── Status update ──────────────────────────────────────────────────
+function setStatus(s, label) {
+  $statusBadge.className = `status-badge ${s}`;
+  $statusText.textContent = label;
+}
+
+// ── API helpers ────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: { "Content-Type": "application/json" } };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  if (!r.ok) {
+    const j = await r.json().catch(()=>({error: r.statusText}));
+    throw new Error(j.error || r.statusText);
+  }
+  return r.json();
+}
+const GET  = (p)    => api("GET",  p);
+const POST = (p, b) => api("POST", p, b);
+
+// ── Socket.IO ──────────────────────────────────────────────────────
+const socket = io({ transports: ["websocket", "polling"] });
+
+socket.on("connect",    () => logMsg("[socket] connected"));
+socket.on("disconnect", () => logMsg("[socket] disconnected", "warn"));
+
+socket.on("log", ({ msg }) => logMsg(msg));
+
+socket.on("connection_result", ({ connected, instruments }) => {
+  state.connecting  = false;
+  state.connected   = connected;
+  state.instruments = instruments || [];
+
+  if (connected) {
+    setStatus("connected", "Connected");
+    $connectBtn.textContent = "Disconnect";
+    $connectBtn.className   = "btn btn-danger";
+    $connectBtn.disabled    = false;
+    logMsg(`✓ Connected (${instruments.filter(i=>i.ok).length}/${instruments.length} instruments)`, "ok");
+    applyConnectionStatus(instruments);
+  } else {
+    setStatus("error", "Failed");
+    $connectBtn.textContent = "Connect";
+    $connectBtn.className   = "btn btn-primary";
+    $connectBtn.disabled    = false;
+    logMsg("✗ Connection failed", "error");
+  }
+});
+
+socket.on("disconnected", () => {
+  state.connected  = false;
+  state.connecting = false;
+  setStatus("", "Disconnected");
+  $connectBtn.textContent = "Connect";
+  $connectBtn.className   = "btn btn-primary";
+  $connectBtn.disabled    = !state.workbench;
+  resetCardStatus();
+  logMsg("Disconnected", "warn");
+});
+
+socket.on("psu_reading", ({ ch, v, i, p }) => {
+  const el = (id) => document.getElementById(id);
+  const vEl = el(`psu-v-${ch}`);
+  const iEl = el(`psu-i-${ch}`);
+  const pEl = el(`psu-p-${ch}`);
+  if (vEl) { vEl.textContent = fmtV(v); vEl.classList.add("live"); }
+  if (iEl) { iEl.textContent = fmtI(i); iEl.classList.add("live"); }
+  if (pEl) { pEl.textContent = fmtW(p); pEl.classList.add("live"); }
+});
+
+socket.on("dmm_reading", ({ value, mode }) => {
+  const $val  = document.getElementById("dmm-value");
+  const $unit = document.getElementById("dmm-unit");
+  if (!$val) return;
+  const units = {
+    vdc:"V",vac:"V(AC)",idc:"A",iac:"A(AC)",r:"Ω",r4w:"Ω",
+    freq:"Hz",cont:"Ω",diode:"V",cap:"F"
+  };
+  if (isNaN(value) || !isFinite(value)) {
+    $val.innerHTML = `<span class="dmm-value dim">OL</span>`;
+  } else {
+    const mag = Math.abs(value);
+    let disp, unit = units[mode] || "";
+    if (mag >= 1e6)      { disp = (value/1e6).toPrecision(5); unit = "M" + unit; }
+    else if (mag >= 1e3) { disp = (value/1e3).toPrecision(5); unit = "k" + unit; }
+    else if (mag < 1e-3 && value !== 0) { disp = (value*1e6).toPrecision(5); unit = "µ" + unit; }
+    else                 { disp = value.toPrecision(6).replace(/\.?0+$/,""); }
+    $val.innerHTML = `${escHtml(disp)} <span class="dmm-unit">${escHtml(unit)}</span>`;
+    $val.classList.remove("dim");
+  }
+});
+
+socket.on("screenshot_done", ({ path, filename, error }) => {
+  if (error) {
+    toast("Screenshot failed: " + error, "error");
+    logMsg("✗ Screenshot: " + error, "error");
+  } else {
+    toast(`Screenshot saved: ${filename}`, "ok", 5000);
+    logMsg(`✓ Screenshot → ${filename}`, "ok");
+  }
+  const btn = document.getElementById("screenshot-btn");
+  if (btn) { btn.disabled = false; btn.innerHTML = "📷 Screenshot"; }
+});
+
+// ── Workbench loading ──────────────────────────────────────────────
+async function loadWorkbenches() {
+  try {
+    const { workbenches, active } = await GET("/api/workbenches");
+    $wbSelect.innerHTML = '<option value="">— select workbench —</option>';
+    for (const wb of workbenches) {
+      const opt = document.createElement("option");
+      opt.value = wb;
+      opt.textContent = wb;
+      $wbSelect.appendChild(opt);
+    }
+    // auto-select: from URL param, then active, then first
+    const params = new URLSearchParams(location.search);
+    const wbParam = params.get("wb") || active || workbenches[0] || "";
+    if (wbParam) {
+      $wbSelect.value = wbParam;
+      await onWorkbenchSelect(wbParam);
+    }
+  } catch (e) {
+    logMsg("✗ Failed to load workbenches: " + e.message, "error");
+  }
+}
+
+$wbSelect.addEventListener("change", async () => {
+  const name = $wbSelect.value;
+  if (name) await onWorkbenchSelect(name);
+  else {
+    state.workbench = null;
+    $grid.classList.add("hidden");
+    $emptyNowb.classList.remove("hidden");
+    $connectBtn.disabled = true;
+  }
+});
+
+async function onWorkbenchSelect(name) {
+  try {
+    const wb = await GET(`/api/workbench/${name}`);
+    if (wb.error) { toast(wb.error, "error"); return; }
+    state.workbench = wb;
+    buildInstrumentGrid(wb._unique || []);
+    $emptyNowb.classList.add("hidden");
+    $grid.classList.remove("hidden");
+    $connectBtn.disabled = false;
+    logMsg(`Workbench loaded: ${name} (${(wb._unique||[]).length} instrument(s))`);
+  } catch (e) {
+    toast("Failed to load workbench: " + e.message, "error");
+  }
+}
+
+// ── Connect / Disconnect ───────────────────────────────────────────
+$connectBtn.addEventListener("click", async () => {
+  if (state.connected) {
+    // disconnect
+    try {
+      $connectBtn.disabled = true;
+      await POST("/api/disconnect");
+    } catch (e) { logMsg("✗ Disconnect error: " + e.message, "error"); }
+    return;
+  }
+  // connect
+  if (!state.workbench) return;
+  state.connecting = true;
+  setStatus("connecting", "Connecting…");
+  $connectBtn.innerHTML = `<span class="spinner"></span> Connecting`;
+  $connectBtn.disabled = true;
+  try {
+    await POST("/api/connect");
+  } catch (e) {
+    state.connecting = false;
+    setStatus("error", "Error");
+    $connectBtn.textContent = "Connect";
+    $connectBtn.className   = "btn btn-primary";
+    $connectBtn.disabled    = false;
+    toast(e.message, "error");
+  }
+});
+
+// ── Instrument grid builder ────────────────────────────────────────
+function buildInstrumentGrid(instruments) {
+  $grid.innerHTML = "";
+
+  const types = {};
+  for (const instr of instruments) {
+    const t = instr.type || "unknown";
+    if (!types[t]) types[t] = [];
+    types[t].push(instr);
+  }
+
+  if (types.scope)  $grid.appendChild(buildScopeCard(types.scope[0]));
+  if (types.psu)    $grid.appendChild(buildPSUCard(types.psu[0]));
+  if (types.awg)    $grid.appendChild(buildAWGCard(types.awg[0]));
+  if (types.dmm)    $grid.appendChild(buildDMMCard(types.dmm[0]));
+
+  // unknown types
+  for (const [t, instrs] of Object.entries(types)) {
+    if (!["scope","psu","awg","dmm"].includes(t)) {
+      for (const instr of instrs) $grid.appendChild(buildGenericCard(instr));
+    }
+  }
+}
+
+function applyConnectionStatus(instruments) {
+  for (const instr of instruments) {
+    const t = instr.type;
+    const card = document.querySelector(`.card[data-type="${t}"]`);
+    if (!card) continue;
+    const sub = card.querySelector(".card-subtitle");
+    if (instr.ok) {
+      card.classList.add("connected");
+      if (sub) sub.textContent = instr.idn || instr.model;
+    } else {
+      card.classList.add("error");
+      if (sub) sub.textContent = instr.error || "Connection failed";
+    }
+  }
+}
+
+function resetCardStatus() {
+  document.querySelectorAll(".card").forEach(c => {
+    c.classList.remove("connected","error");
+    const sub = c.querySelector(".card-subtitle");
+    if (sub) sub.textContent = c.dataset.model || "";
+  });
+  // Reset live readings
+  document.querySelectorAll(".psu-reading-val").forEach(el => {
+    el.textContent = "—"; el.classList.remove("live");
+  });
+}
+
+// ── Card builders ──────────────────────────────────────────────────
+
+// Scope card
+function buildScopeCard(instr) {
+  const div = document.createElement("div");
+  div.className = "card";
+  div.dataset.type  = "scope";
+  div.dataset.model = instr.model || "";
+  div.innerHTML = `
+    <div class="card-header">
+      <div class="card-icon scope">⚡</div>
+      <div class="card-title-wrap">
+        <div class="card-title">Oscilloscope</div>
+        <div class="card-subtitle">${escHtml(instr.model || "—")}</div>
+      </div>
+      <div class="card-status-dot"></div>
+    </div>
+    <div class="card-body scope-controls">
+      <div class="section-label">Transport</div>
+      <div class="transport-row">
+        <button class="btn run"    onclick="scopeCmd('run')">▶ Run</button>
+        <button class="btn stop"   onclick="scopeCmd('stop')">■ Stop</button>
+        <button class="btn single" onclick="scopeCmd('single')">↓ Single</button>
+        <button class="btn auto"   onclick="scopeCmd('autoscale')">⟳ Auto</button>
+      </div>
+      <button class="screenshot-btn" id="screenshot-btn" onclick="doScreenshot()">
+        📷 Screenshot
+      </button>
+    </div>
+  `;
+  return div;
+}
+
+function scopeCmd(cmd) {
+  POST(`/api/scope/${cmd}`).catch(e => toast(e.message, "error"));
+}
+
+function doScreenshot() {
+  const btn = document.getElementById("screenshot-btn");
+  if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> Capturing…`; }
+  const ts = new Date().toISOString().replace(/[:.]/g,"-").slice(0,-5);
+  POST("/api/scope/screenshot", { filename: `scope_${ts}` }).catch(e => {
+    toast(e.message, "error");
+    if (btn) { btn.disabled = false; btn.innerHTML = "📷 Screenshot"; }
+  });
+}
+
+// PSU card
+function buildPSUCard(instr) {
+  const nCh = inferPSUChannels(instr.model);
+  let channelHTML = "";
+  for (let ch = 1; ch <= nCh; ch++) {
+    channelHTML += `
+      <div class="psu-channel" id="psu-ch-${ch}">
+        <div class="psu-ch-header">
+          <span class="psu-ch-label">CH</span>
+          <span class="ch-num">${ch}</span>
+          <div class="psu-ch-spacer"></div>
+          <button class="output-toggle" id="psu-out-${ch}" data-ch="${ch}" data-on="false"
+                  onclick="psuToggleOutput(this)">
+            <span class="tog-dot"></span>OFF
+          </button>
+        </div>
+        <div class="psu-ch-body">
+          <div class="psu-set-row">
+            <div class="psu-input-wrap">
+              <span class="psu-input-unit">V</span>
+              <input class="psu-input" id="psu-vset-${ch}" type="number" step="0.001"
+                     min="0" placeholder="0.000" title="Voltage setpoint" />
+            </div>
+            <div class="psu-input-wrap">
+              <span class="psu-input-unit">A</span>
+              <input class="psu-input" id="psu-iset-${ch}" type="number" step="0.0001"
+                     min="0" placeholder="0.0000" title="Current limit" />
+            </div>
+            <button class="psu-set-btn" onclick="psuSet(${ch})">Set</button>
+          </div>
+          <div class="psu-readings">
+            <div class="psu-reading">
+              <div class="psu-reading-label">Voltage</div>
+              <div class="psu-reading-val" id="psu-v-${ch}">—</div>
+            </div>
+            <div class="psu-reading">
+              <div class="psu-reading-label">Current</div>
+              <div class="psu-reading-val" id="psu-i-${ch}">—</div>
+            </div>
+            <div class="psu-reading">
+              <div class="psu-reading-label">Power</div>
+              <div class="psu-reading-val" id="psu-p-${ch}">—</div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  const div = document.createElement("div");
+  div.className = "card";
+  div.dataset.type  = "psu";
+  div.dataset.model = instr.model || "";
+  div.innerHTML = `
+    <div class="card-header">
+      <div class="card-icon psu">⚙</div>
+      <div class="card-title-wrap">
+        <div class="card-title">Power Supply</div>
+        <div class="card-subtitle">${escHtml(instr.model || "—")}</div>
+      </div>
+      <div class="card-status-dot"></div>
+    </div>
+    <div class="card-body">
+      <div class="psu-channels">${channelHTML}</div>
+      <div class="psu-footer mt8">
+        <button class="btn btn-ghost" style="width:100%;font-size:11px;"
+                onclick="psuReset()">↺ Reset all outputs</button>
+      </div>
+    </div>`;
+  return div;
+}
+
+function psuSet(ch) {
+  const v = document.getElementById(`psu-vset-${ch}`)?.value;
+  const i = document.getElementById(`psu-iset-${ch}`)?.value;
+  const body = { ch };
+  if (v !== "" && v !== undefined) body.voltage = parseFloat(v);
+  if (i !== "" && i !== undefined) body.current = parseFloat(i);
+  POST("/api/psu/set", body).catch(e => toast(e.message, "error"));
+}
+
+function psuToggleOutput(btn) {
+  const ch  = parseInt(btn.dataset.ch);
+  const on  = btn.dataset.on !== "true";
+  btn.dataset.on = on;
+  btn.className  = "output-toggle" + (on ? " on" : "");
+  btn.innerHTML  = `<span class="tog-dot"></span>${on ? "ON" : "OFF"}`;
+  POST("/api/psu/output", { ch, state: on }).catch(e => toast(e.message, "error"));
+}
+
+function psuReset() {
+  // reset all toggles
+  document.querySelectorAll(".output-toggle").forEach(btn => {
+    btn.dataset.on = "false";
+    btn.className  = "output-toggle";
+    btn.innerHTML  = `<span class="tog-dot"></span>OFF`;
+  });
+  POST("/api/psu/reset").catch(e => toast(e.message, "error"));
+}
+
+// AWG card
+function buildAWGCard(instr) {
+  const nCh = inferAWGChannels(instr.model);
+  const chTabs = Array.from({length: nCh}, (_,i) => `
+    <button class="ch-tab${i===0?" active":""}" data-ch="${i+1}"
+            onclick="awgSelectCh(this)">${i+1}</button>`).join("");
+
+  const funcs = ["SINE","SQU","TRI","RAMP","PULS","NOIS","DC"];
+  const funcPills = funcs.map((f,i) => `
+    <button class="func-pill${i===0?" active":""}" data-func="${f}"
+            onclick="awgSelectFunc(this)">${f}</button>`).join("");
+
+  const div = document.createElement("div");
+  div.className = "card";
+  div.dataset.type  = "awg";
+  div.dataset.model = instr.model || "";
+  div.innerHTML = `
+    <div class="card-header">
+      <div class="card-icon awg">〜</div>
+      <div class="card-title-wrap">
+        <div class="card-title">Waveform Generator</div>
+        <div class="card-subtitle">${escHtml(instr.model || "—")}</div>
+      </div>
+      <div class="card-status-dot"></div>
+    </div>
+    <div class="card-body awg-body">
+      ${nCh > 1 ? `
+      <div>
+        <div class="section-label">Channel</div>
+        <div class="ch-tabs" id="awg-ch-tabs">${chTabs}</div>
+      </div>` : ""}
+
+      <div>
+        <div class="section-label">Waveform</div>
+        <div class="func-pills" id="awg-func-pills">${funcPills}</div>
+      </div>
+
+      <div>
+        <div class="section-label">Parameters</div>
+        <div class="param-rows">
+          <div class="param-row">
+            <span class="param-label">Frequency</span>
+            <div class="param-input-wrap">
+              <input class="param-input" id="awg-freq" type="number" step="any" placeholder="1000" />
+              <span class="param-unit">Hz</span>
+            </div>
+          </div>
+          <div class="param-row">
+            <span class="param-label">Amplitude</span>
+            <div class="param-input-wrap">
+              <input class="param-input" id="awg-amp" type="number" step="any" placeholder="1.000" />
+              <span class="param-unit">Vpp</span>
+            </div>
+          </div>
+          <div class="param-row">
+            <span class="param-label">Offset</span>
+            <div class="param-input-wrap">
+              <input class="param-input" id="awg-offs" type="number" step="any" placeholder="0.000" />
+              <span class="param-unit">V</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="awg-actions">
+        <button class="btn btn-primary" onclick="awgApply()">Apply</button>
+        <button class="btn btn-ghost" id="awg-out-btn" data-on="false"
+                onclick="awgToggleOutput(this)">Output: OFF</button>
+        <button class="btn btn-ghost" onclick="awgReset()">↺</button>
+      </div>
+    </div>`;
+  return div;
+}
+
+let _awgCh   = 1;
+let _awgFunc = "SINE";
+
+function awgSelectCh(btn) {
+  document.querySelectorAll("#awg-ch-tabs .ch-tab").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  _awgCh = parseInt(btn.dataset.ch);
+}
+
+function awgSelectFunc(btn) {
+  document.querySelectorAll("#awg-func-pills .func-pill").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  _awgFunc = btn.dataset.func;
+}
+
+function awgApply() {
+  const body = { ch: _awgCh, function: _awgFunc };
+  const freq = document.getElementById("awg-freq")?.value;
+  const amp  = document.getElementById("awg-amp")?.value;
+  const offs = document.getElementById("awg-offs")?.value;
+  if (freq) body.frequency = parseFloat(freq);
+  if (amp)  body.amplitude = parseFloat(amp);
+  if (offs) body.offset    = parseFloat(offs);
+  POST("/api/awg/apply", body).catch(e => toast(e.message, "error"));
+}
+
+function awgToggleOutput(btn) {
+  const on  = btn.dataset.on !== "true";
+  btn.dataset.on   = on;
+  btn.textContent  = `Output: ${on ? "ON" : "OFF"}`;
+  btn.className    = `btn ${on ? "btn-green" : "btn-ghost"}`;
+  POST("/api/awg/output", { ch: _awgCh, state: on }).catch(e => toast(e.message, "error"));
+}
+
+function awgReset() {
+  const outBtn = document.getElementById("awg-out-btn");
+  if (outBtn) { outBtn.dataset.on = "false"; outBtn.textContent = "Output: OFF"; outBtn.className = "btn btn-ghost"; }
+  POST("/api/awg/reset").catch(e => toast(e.message, "error"));
+}
+
+// DMM card
+function buildDMMCard(instr) {
+  const modes = [
+    { id:"vdc",  label:"DC V"   },
+    { id:"vac",  label:"AC V"   },
+    { id:"idc",  label:"DC I"   },
+    { id:"iac",  label:"AC I"   },
+    { id:"r",    label:"Ω"      },
+    { id:"r4w",  label:"4W Ω"   },
+    { id:"freq", label:"Hz"     },
+    { id:"cont", label:"Cont"   },
+    { id:"diode",label:"Diode"  },
+    { id:"cap",  label:"Cap"    },
+  ];
+  const modePills = modes.map((m,i) => `
+    <button class="dmm-mode${i===0?" active":""}" data-mode="${m.id}"
+            onclick="dmmSelectMode(this)">${m.label}</button>`).join("");
+
+  const div = document.createElement("div");
+  div.className = "card";
+  div.dataset.type  = "dmm";
+  div.dataset.model = instr.model || "";
+  div.innerHTML = `
+    <div class="card-header">
+      <div class="card-icon dmm">Ω</div>
+      <div class="card-title-wrap">
+        <div class="card-title">Multimeter</div>
+        <div class="card-subtitle">${escHtml(instr.model || "—")}</div>
+      </div>
+      <div class="card-status-dot"></div>
+    </div>
+    <div class="card-body dmm-body">
+      <div>
+        <div class="section-label">Measurement</div>
+        <div class="dmm-modes">${modePills}</div>
+      </div>
+      <div class="dmm-display">
+        <div class="dmm-value dim" id="dmm-value">—</div>
+      </div>
+      <div class="dmm-actions">
+        <button class="btn btn-primary" onclick="dmmMeasure()">Measure</button>
+        <button class="btn btn-ghost"   id="dmm-cont-btn" data-on="false"
+                onclick="dmmToggleContinuous(this)">Continuous: OFF</button>
+      </div>
+    </div>`;
+  return div;
+}
+
+let _dmmMode   = "vdc";
+let _dmmContID = null;
+
+function dmmSelectMode(btn) {
+  document.querySelectorAll(".dmm-mode").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  _dmmMode = btn.dataset.mode;
+  // clear display
+  const v = document.getElementById("dmm-value");
+  if (v) { v.innerHTML = "—"; v.classList.add("dim"); }
+}
+
+function dmmMeasure() {
+  POST("/api/dmm/measure", { mode: _dmmMode }).catch(e => toast(e.message, "error"));
+}
+
+function dmmToggleContinuous(btn) {
+  const on = btn.dataset.on !== "true";
+  btn.dataset.on   = on;
+  btn.textContent  = `Continuous: ${on ? "ON" : "OFF"}`;
+  btn.className    = `btn ${on ? "btn-green" : "btn-ghost"}`;
+  if (on) {
+    _dmmContID = setInterval(() => {
+      POST("/api/dmm/measure", { mode: _dmmMode }).catch(() => {});
+    }, 1000);
+  } else {
+    clearInterval(_dmmContID);
+    _dmmContID = null;
+  }
+}
+
+// Generic card (unknown instrument type)
+function buildGenericCard(instr) {
+  const div = document.createElement("div");
+  div.className = "card";
+  div.dataset.type  = instr.type  || "unknown";
+  div.dataset.model = instr.model || "";
+  div.innerHTML = `
+    <div class="card-header">
+      <div class="card-icon scope" style="background:var(--surface4)">?</div>
+      <div class="card-title-wrap">
+        <div class="card-title">${escHtml(instr.type || "Unknown")}</div>
+        <div class="card-subtitle">${escHtml(instr.model || "—")}</div>
+      </div>
+      <div class="card-status-dot"></div>
+    </div>
+    <div class="card-body">
+      <p style="color:var(--text-dim);font-size:12px;">
+        No control panel for instrument type <code>${escHtml(instr.type||"")}</code>.
+      </p>
+    </div>`;
+  return div;
+}
+
+// ── Keyboard shortcuts ─────────────────────────────────────────────
+document.addEventListener("keydown", e => {
+  // Ctrl/Cmd+K → focus workbench selector
+  if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+    e.preventDefault();
+    $wbSelect.focus();
+  }
+  // Escape → blur focused element
+  if (e.key === "Escape") document.activeElement?.blur();
+  // Enter in PSU voltage/current inputs → trigger set
+  if (e.key === "Enter" && e.target.matches(".psu-input")) {
+    const ch = e.target.id.match(/psu-[vi]set-(\d)/)?.[1];
+    if (ch) psuSet(parseInt(ch));
+  }
+  // Enter in AWG inputs → trigger apply
+  if (e.key === "Enter" && e.target.matches(".param-input")) {
+    awgApply();
+  }
+});
+
+// ── Scan modal ────────────────────────────────────────────────────
+let _scanResults = [];
+
+function openScanModal() {
+  _scanResults = [];
+  // reset to idle
+  document.getElementById("scan-idle").classList.remove("hidden");
+  document.getElementById("scan-running").classList.add("hidden");
+  document.getElementById("scan-done").classList.add("hidden");
+  document.getElementById("scan-footer-idle").style.display = "flex";
+  document.getElementById("scan-footer-done").classList.add("hidden");
+  document.getElementById("scan-found-list").innerHTML = "";
+  document.getElementById("scan-results-list").innerHTML = "";
+  document.getElementById("scan-start-btn").disabled = false;
+  document.getElementById("scan-modal").classList.remove("hidden");
+}
+
+function closeScanModal() {
+  document.getElementById("scan-modal").classList.add("hidden");
+}
+
+// close on overlay click
+document.getElementById("scan-modal").addEventListener("click", e => {
+  if (e.target === document.getElementById("scan-modal")) closeScanModal();
+});
+
+function startScan() {
+  const usbOnly = document.getElementById("scan-usb-only").checked;
+  document.getElementById("scan-start-btn").disabled = true;
+  document.getElementById("scan-idle").classList.add("hidden");
+  document.getElementById("scan-running").classList.remove("hidden");
+  document.getElementById("scan-phase-text").textContent = "Starting…";
+
+  POST("/api/scan", { usb_only: usbOnly }).catch(e => {
+    toast(e.message, "error");
+    closeScanModal();
+  });
+}
+
+socket.on("scan_progress", ({ msg, instrument }) => {
+  // update phase indicator
+  const phase = document.getElementById("scan-phase-text");
+  if (phase) phase.textContent = msg;
+
+  // if an instrument was found, add it to the live list
+  if (instrument) {
+    const list = document.getElementById("scan-found-list");
+    list.appendChild(buildScanInstrRow(instrument, true));
+  }
+});
+
+socket.on("scan_result", ({ instruments, errors, error }) => {
+  if (error) {
+    toast("Scan failed: " + error, "error");
+    closeScanModal();
+    return;
+  }
+
+  _scanResults = instruments || [];
+
+  // switch to results view
+  document.getElementById("scan-running").classList.add("hidden");
+  document.getElementById("scan-done").classList.remove("hidden");
+  document.getElementById("scan-footer-idle").style.display = "none";
+  document.getElementById("scan-footer-done").classList.remove("hidden");
+
+  // summary line
+  const summary = document.getElementById("scan-summary");
+  summary.textContent = _scanResults.length
+    ? `Found ${_scanResults.length} instrument${_scanResults.length > 1 ? "s" : ""}.`
+    : "No instruments found.";
+
+  // results list
+  const list = document.getElementById("scan-results-list");
+  list.innerHTML = "";
+  for (const instr of _scanResults) list.appendChild(buildScanInstrRow(instr, false));
+
+  if (!_scanResults.length) {
+    const empty = document.createElement("div");
+    empty.style.cssText = "text-align:center;padding:24px;color:var(--text-faint);font-size:12px;";
+    empty.textContent = "No VISA instruments responded. Check connections and try again.";
+    list.appendChild(empty);
+  }
+
+  // errors/warnings
+  const filtered = (errors || []).filter(e => !e.startsWith("Subnet note"));
+  if (filtered.length) {
+    document.getElementById("scan-errors-wrap").classList.remove("hidden");
+    document.getElementById("scan-errors-list").textContent = filtered.join("\n");
+  }
+
+  // auto-suggest workbench name from hostname + date
+  const d = new Date();
+  const sug = `bench_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`;
+  document.getElementById("scan-save-name").value = sug;
+  if (_scanResults.length) document.getElementById("scan-save-name").focus();
+});
+
+function buildScanInstrRow(instr, live) {
+  const icons = { scope:"⚡", psu:"⚙", awg:"〜", dmm:"Ω" };
+  const colors = {
+    scope: "background:rgba(59,130,246,.12);color:var(--accent)",
+    psu:   "background:rgba(74,222,128,.12);color:var(--green)",
+    awg:   "background:rgba(167,139,250,.12);color:var(--purple)",
+    dmm:   "background:rgba(251,191,36,.12);color:var(--amber)",
+  };
+  const t     = instr.type || "";
+  const icon  = icons[t] || "?";
+  const color = colors[t] || "background:var(--surface4);color:var(--text-dim)";
+
+  const div = document.createElement("div");
+  div.className = "scan-instr ok";
+  div.innerHTML = `
+    <div class="instr-icon" style="${color}">${icon}</div>
+    <div class="instr-info">
+      <div class="instr-model">${escHtml(instr.model || "Unknown")}</div>
+      <div class="instr-detail">${escHtml(instr.resource || "")}${instr.serial ? "  ·  S/N " + instr.serial : ""}</div>
+    </div>
+    <span class="instr-type">${escHtml(t || "?")}</span>
+  `;
+  return div;
+}
+
+async function saveScanWorkbench() {
+  const name = document.getElementById("scan-save-name").value.trim();
+  if (!name) { toast("Enter a workbench name", "error"); return; }
+  if (!_scanResults.length) { toast("Nothing to save", "error"); return; }
+
+  try {
+    const r = await POST("/api/scan/save", { name, instruments: _scanResults });
+    toast(`Workbench "${r.name}" saved`, "ok");
+    // reload workbench dropdown
+    await loadWorkbenches();
+    // auto-select the new workbench
+    document.getElementById("wb-select").value = name;
+    await onWorkbenchSelect(name);
+    closeScanModal();
+  } catch(e) {
+    toast("Save failed: " + e.message, "error");
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+(async () => {
+  await loadWorkbenches();
+})();
+</script>
+</body>
+</html>
