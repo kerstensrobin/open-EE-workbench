@@ -347,6 +347,84 @@
     }
     .screenshot-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+    /* ── Scope measurement panel ─────────────────────────────────── */
+    .meas-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+    }
+    .meas-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .meas-select-wrap {
+      flex: 1;
+      position: relative;
+    }
+    .meas-select-wrap::after {
+      content: '';
+      position: absolute;
+      right: 9px; top: 50%;
+      transform: translateY(-50%);
+      border: 4px solid transparent;
+      border-top-color: var(--text-dim);
+      pointer-events: none;
+    }
+    .meas-select {
+      width: 100%;
+      appearance: none;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 6px 26px 6px 10px;
+      font: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .meas-select:focus { border-color: var(--accent); }
+    .meas-select option { background: var(--surface2); }
+
+    .meas-display {
+      text-align: center;
+      padding: 10px 8px 6px;
+    }
+    .meas-value {
+      font-family: var(--mono);
+      font-size: 26px;
+      font-weight: 500;
+      color: var(--accent);
+      letter-spacing: -0.02em;
+      line-height: 1;
+      min-height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+    }
+    .meas-value.dim { color: var(--text-faint); font-size: 16px; }
+    .meas-value-unit {
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--text-dim);
+      align-self: flex-end;
+      padding-bottom: 2px;
+    }
+    .meas-meta {
+      font-size: 9px;
+      color: var(--text-faint);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-top: 3px;
+    }
+
     /* ── PSU Card ────────────────────────────────────────────────── */
     .psu-channels { display: flex; flex-direction: column; gap: 14px; }
     .psu-channel {
@@ -1341,8 +1419,43 @@ function resetCardStatus() {
 
 // ── Card builders ──────────────────────────────────────────────────
 
+// Scope measurements catalogue (matches backend _SCOPE_MEASURES)
+const SCOPE_MEASURES = [
+  { op:"measure_vpp",       label:"V p-p",    unit:"V",  group:"Voltage" },
+  { op:"measure_vmax",      label:"Vmax",     unit:"V",  group:"Voltage" },
+  { op:"measure_vmin",      label:"Vmin",     unit:"V",  group:"Voltage" },
+  { op:"measure_vavg",      label:"V avg",    unit:"V",  group:"Voltage" },
+  { op:"measure_vrms",      label:"V rms",    unit:"V",  group:"Voltage" },
+  { op:"measure_freq",      label:"Freq",     unit:"Hz", group:"Time" },
+  { op:"measure_period",    label:"Period",   unit:"s",  group:"Time" },
+  { op:"measure_risetime",  label:"Rise",     unit:"s",  group:"Time" },
+  { op:"measure_falltime",  label:"Fall",     unit:"s",  group:"Time" },
+  { op:"measure_dutycycle", label:"Duty",     unit:"%",  group:"Time" },
+];
+
 // Scope card
 function buildScopeCard(instr) {
+  // channel count — best-effort from model name, default 4
+  const nCh = (() => {
+    const m = (instr.model || "").toUpperCase();
+    const mx = m.match(/(\d)(?:04|02|0[A-Z]|[A-Z]+)\s*$/);
+    if (mx) { const n = parseInt(mx[1]); if (n >= 1 && n <= 8) return n; }
+    return 4;
+  })();
+
+  const chTabs = Array.from({length: nCh}, (_,i) =>
+    `<button class="ch-tab${i===0?" active":""}" data-ch="${i+1}"
+             onclick="scopeMeasChSelect(this)">${i+1}</button>`
+  ).join("");
+
+  // build <select> options grouped
+  let lastGroup = "";
+  const opts = SCOPE_MEASURES.map(m => {
+    let prefix = "";
+    if (m.group !== lastGroup) { lastGroup = m.group; }
+    return `<option value="${m.op}">${m.label}</option>`;
+  }).join("");
+
   const div = document.createElement("div");
   div.className = "card";
   div.dataset.type  = "scope";
@@ -1357,6 +1470,7 @@ function buildScopeCard(instr) {
       <div class="card-status-dot"></div>
     </div>
     <div class="card-body scope-controls">
+
       <div class="section-label">Transport</div>
       <div class="transport-row">
         <button class="btn run"    onclick="scopeCmd('run')">▶ Run</button>
@@ -1364,6 +1478,23 @@ function buildScopeCard(instr) {
         <button class="btn single" onclick="scopeCmd('single')">↓ Single</button>
         <button class="btn auto"   onclick="scopeCmd('autoscale')">⟳ Auto</button>
       </div>
+
+      <div class="section-label">Measurement</div>
+      <div class="meas-panel">
+        <div class="meas-row">
+          <div class="ch-tabs" id="scope-meas-ch-tabs" style="flex-shrink:0;">${chTabs}</div>
+          <div class="meas-select-wrap">
+            <select class="meas-select" id="scope-meas-select">${opts}</select>
+          </div>
+          <button class="btn btn-primary" style="padding:6px 12px;font-size:11px;"
+                  onclick="scopeMeasure()">Measure</button>
+        </div>
+        <div class="meas-display">
+          <div class="meas-value dim" id="scope-meas-value">—</div>
+          <div class="meas-meta"      id="scope-meas-meta"></div>
+        </div>
+      </div>
+
       <button class="screenshot-btn" id="screenshot-btn" onclick="doScreenshot()">
         📷 Screenshot
       </button>
@@ -1372,9 +1503,81 @@ function buildScopeCard(instr) {
   return div;
 }
 
+let _scopeMeasCh = 1;
+
+function scopeMeasChSelect(btn) {
+  document.querySelectorAll("#scope-meas-ch-tabs .ch-tab")
+    .forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  _scopeMeasCh = parseInt(btn.dataset.ch);
+}
+
 function scopeCmd(cmd) {
   POST(`/api/scope/${cmd}`).catch(e => toast(e.message, "error"));
 }
+
+function scopeMeasure() {
+  const sel  = document.getElementById("scope-meas-select");
+  const meas = sel ? sel.value : "measure_vpp";
+  const $val  = document.getElementById("scope-meas-value");
+  const $meta = document.getElementById("scope-meas-meta");
+
+  if ($val) { $val.innerHTML = `<span class="spinner" style="width:14px;height:14px;border-width:2px;"></span>`; $val.classList.add("dim"); }
+  if ($meta) $meta.textContent = "";
+
+  POST("/api/scope/measure", { measurement: meas, ch: _scopeMeasCh })
+    .catch(e => {
+      toast(e.message, "error");
+      if ($val) { $val.innerHTML = "—"; $val.classList.add("dim"); }
+    });
+}
+
+socket.on("scope_measurement", ({ value, label, unit, ch, measurement, error }) => {
+  const $val  = document.getElementById("scope-meas-value");
+  const $meta = document.getElementById("scope-meas-meta");
+  if (!$val) return;
+
+  if (error) {
+    $val.innerHTML = "ERR";
+    $val.classList.add("dim");
+    $meta.textContent = error;
+    toast(error, "error");
+    return;
+  }
+
+  $val.classList.remove("dim");
+
+  if (value === null || isNaN(value) || !isFinite(value) ||
+      Math.abs(value) > 1e37) {          // scope returns 9.9e+37 for "no measurement"
+    $val.innerHTML = "—";
+    $val.classList.add("dim");
+    $meta.textContent = `${label} · CH${ch}`;
+    return;
+  }
+
+  // auto-scale with SI prefix
+  const mag = Math.abs(value);
+  let disp, dispUnit = unit;
+  if (unit === "%") {
+    disp = value.toPrecision(5).replace(/\.?0+$/, "");
+  } else if (mag >= 1e6) {
+    disp = (value / 1e6).toPrecision(5); dispUnit = "M" + unit;
+  } else if (mag >= 1e3) {
+    disp = (value / 1e3).toPrecision(5); dispUnit = "k" + unit;
+  } else if (mag < 1e-6 && mag > 0) {
+    disp = (value * 1e9).toPrecision(5); dispUnit = "n" + unit;
+  } else if (mag < 1e-3 && mag > 0) {
+    disp = (value * 1e6).toPrecision(5); dispUnit = "µ" + unit;
+  } else if (mag < 1 && unit === "s") {
+    disp = (value * 1e3).toPrecision(5); dispUnit = "ms";
+  } else {
+    disp = value.toPrecision(6).replace(/\.?0+$/, "");
+  }
+
+  $val.innerHTML =
+    `${escHtml(disp)}<span class="meas-value-unit">${escHtml(dispUnit)}</span>`;
+  $meta.textContent = `${label} · CH${ch}`;
+});
 
 function doScreenshot() {
   const btn = document.getElementById("screenshot-btn");

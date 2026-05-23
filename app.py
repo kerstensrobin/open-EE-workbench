@@ -249,11 +249,55 @@ def _find_instrument(itype: str):
     return None, None
 
 
+_SCOPE_MEASURES = {
+    "measure_vpp":       ("Vpp",  "V p-p"),
+    "measure_freq":      ("Freq", "Hz"),
+    "measure_period":    ("Per",  "s"),
+    "measure_vavg":      ("Vavg", "V"),
+    "measure_vrms":      ("Vrms", "V"),
+    "measure_vmax":      ("Vmax", "V"),
+    "measure_vmin":      ("Vmin", "V"),
+    "measure_risetime":  ("Rise", "s"),
+    "measure_falltime":  ("Fall", "s"),
+    "measure_dutycycle": ("Duty", "%"),
+}
+
+
 @flask_app.route("/api/scope/<cmd>", methods=["POST"])
 def api_scope(cmd: str):
     if cmd not in ("run", "stop", "single", "autoscale"):
         return jsonify({"error": "unknown command"}), 400
     _executor.submit(lambda: _op(*_find_instrument("scope"), cmd))
+    return jsonify({"status": "ok"})
+
+
+@flask_app.route("/api/scope/measure", methods=["POST"])
+def api_scope_measure():
+    d    = request.json or {}
+    meas = d.get("measurement", "measure_vpp")
+    ch   = int(d.get("ch", 1))
+
+    if meas not in _SCOPE_MEASURES:
+        return jsonify({"error": f"unknown measurement {meas!r}"}), 400
+
+    def _do():
+        res, fam = _find_instrument("scope")
+        if res is None:
+            sio.emit("scope_measurement", {"error": "No scope connected"}); return
+        try:
+            raw = _run_steps(res, get_command(fam, meas, ch=ch))
+            val = float(raw) if raw is not None else None
+            label, unit = _SCOPE_MEASURES[meas]
+            sio.emit("scope_measurement",
+                     {"measurement": meas, "label": label, "unit": unit,
+                      "ch": ch, "value": val})
+        except KeyError:
+            sio.emit("scope_measurement",
+                     {"error": f"{meas!r} not supported on this scope"})
+        except Exception as exc:
+            sio.emit("scope_measurement", {"error": str(exc)})
+
+    _executor.submit(_do)
     return jsonify({"status": "ok"})
 
 
