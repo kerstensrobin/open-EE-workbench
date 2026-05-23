@@ -106,7 +106,7 @@ After scanning, `nachoVisa.py` asks whether to save the current bench. Workbench
 
 ## Note on documentation
 
-The `documentation/` folder is used locally to store vendor programming manuals referenced during development. These files are not tracked in version control. The SCPI command definitions in `instruments.json` are derived from those manuals but are expressed as independent, non-verbatim structured data.
+The `documentation/` folder is used locally to store vendor programming manuals referenced during development. These files are not included on the online git, only the educational Keysight manuals are. The SCPI command definitions in `instruments.json` are derived from those manuals but are expressed as independent, non-verbatim structured data.
 
 ---
 
