@@ -588,6 +588,27 @@ def ui_static(p):
 def gui_assets(p):
     return send_from_directory(ROOT / "gui_assets", p)
 
+@flask_app.route("/favicon.ico")
+@flask_app.route("/favicon.png")
+def favicon():
+    return send_from_directory(ROOT / "gui_assets", "favicon-32.png",
+                               mimetype="image/png")
+
+@flask_app.route("/manifest.json")
+def manifest():
+    from flask import jsonify as _j
+    return _j({
+        "name":             "open-EE-workbench",
+        "short_name":       "EEW",
+        "display":          "standalone",
+        "background_color": "#0d0e11",
+        "theme_color":      "#231040",
+        "icons": [
+            {"src": "/assets/icon-192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png"},
+        ],
+    })
+
 
 # ── SocketIO ──────────────────────────────────────────────────────────────────
 @sio.on("connect")
