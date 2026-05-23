@@ -311,41 +311,49 @@ def api_screenshot():
             sio.emit("screenshot_done", {"error": "No scope connected"}); return
 
         try:
-            steps   = get_command(fam, "screenshot")
+            steps = get_command(fam, "screenshot")
         except KeyError:
             sio.emit("screenshot_done",
                      {"error": "Screenshot not supported on this scope"}); return
 
         raw_idx = next((i for i, (a, _) in enumerate(steps) if a == "raw_query"), None)
         if raw_idx is None:
-            sio.emit("screenshot_done", {"error": "No data-read step in screenshot command"}); return
+            sio.emit("screenshot_done",
+                     {"error": "No data-read step in screenshot command"}); return
 
         pre  = [(a, s) for a, s in steps[:raw_idx]     if a == "write"]
         cmd_ = steps[raw_idx][1]
         post = [(a, s) for a, s in steps[raw_idx + 1:] if a == "write"]
 
-        orig_timeout  = res.timeout
-        res.timeout   = 12_000
-        is_usb        = res.resource_name.upper().startswith("USB")
-        if is_usb:
-            res.chunk_size = 4096
+        orig_timeout = res.timeout
+        try:
+            res.timeout = 20_000    # screenshots can take several seconds
 
-        for _, s in pre: res.write(s)
-        time.sleep(1.2)
-        res.write(cmd_)
+            for _, s in pre:
+                res.write(s)
+            time.sleep(1.0)         # let scope compose the image before we ask
 
-        if is_usb:
-            chunks = []
-            while True:
-                c = res.read_raw(); chunks.append(c)
-                if len(c) < 4096: break
-            data = b"".join(chunks)
-        else:
+            res.write(cmd_)
+            # pyvisa's read_raw() handles USBTMC end-of-transfer natively;
+            # manual chunking is unreliable (hangs when data is a multiple of chunk_size).
             data = res.read_raw()
 
-        for _, s in post: res.write(s)
-        res.timeout = orig_timeout
+            for _, s in post:
+                try: res.write(s)
+                except Exception: pass
 
+        except Exception as exc:
+            _log(f"✗ Screenshot I/O error: {exc}")
+            sio.emit("screenshot_done", {"error": str(exc)})
+            return
+        finally:
+            try: res.timeout = orig_timeout
+            except Exception: pass
+
+        if not data:
+            sio.emit("screenshot_done", {"error": "Scope returned empty data"}); return
+
+        # Strip any leading SCPI header before the image magic bytes
         ext = ""
         for magic, e in [(b"\x89PNG", ".png"), (b"BM", ".bmp")]:
             idx = data.find(magic)
@@ -353,10 +361,14 @@ def api_screenshot():
                 data = data[idx:]; ext = e; break
 
         ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
-        name = f"{filename}_{ts}{ext}"
+        name = f"{filename}_{ts}{ext or '.bin'}"
         path = ROOT / name
-        path.write_bytes(data)
-        _log(f"Screenshot saved: {name}")
+        try:
+            path.write_bytes(data)
+        except Exception as exc:
+            sio.emit("screenshot_done", {"error": f"Could not save file: {exc}"}); return
+
+        _log(f"✓ Screenshot saved: {name}  ({len(data)} bytes)")
         sio.emit("screenshot_done", {"path": str(path), "filename": name})
 
     _executor.submit(_do)
