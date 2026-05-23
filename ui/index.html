@@ -1337,7 +1337,8 @@ function buildTestCard(test) {
   }).join("");
 
   // Icon by type
-  const icons = { ac_frequency_sweep:"〜", iv_curve:"⚡", dmm_logger:"Ω" };
+  const icons = { ac_frequency_sweep:"〜", iv_curve:"⚡", dmm_logger:"Ω",
+                  waveform_analysis:"∿",  harmonic_analysis:"≋" };
   const icon = icons[test.id] || "▶";
 
   div.innerHTML = `

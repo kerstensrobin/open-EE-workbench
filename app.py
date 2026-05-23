@@ -680,6 +680,38 @@ def _suggest_tests() -> list:
             "columns": ["elapsed_s", "value"],
         })
 
+    if "scope" in types:
+        tests.append({
+            "id":          "waveform_analysis",
+            "name":        "Waveform Analysis",
+            "description": "Log all measurements from a scope channel over time",
+            "requires":    ["scope"],
+            "params": [
+                {"id": "ch",          "label": "Channel",   "unit": "",   "default": "1",  "type": "select",
+                 "options": ["1", "2", "3", "4"]},
+                {"id": "num_samples", "label": "Samples",   "unit": "",   "default": 10,   "type": "number"},
+                {"id": "interval",    "label": "Interval",  "unit": "s",  "default": 0.5,  "type": "number"},
+            ],
+            "columns": ["sample", "vpp_V", "vmax_V", "vmin_V", "vavg_V", "vrms_V",
+                        "freq_Hz", "period_s", "duty_pct", "rise_s", "fall_s"],
+        })
+        tests.append({
+            "id":          "harmonic_analysis",
+            "name":        "Harmonic Analysis",
+            "description": "Crest factor, THD estimate, and optional CH1→CH2 gain",
+            "requires":    ["scope"],
+            "params": [
+                {"id": "ch_signal",   "label": "Signal CH", "unit": "",   "default": "1",    "type": "select",
+                 "options": ["1", "2", "3", "4"]},
+                {"id": "ch_ref",      "label": "Ref CH",    "unit": "",   "default": "none", "type": "select",
+                 "options": ["none", "1", "2", "3", "4"]},
+                {"id": "num_samples", "label": "Samples",   "unit": "",   "default": 20,     "type": "number"},
+                {"id": "interval",    "label": "Interval",  "unit": "s",  "default": 0.5,    "type": "number"},
+            ],
+            "columns": ["sample", "freq_Hz", "vpp_V", "vrms_V", "crest_factor", "thd_est_pct",
+                        "ref_vpp_V", "gain_dB"],
+        })
+
     return tests
 
 
@@ -867,10 +899,142 @@ def api_automation_run():
 
         _done(rows, cols)
 
+    def _run_waveform_analysis():
+        ch          = int(params.get("ch", 1))
+        num_samples = int(params.get("num_samples", 10))
+        interval    = float(params.get("interval", 0.5))
+
+        scope_res, scope_fam = _find_instrument("scope")
+        if scope_res is None:
+            _done([], [], "Scope not connected"); return
+
+        cols = ["sample", "vpp_V", "vmax_V", "vmin_V", "vavg_V", "vrms_V",
+                "freq_Hz", "period_s", "duty_pct", "rise_s", "fall_s"]
+
+        _emit_progress(f"Waveform analysis: {num_samples} snapshots from CH{ch} at {interval}s interval")
+
+        meas_ops = [
+            ("measure_vpp",       "vpp"),
+            ("measure_vmax",      "vmax"),
+            ("measure_vmin",      "vmin"),
+            ("measure_vavg",      "vavg"),
+            ("measure_vrms",      "vrms"),
+            ("measure_freq",      "freq"),
+            ("measure_period",    "period"),
+            ("measure_dutycycle", "duty"),
+            ("measure_risetime",  "rise"),
+            ("measure_falltime",  "fall"),
+        ]
+
+        rows = []
+        for i in range(num_samples):
+            if _auto_stop.is_set():
+                _emit_progress("Stopped by user"); break
+
+            vals = {}
+            for op, key in meas_ops:
+                try:
+                    raw = _run_steps(scope_res, get_command(scope_fam, op, ch=ch))
+                    v = float(raw) if raw is not None else None
+                    if v is not None and abs(v) > 1e30:
+                        v = None
+                    vals[key] = round(v, 8) if v is not None else None
+                except Exception:
+                    vals[key] = None
+
+            row = [
+                i + 1,
+                vals["vpp"], vals["vmax"], vals["vmin"],
+                vals["vavg"], vals["vrms"],
+                vals["freq"], vals["period"], vals["duty"],
+                vals["rise"], vals["fall"],
+            ]
+            rows.append(row)
+            sio.emit("automation_row", {"test_id": test_id, "row": row, "columns": cols,
+                                        "progress": (i + 1) / num_samples})
+            if i < num_samples - 1:
+                _auto_stop.wait(timeout=interval)
+
+        _done(rows, cols)
+
+    def _run_harmonic_analysis():
+        import math as _math
+        ch_signal   = int(params.get("ch_signal", 1))
+        ch_ref_raw  = str(params.get("ch_ref", "none")).strip()
+        ch_ref      = None if ch_ref_raw in ("none", "0", "", str(ch_signal)) else int(ch_ref_raw)
+        num_samples = int(params.get("num_samples", 20))
+        interval    = float(params.get("interval", 0.5))
+
+        scope_res, scope_fam = _find_instrument("scope")
+        if scope_res is None:
+            _done([], [], "Scope not connected"); return
+
+        cols = ["sample", "freq_Hz", "vpp_V", "vrms_V", "crest_factor",
+                "thd_est_pct", "ref_vpp_V", "gain_dB"]
+
+        ref_desc = f", gain vs CH{ch_ref}" if ch_ref else ""
+        _emit_progress(f"Harmonic analysis: {num_samples} samples from CH{ch_signal}{ref_desc}")
+
+        def _safe(op, ch_):
+            try:
+                raw = _run_steps(scope_res, get_command(scope_fam, op, ch=ch_))
+                v = float(raw)
+                return None if abs(v) > 1e30 else v
+            except Exception:
+                return None
+
+        rows = []
+        for i in range(num_samples):
+            if _auto_stop.is_set():
+                _emit_progress("Stopped by user"); break
+
+            freq = _safe("measure_freq",  ch_signal)
+            vpp  = _safe("measure_vpp",   ch_signal)
+            vrms = _safe("measure_vrms",  ch_signal)
+
+            # Crest factor = Vpeak / Vrms  (pure sine → √2 ≈ 1.414)
+            # THD estimate: assume fundamental Vrms ≈ Vpp/(2√2)
+            # THD% = √(Vrms² − Vrms_fund²) / Vrms_fund × 100
+            crest = thd = None
+            if vpp is not None and vrms is not None and vrms > 0:
+                vpeak         = vpp / 2.0
+                crest         = round(vpeak / vrms, 4)
+                vrms_fund_est = vpeak / _math.sqrt(2)
+                if vrms >= vrms_fund_est:
+                    thd = round(_math.sqrt(max(vrms**2 - vrms_fund_est**2, 0))
+                                / vrms_fund_est * 100, 2)
+                else:
+                    thd = 0.0
+
+            ref_vpp = gain_db = None
+            if ch_ref is not None:
+                ref_vpp = _safe("measure_vpp", ch_ref)
+                if vpp is not None and ref_vpp and ref_vpp > 0:
+                    gain_db = round(20 * _math.log10(vpp / ref_vpp), 3)
+
+            row = [
+                i + 1,
+                round(freq, 3)    if freq    is not None else None,
+                round(vpp, 6)     if vpp     is not None else None,
+                round(vrms, 6)    if vrms    is not None else None,
+                crest, thd,
+                round(ref_vpp, 6) if ref_vpp is not None else None,
+                gain_db,
+            ]
+            rows.append(row)
+            sio.emit("automation_row", {"test_id": test_id, "row": row, "columns": cols,
+                                        "progress": (i + 1) / num_samples})
+            if i < num_samples - 1:
+                _auto_stop.wait(timeout=interval)
+
+        _done(rows, cols)
+
     runners = {
         "ac_frequency_sweep": _run_ac_sweep,
         "iv_curve":           _run_iv_curve,
         "dmm_logger":         _run_dmm_logger,
+        "waveform_analysis":  _run_waveform_analysis,
+        "harmonic_analysis":  _run_harmonic_analysis,
     }
     runner = runners.get(test_id)
     if runner is None:
