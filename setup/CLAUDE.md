@@ -39,7 +39,7 @@ Role-based access means scripts work regardless of which port or IP an instrumen
 
 ### instruments.json / instruments.py
 
-`instruments.json` is the vendor-neutral SCPI command database (57 families, 13 vendors). `instruments.py` loads it and exposes:
+`instruments.json` is the vendor-neutral SCPI command database (68 families, 13 vendors). `instruments.py` loads it and exposes:
 - `classify(idn)` — match IDN string → resolved family dict
 - `get_command(family, operation)` — retrieve SCPI steps for an operation
 - `resolve_command(cmd, **kwargs)` — expand `{ch}`, `{value}`, etc. placeholders

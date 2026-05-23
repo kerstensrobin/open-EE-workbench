@@ -1971,6 +1971,201 @@
         "remote_mode": ":SYSTem:REMote",
         "local_mode": "LOCAL"
       }
+    },
+    {
+      "id": "aimtti_pl",
+      "vendor": "AIM-TTI",
+      "series": "PL / PL-P Series Precision Linear DC Power Supply",
+      "type": "psu",
+      "patterns": [
+        "PL068",
+        "PL155",
+        "PL303",
+        "PL601"
+      ],
+      "commands": {
+        "reset": ["*RST", "*CLS"],
+        "set_voltage": {
+          "write": "V{ch} {value}",
+          "query": "V{ch}?"
+        },
+        "set_current_limit": {
+          "write": "I{ch} {value}",
+          "query": "I{ch}?"
+        },
+        "set_ovp": {
+          "write": "OVP{ch} {value}",
+          "query": "OVP{ch}?"
+        },
+        "set_ocp": {
+          "write": "OCP{ch} {value}",
+          "query": "OCP{ch}?"
+        },
+        "output_on": "OP{ch} 1",
+        "output_off": "OP{ch} 0",
+        "output_state": {
+          "query": "OP{ch}?"
+        },
+        "measure_voltage": {
+          "query": "V{ch}O?"
+        },
+        "measure_current": {
+          "query": "I{ch}O?"
+        },
+        "output_on_all": "OPALL 1",
+        "output_off_all": "OPALL 0",
+        "clear_trip": "TRIPRST",
+        "local_mode": "LOCAL"
+      }
+    },
+    {
+      "id": "aimtti_tsx",
+      "vendor": "AIM-TTI",
+      "series": "TSX Series II High-Current Linear DC Power Supply",
+      "type": "psu",
+      "patterns": [
+        "TSX3510P",
+        "TSX1820P"
+      ],
+      "commands": {
+        "reset": ["*RST", "*CLS"],
+        "set_voltage": {
+          "write": "V1 {value}",
+          "query": "V1?"
+        },
+        "set_current_limit": {
+          "write": "I1 {value}",
+          "query": "I1?"
+        },
+        "set_ovp": {
+          "write": "OVP1 {value}",
+          "query": "OVP1?"
+        },
+        "output_on": "OP1 1",
+        "output_off": "OP1 0",
+        "output_state": {
+          "query": "OP1?"
+        },
+        "measure_voltage": {
+          "query": "V1O?"
+        },
+        "measure_current": {
+          "query": "I1O?"
+        },
+        "measure_power": {
+          "query": "POWER 1?"
+        },
+        "save_setup": "*SAV1 {value}",
+        "recall_setup": "*RCL1 {value}",
+        "local_mode": "LOCAL"
+      }
+    },
+    {
+      "id": "aimtti_tgf4000",
+      "vendor": "AIM-TTI",
+      "series": "TGF4000 Series Dual-Channel Arbitrary Waveform Generator",
+      "type": "awg",
+      "patterns": [
+        "TGF4042",
+        "TGF4082",
+        "TGF4162",
+        "TGF4242"
+      ],
+      "commands": {
+        "reset": ["*RST", "*CLS"],
+        "select_channel": {
+          "write": "CHN {ch}",
+          "query": "CHN?"
+        },
+        "set_function": {
+          "write": "WAVE {func}",
+          "query": "WAVE?"
+        },
+        "set_frequency": {
+          "write": "FREQ {freq}",
+          "query": "FREQ?"
+        },
+        "set_period": {
+          "write": "PER {value}",
+          "query": "PER?"
+        },
+        "set_amplitude": {
+          "write": "AMPL {amp}",
+          "query": "AMPL?"
+        },
+        "set_high_level": {
+          "write": "HIVLV {value}",
+          "query": "HIVLV?"
+        },
+        "set_low_level": {
+          "write": "LOLVL {value}",
+          "query": "LOLVL?"
+        },
+        "set_offset": {
+          "write": "DCOFFS {offset}",
+          "query": "DCOFFS?"
+        },
+        "output_on": "OUTPUT ON",
+        "output_off": "OUTPUT OFF",
+        "set_output": {
+          "write": "OUTPUT {value}",
+          "query": "OUTPUT?"
+        },
+        "set_load": {
+          "write": "ZLOAD {value}",
+          "query": "ZLOAD?"
+        },
+        "set_phase": {
+          "write": "PHASE {value}",
+          "query": "PHASE?"
+        },
+        "align_phase": "ALIGN",
+        "set_sync": {
+          "write": "SYNCOUT {value}",
+          "query": "SYNCOUT?"
+        },
+        "local_mode": "LOCAL"
+      }
+    },
+    {
+      "id": "aimtti_smu4000",
+      "vendor": "AIM-TTI",
+      "series": "SMU4000 Series Source Measure Unit",
+      "type": "smu",
+      "patterns": [
+        "SMU4201",
+        "SMU4202",
+        "SMU4204"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "set_mode": "SYSTem:FUNCtion:MODE {func}",
+        "output_on": "OUTPut:STATe ON",
+        "output_off": "OUTPut:STATe OFF",
+        "output_state": {
+          "write": "OUTPut:STATe {value}",
+          "query": "OUTPut:STATe?"
+        },
+        "set_voltage": "SOURce:VOLTage:FIXed {value}",
+        "set_current_limit": "SOURce:VOLTage:CURRent:LIMit {value}",
+        "set_current": "SOURce:CURRent:FIXed {value}",
+        "set_voltage_limit": "SOURce:CURRent:VOLTage:LIMit {value}",
+        "set_ovp": {
+          "write": "SOURce:VOLTage:PROTection:VOLTage {value}",
+          "query": "SOURce:VOLTage:PROTection:VOLTage?"
+        },
+        "set_ocp": {
+          "write": "SOURce:VOLTage:PROTection:CURRent {value}",
+          "query": "SOURce:VOLTage:PROTection:CURRent?"
+        },
+        "measure_primary": {
+          "query": "MEASure:PRIMary:LIVEdata?"
+        },
+        "measure_secondary": {
+          "query": "MEASure:SECondary:LIVEdata?"
+        },
+        "clear_protection": ["SYSTem:PROTection:VOLTage:CLEAr", "SYSTem:PROTection:CURRent:CLEAr"]
+      }
     }
   ]
 }

@@ -220,3 +220,6 @@ __marimo__/
 # Workbench configs (device-specific, private)
 workbenches/*.json
 !workbenches/active.json
+
+# Vendor programming manuals — not redistributed due to copyright
+documentation/*.pdf

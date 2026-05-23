@@ -9,7 +9,7 @@ Very much a work in progress.
 
 ```
 open-EE-workbench/
-├── documentation/       # Instrument programmer manuals
+├── documentation/       # Reference materials (not tracked — see note below)
 ├── workbenches/         # Saved workbench definitions (JSON)
 ├── setup/               # Core tools and libraries
 │   ├── nachoVisa.py
@@ -77,18 +77,18 @@ python setup/setWorkbench.py --save-current NAME    # read current settings and 
 `"hosts"` lists IP addresses of Ethernet instruments to probe (the `@py` backend does not auto-discover LAN instruments). The `--reset-bench` flag bypasses the config and drives all instruments to a hardcoded safe state: PSU outputs off at 0 V / 500 mA, AWG set to 1 kHz 1 Vpp sine off, scopes recalled to default setup.
 
 ### instruments.py / instruments.json
-A vendor-neutral SCPI abstraction layer. `instruments.json` contains 57 instrument families spanning 320 IDN match patterns across 13 vendors:
+A vendor-neutral SCPI abstraction layer. `instruments.json` contains 68 instrument families spanning 374 IDN match patterns across 14 vendors. SCPI dialects are derived from vendor-provided programming manuals.
 
 | Type | Families |
 |---|---|
-| Oscilloscope | 22 |
-| AWG / Function generator | 12 |
-| Power supply | 11 |
+| Oscilloscope | 25 |
+| AWG / Function generator | 14 |
+| Power supply | 15 |
 | Multimeter | 9 |
-| SMU | 2 |
-| Electronic load | 1 |
+| SMU | 3 |
+| Electronic load | 2 |
 
-Vendors covered: AIM-TTI, Fluke, GW INSTEK, Hantek, Keithley, Keysight, Korad, OWON, Rigol, Rohde & Schwarz, Siglent, Tektronix.
+Vendors covered: AIM-TTI, BK Precision, Fluke, GW INSTEK, Hantek, Keithley, Keysight, Korad, OWON, Rigol, Rohde & Schwarz, Siglent, Tektronix, Teledyne.
 
 `instruments.py` loads the database and exposes `classify(idn)` and `resolve_command(cmd, **kw)` for use by other scripts.
 
@@ -103,6 +103,10 @@ Vendors covered: AIM-TTI, Fluke, GW INSTEK, Hantek, Keithley, Keysight, Korad, O
 After scanning, `nachoVisa.py` asks whether to save the current bench. Workbench files are stored in `workbenches/<name>.json` and record each instrument's resource string, connection type, manufacturer/model/serial, and its **role** (`scope`, `generator`, `psu`, `dmm`). Scripts can load a workbench and bind to instruments by role rather than hard-coded resource strings, so they work regardless of which USB port or IP an instrument ends up on.
 
 `nachoVisa.py` also reports which tests are ready to run given the roles present — e.g. `ac_frequency_sweep` requires a `scope` + `generator`, `psu_ramp_capture` requires a `scope` + `psu`.
+
+## Note on documentation
+
+The `documentation/` folder is used locally to store vendor programming manuals referenced during development. These files are not tracked in version control. The SCPI command definitions in `instruments.json` are derived from those manuals but are expressed as independent, non-verbatim structured data.
 
 ---
 
