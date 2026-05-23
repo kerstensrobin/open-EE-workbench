@@ -132,33 +132,43 @@
           "query": ":TRIGger:EDGe:SLOPe?"
         },
         "measure_vpp": {
+          "write": ":MEASure:ITEM VPP,CHANnel{ch}",
           "query": ":MEASure:ITEM? VPP,CHANnel{ch}"
         },
         "measure_freq": {
+          "write": ":MEASure:ITEM FREQuency,CHANnel{ch}",
           "query": ":MEASure:ITEM? FREQuency,CHANnel{ch}"
         },
         "measure_period": {
+          "write": ":MEASure:ITEM PERIOD,CHANnel{ch}",
           "query": ":MEASure:ITEM? PERIOD,CHANnel{ch}"
         },
         "measure_vavg": {
+          "write": ":MEASure:ITEM VAVG,CHANnel{ch}",
           "query": ":MEASure:ITEM? VAVG,CHANnel{ch}"
         },
         "measure_vrms": {
+          "write": ":MEASure:ITEM VRMS,CHANnel{ch}",
           "query": ":MEASure:ITEM? VRMS,CHANnel{ch}"
         },
         "measure_vmax": {
+          "write": ":MEASure:ITEM VMAX,CHANnel{ch}",
           "query": ":MEASure:ITEM? VMAX,CHANnel{ch}"
         },
         "measure_vmin": {
+          "write": ":MEASure:ITEM VMIN,CHANnel{ch}",
           "query": ":MEASure:ITEM? VMIN,CHANnel{ch}"
         },
         "measure_risetime": {
+          "write": ":MEASure:ITEM RTIM,CHANnel{ch}",
           "query": ":MEASure:ITEM? RTIM,CHANnel{ch}"
         },
         "measure_falltime": {
+          "write": ":MEASure:ITEM FTIM,CHANnel{ch}",
           "query": ":MEASure:ITEM? FTIM,CHANnel{ch}"
         },
         "measure_dutycycle": {
+          "write": ":MEASure:ITEM DUTY,CHANnel{ch}",
           "query": ":MEASure:ITEM? DUTY,CHANnel{ch}"
         },
         "screenshot": {

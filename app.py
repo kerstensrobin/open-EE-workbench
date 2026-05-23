@@ -699,10 +699,12 @@ def _suggest_tests() -> list:
             "description": "Log all measurements from a scope channel over time",
             "requires":    ["scope"],
             "params": [
-                {"id": "ch",          "label": "Channel",   "unit": "",   "default": "1",  "type": "select",
+                {"id": "ch",          "label": "Channel",   "unit": "",   "default": "1",   "type": "select",
                  "options": ["1", "2", "3", "4"]},
-                {"id": "num_samples", "label": "Samples",   "unit": "",   "default": 10,   "type": "number"},
-                {"id": "interval",    "label": "Interval",  "unit": "s",  "default": 0.5,  "type": "number"},
+                {"id": "autoscale",   "label": "Autoscale", "unit": "",   "default": "yes", "type": "select",
+                 "options": ["yes", "no"]},
+                {"id": "num_samples", "label": "Samples",   "unit": "",   "default": 10,    "type": "number"},
+                {"id": "interval",    "label": "Interval",  "unit": "s",  "default": 0.5,   "type": "number"},
             ],
             "columns": ["sample", "vpp_V", "vmax_V", "vmin_V", "vavg_V", "vrms_V",
                         "freq_Hz", "period_s", "duty_pct", "rise_s", "fall_s"],
@@ -717,6 +719,8 @@ def _suggest_tests() -> list:
                  "options": ["1", "2", "3", "4"]},
                 {"id": "ch_ref",      "label": "Ref CH",    "unit": "",   "default": "none", "type": "select",
                  "options": ["none", "1", "2", "3", "4"]},
+                {"id": "autoscale",   "label": "Autoscale", "unit": "",   "default": "yes",  "type": "select",
+                 "options": ["yes", "no"]},
                 {"id": "num_samples", "label": "Samples",   "unit": "",   "default": 20,     "type": "number"},
                 {"id": "interval",    "label": "Interval",  "unit": "s",  "default": 0.5,    "type": "number"},
             ],
@@ -911,10 +915,65 @@ def api_automation_run():
 
         _done(rows, cols)
 
+    def _scope_autoscale_and_rescale(scope_res, scope_fam, ch: int):
+        """Full scope setup matching acAnalysis.py:
+        1. :AUToscale  – initial trigger / timebase / vertical
+        2. Vertical rescale  – Vpp/6 V/div, offset 0
+        3. Trigger  – rising edge on the selected channel, level 0 V
+        4. Timebase  – ~3 cycles across 10 divisions based on measured freq
+        """
+        # ── 1. Autoscale ────────────────────────────────────────────
+        try:
+            _run_steps(scope_res, get_command(scope_fam, "autoscale"))
+            _emit_progress("Autoscaling… (waiting 2.5 s)")
+            _auto_stop.wait(timeout=2.5)
+        except Exception as exc:
+            _log(f"[auto] autoscale: {exc}")
+
+        # ── 2. Vertical rescale ─────────────────────────────────────
+        try:
+            raw = _run_steps(scope_res, get_command(scope_fam, "measure_vpp", ch=ch))
+            vpp = float(raw) if raw is not None else None
+            if vpp and 0 < abs(vpp) < 1e30:
+                vscale = abs(vpp) / 6.0
+                _run_steps(scope_res, get_command(scope_fam, "channel_scale",
+                                                  ch=ch, value=f"{vscale:.4e}"))
+                _run_steps(scope_res, get_command(scope_fam, "channel_offset",
+                                                  ch=ch, value="0"))
+                _emit_progress(f"CH{ch} → {vscale:.4e} V/div  (Vpp={vpp:.4g} V)")
+        except Exception as exc:
+            _log(f"[auto] vertical rescale: {exc}")
+
+        # ── 3. Trigger on this channel, rising edge, level 0 V ─────
+        try:
+            _run_steps(scope_res, get_command(scope_fam, "trigger_source", ch=ch))
+            _run_steps(scope_res, get_command(scope_fam, "trigger_slope",  slope="POSitive"))
+            _run_steps(scope_res, get_command(scope_fam, "trigger_level",  value="0"))
+            _emit_progress(f"Trigger: CH{ch} rising edge at 0 V")
+        except Exception as exc:
+            _log(f"[auto] trigger setup: {exc}")
+
+        # ── 4. Timebase: show ~3 cycles ─────────────────────────────
+        try:
+            raw = _run_steps(scope_res, get_command(scope_fam, "measure_freq", ch=ch))
+            freq = float(raw) if raw is not None else None
+            if freq and 0 < freq < 1e30:
+                period = 1.0 / freq
+                tscale = period * 3 / 10   # 3 periods across 10 divisions
+                _run_steps(scope_res, get_command(scope_fam, "timebase_scale",
+                                                  value=f"{tscale:.6e}"))
+                _emit_progress(f"Timebase → {tscale:.4e} s/div  ({freq:.4g} Hz, 3 cycles)")
+        except Exception as exc:
+            _log(f"[auto] timebase: {exc}")
+
+        # Give scope a moment to re-acquire after all adjustments
+        _auto_stop.wait(timeout=0.5)
+
     def _run_waveform_analysis():
         ch          = int(params.get("ch", 1))
         num_samples = int(params.get("num_samples", 10))
         interval    = float(params.get("interval", 0.5))
+        do_autoscale = str(params.get("autoscale", "yes")).lower() != "no"
 
         scope_res, scope_fam = _find_instrument("scope")
         if scope_res is None:
@@ -923,7 +982,10 @@ def api_automation_run():
         cols = ["sample", "vpp_V", "vmax_V", "vmin_V", "vavg_V", "vrms_V",
                 "freq_Hz", "period_s", "duty_pct", "rise_s", "fall_s"]
 
-        _emit_progress(f"Waveform analysis: {num_samples} snapshots from CH{ch} at {interval}s interval")
+        _emit_progress(f"Waveform analysis: CH{ch}, {num_samples} snapshots at {interval}s interval")
+
+        if do_autoscale:
+            _scope_autoscale_and_rescale(scope_res, scope_fam, ch)
 
         meas_ops = [
             ("measure_vpp",       "vpp"),
@@ -971,11 +1033,12 @@ def api_automation_run():
 
     def _run_harmonic_analysis():
         import math as _math
-        ch_signal   = int(params.get("ch_signal", 1))
-        ch_ref_raw  = str(params.get("ch_ref", "none")).strip()
-        ch_ref      = None if ch_ref_raw in ("none", "0", "", str(ch_signal)) else int(ch_ref_raw)
-        num_samples = int(params.get("num_samples", 20))
-        interval    = float(params.get("interval", 0.5))
+        ch_signal    = int(params.get("ch_signal", 1))
+        ch_ref_raw   = str(params.get("ch_ref", "none")).strip()
+        ch_ref       = None if ch_ref_raw in ("none", "0", "", str(ch_signal)) else int(ch_ref_raw)
+        num_samples  = int(params.get("num_samples", 20))
+        interval     = float(params.get("interval", 0.5))
+        do_autoscale = str(params.get("autoscale", "yes")).lower() != "no"
 
         scope_res, scope_fam = _find_instrument("scope")
         if scope_res is None:
@@ -986,6 +1049,9 @@ def api_automation_run():
 
         ref_desc = f", gain vs CH{ch_ref}" if ch_ref else ""
         _emit_progress(f"Harmonic analysis: {num_samples} samples from CH{ch_signal}{ref_desc}")
+
+        if do_autoscale:
+            _scope_autoscale_and_rescale(scope_res, scope_fam, ch_signal)
 
         def _safe(op, ch_):
             try:
