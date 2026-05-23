@@ -106,6 +106,7 @@ Path={ROOT}
 Icon={icon_path}
 Terminal=false
 StartupNotify=true
+StartupWMClass=open-EE-workbench
 Categories=Science;Engineering;Electronics;Education;
 Keywords=VISA;SCPI;oscilloscope;power supply;DMM;AWG;lab;instrument;
 """

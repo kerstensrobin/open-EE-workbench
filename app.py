@@ -653,6 +653,9 @@ def _open_chrome_app(url: str, width: int = 1300, height: int = 840) -> subproce
         chrome,
         f"--app={url}",
         f"--window-size={width},{height}",
+        # Set WM_CLASS so GNOME Shell matches this window to our .desktop file
+        # and shows the nacho icon in the taskbar instead of the Chrome icon.
+        "--class=open-EE-workbench",
         "--no-default-browser-check",
         "--no-first-run",
         "--disable-extensions",
