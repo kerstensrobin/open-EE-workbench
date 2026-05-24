@@ -708,10 +708,6 @@
         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
       <span class="modal-title">Instrument Scan</span>
-      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);cursor:pointer;">
-        <input type="checkbox" id="scan-usb-only" style="accent-color:var(--accent);" />
-        USB only
-      </label>
       <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="closeScanModal()">✕</button>
     </div>
     <div class="modal-body" id="scan-modal-body">
@@ -746,13 +742,19 @@
     </div>
     <div class="modal-footer" id="scan-footer">
       <div id="scan-footer-idle" style="display:flex;gap:8px;width:100%;align-items:center;">
-        <div style="flex:1"></div>
         <button class="btn btn-ghost" onclick="closeScanModal()">Cancel</button>
-        <button class="btn btn-primary" id="scan-start-btn" onclick="startScan()">
+        <div style="flex:1"></div>
+        <button class="btn btn-ghost" id="scan-start-usb-btn" onclick="startScan(true)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M12 2v8M8 6l4-4 4 4M5 10h14l-1 9H6L5 10z"/>
+          </svg>
+          Scan USB
+        </button>
+        <button class="btn btn-primary" id="scan-start-btn" onclick="startScan(false)">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
-          Start Scan
+          Scan LAN + USB
         </button>
       </div>
       <div id="scan-footer-done" class="hidden save-form" style="width:100%;">
@@ -1764,6 +1766,7 @@ function openScanModal() {
   document.getElementById("scan-found-list").innerHTML="";
   document.getElementById("scan-results-list").innerHTML="";
   document.getElementById("scan-start-btn").disabled=false;
+  document.getElementById("scan-start-usb-btn").disabled=false;
   document.getElementById("scan-modal").classList.remove("hidden");
 }
 function closeScanModal() { document.getElementById("scan-modal").classList.add("hidden"); }
@@ -1771,9 +1774,9 @@ document.getElementById("scan-modal").addEventListener("click", e => {
   if (e.target===document.getElementById("scan-modal")) closeScanModal();
 });
 
-function startScan() {
-  const usbOnly=document.getElementById("scan-usb-only").checked;
+function startScan(usbOnly=false) {
   document.getElementById("scan-start-btn").disabled=true;
+  document.getElementById("scan-start-usb-btn").disabled=true;
   document.getElementById("scan-idle").classList.add("hidden");
   document.getElementById("scan-running").classList.remove("hidden");
   document.getElementById("scan-phase-text").textContent="Starting…";
