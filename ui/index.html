@@ -2008,10 +2008,13 @@ function _dcSwSnapshotMeasItems() {
     } else {
       const action = el.querySelector(`[data-field="action"]`)?.value ?? "screenshot";
       return {
-        kind:   "action",
-        action: action,
-        script: action === "script" ? (el.querySelector(`[data-field="script"]`)?.value ?? "") : "",
-        label:  el.querySelector(`[data-field="label"]`)?.value ?? "",
+        kind:            "action",
+        action:          action,
+        script:          action === "script" ? (el.querySelector(`[data-field="script"]`)?.value  ?? "") : "",
+        scpi_instrument: action === "scpi"   ? (el.querySelector(`[data-field="scpi_instrument"]`)?.value ?? "") : "",
+        scpi_command:    action === "scpi"   ? (el.querySelector(`[data-field="scpi_command"]`)?.value    ?? "") : "",
+        scpi_settle:     action === "scpi"   ? parseFloat(el.querySelector(`[data-field="scpi_settle"]`)?.value ?? "0.1") : 0,
+        label:           el.querySelector(`[data-field="label"]`)?.value ?? "",
       };
     }
   });
@@ -2026,7 +2029,7 @@ function _dcSwMeasTypeOpts(item) {
   ).join("");
 }
 
-// Build the instrument options HTML for a measurement item
+// Build the instrument options HTML for a measurement item (PSU + DMMs)
 function _dcSwInstrOpts(item) {
   const test  = _dcSw.test;
   const sources = test ? test.meters : [];
@@ -2037,6 +2040,16 @@ function _dcSwInstrOpts(item) {
     .map(m => `<option value="${escHtml(m.value)}"${m.value === item.instrument ? " selected" : ""}>${escHtml(m.label)}</option>`)
     .join("");
   return base + rest;
+}
+
+// Build instrument options for SCPI query — all connected instruments
+function _dcSwAllInstrOpts(selected) {
+  const connected = state.instruments.filter(i => i.ok && i.resource);
+  if (!connected.length) return `<option value="">— no instruments connected —</option>`;
+  return connected.map(i => {
+    const label = `${i.type ? i.type.toUpperCase() : "?"} · ${i.model || i.resource}`;
+    return `<option value="${escHtml(i.resource)}"${i.resource === selected ? " selected" : ""}>${escHtml(label)}</option>`;
+  }).join("");
 }
 
 // Render a single measurement item element
@@ -2087,6 +2100,7 @@ function _dcSwBuildMeasItem(item, i) {
   } else {
     // action
     const isScript = (item.action === "script");
+    const isScpi   = (item.action === "scpi");
     el.innerHTML = `
       <div class="dcsw-mi-hdr">
         <span class="dcsw-mi-tag action">Action</span>
@@ -2097,12 +2111,44 @@ function _dcSwBuildMeasItem(item, i) {
           <span class="dcsw-field-label">Action</span>
           <select class="dcsw-select" data-field="action"
                   onchange="_dcSwActionTypeChange(this)">
-            <option value="screenshot"${!isScript ? " selected" : ""}>📷 Scope screenshot</option>
+            <option value="screenshot"${!isScript && !isScpi ? " selected" : ""}>📷 Scope screenshot</option>
+            <option value="scpi"${isScpi ? " selected" : ""}>📡 SCPI query</option>
             <option value="script"${isScript ? " selected" : ""}>⚙ External script</option>
           </select>
         </div>
+
+        <!-- SCPI rows (hidden unless action = scpi) -->
+        <div class="dcsw-field" style="grid-column:1/-1; display:${isScpi ? "" : "none"};"
+             data-action-row="scpi">
+          <span class="dcsw-field-label">Instrument</span>
+          <select class="dcsw-select" data-field="scpi_instrument">
+            ${_dcSwAllInstrOpts(item.scpi_instrument ?? "")}
+          </select>
+        </div>
+        <div class="dcsw-field" style="grid-column:1/-1; display:${isScpi ? "" : "none"};"
+             data-action-row="scpi">
+          <span class="dcsw-field-label">Command</span>
+          <div class="dcsw-field-iw">
+            <input class="dcsw-field-input" data-field="scpi_command" type="text"
+                   placeholder="MEAS:VOLT:DC?" spellcheck="false"
+                   style="font-family:var(--mono);"
+                   value="${escHtml(item.scpi_command ?? "")}" />
+          </div>
+        </div>
+        <div class="dcsw-field" style="display:${isScpi ? "" : "none"};"
+             data-action-row="scpi">
+          <span class="dcsw-field-label">Settle</span>
+          <div class="dcsw-field-iw">
+            <input class="dcsw-field-input" data-field="scpi_settle" type="number"
+                   step="0.01" min="0"
+                   value="${item.scpi_settle ?? 0.1}" />
+            <span class="dcsw-field-unit">s</span>
+          </div>
+        </div>
+
+        <!-- Script row (hidden unless action = script) -->
         <div class="dcsw-field" style="grid-column:1/-1; display:${isScript ? "" : "none"};"
-             data-script-row="1">
+             data-action-row="script">
           <span class="dcsw-field-label">Script</span>
           <div class="dcsw-field-iw">
             <input class="dcsw-field-input" data-field="script" type="text"
@@ -2110,6 +2156,7 @@ function _dcSwBuildMeasItem(item, i) {
                    value="${escHtml(item.script ?? "")}" />
           </div>
         </div>
+
         <div class="dcsw-field" style="grid-column:1/-1;">
           <span class="dcsw-field-label">Label</span>
           <div class="dcsw-field-iw">
@@ -2164,11 +2211,13 @@ function _dcSwMeasInstrChange(sel) {
   ).join("");
 }
 
-// Called when action type dropdown changes — show/hide script row
+// Called when action type dropdown changes — show/hide conditional rows
 function _dcSwActionTypeChange(sel) {
-  const mi = sel.closest(".dcsw-mi");
-  const scriptRow = mi.querySelector('[data-script-row]');
-  if (scriptRow) scriptRow.style.display = sel.value === "script" ? "" : "none";
+  const mi  = sel.closest(".dcsw-mi");
+  const val = sel.value;
+  mi.querySelectorAll("[data-action-row]").forEach(row => {
+    row.style.display = row.dataset.actionRow === val ? "" : "none";
+  });
 }
 
 // ── Channel-count segmented control ─────────────────────────────────

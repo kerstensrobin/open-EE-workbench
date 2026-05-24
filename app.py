@@ -1163,6 +1163,34 @@ def api_automation_run():
                         _log(f"[auto] screenshot: {exc}")
                     return None
 
+                elif action == "scpi":
+                    rstr    = (item.get("scpi_instrument") or "").strip()
+                    command = (item.get("scpi_command")    or "").strip()
+                    settle  = float(item.get("scpi_settle", 0.1) or 0)
+                    if not command:
+                        return None
+                    # Resolve instrument: by resource string, or fall back to first connected
+                    res = _state["resources"].get(rstr)
+                    if res is None and rstr:
+                        _log(f"[auto] SCPI query: instrument '{rstr}' not connected")
+                        return None
+                    if res is None:
+                        # pick any connected instrument
+                        res = next(iter(_state["resources"].values()), None)
+                    if res is None:
+                        return None
+                    try:
+                        if settle > 0:
+                            time.sleep(settle)
+                        raw = res.query(command).strip()
+                        try:
+                            return round(float(raw), 6)
+                        except ValueError:
+                            return raw
+                    except Exception as exc:
+                        _log(f"[auto] SCPI query '{command}': {exc}")
+                    return None
+
                 elif action == "script":
                     script = (item.get("script") or "").strip()
                     if not script:
