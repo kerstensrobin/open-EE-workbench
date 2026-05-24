@@ -1168,8 +1168,32 @@ def api_automation_run():
                     if scope_res is None:
                         _log("[auto] screenshot: no scope connected"); return None
                     try:
-                        data = _run_steps(scope_res,
-                                          get_command(scope_fam, "screenshot"))
+                        steps   = get_command(scope_fam, "screenshot")
+                        raw_idx = next(
+                            (i for i, (a, _) in enumerate(steps) if a == "raw_query"),
+                            None)
+                        if raw_idx is None:
+                            _log("[auto] screenshot: no raw_query step in command")
+                            return None
+                        pre   = [s for a, s in steps[:raw_idx]      if a == "write"]
+                        cmd_  = steps[raw_idx][1]
+                        post  = [s for a, s in steps[raw_idx + 1:]  if a == "write"]
+
+                        orig_timeout = scope_res.timeout
+                        try:
+                            scope_res.timeout = 20_000  # screenshots can take several seconds
+                            for s in pre:
+                                scope_res.write(s)
+                            time.sleep(1.0)             # let scope compose the image
+                            scope_res.write(cmd_)
+                            data = scope_res.read_raw()
+                            for s in post:
+                                try: scope_res.write(s)
+                                except Exception: pass
+                        finally:
+                            try: scope_res.timeout = orig_timeout
+                            except Exception: pass
+
                         if data and len(data) > 0:
                             ts    = datetime.now().strftime("%Y%m%d_%H%M%S")
                             step  = step_ctx.get("step", 0)
