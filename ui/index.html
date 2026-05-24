@@ -614,8 +614,10 @@
       <div id="auto-outpath-bar">
         <label>Output path</label>
         <input id="auto-outpath-input" type="text"
-               placeholder="~/Desktop/sweep_results  (leave blank to use working directory)"
+               placeholder="leave blank to use working directory"
                spellcheck="false" autocomplete="off" />
+        <button class="btn btn-ghost" id="auto-outpath-browse"
+                onclick="browseOutputFolder()" title="Browse…">📁 Browse</button>
       </div>
 
       <!-- no workbench (full-width placeholder) -->
@@ -1593,6 +1595,21 @@ function getTestParams(testId) {
     if (el) params[p.id] = p.type==="number" ? parseFloat(el.value) : el.value;
   }
   return params;
+}
+
+async function browseOutputFolder() {
+  const input   = document.getElementById("auto-outpath-input");
+  const initial = input.value.trim() || "";
+  const btn     = document.getElementById("auto-outpath-browse");
+  btn.disabled  = true;
+  try {
+    const res = await POST("/api/pick-folder", { initial });
+    if (res.path) input.value = res.path;
+  } catch(e) {
+    toast("Folder picker failed: " + e.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function runTest(testId) {

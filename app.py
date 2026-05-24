@@ -882,6 +882,26 @@ def api_automation_stop():
     return jsonify({"status": "stopping"})
 
 
+@flask_app.route("/api/pick-folder", methods=["POST"])
+def api_pick_folder():
+    """Open a native OS folder-picker dialog and return the chosen path."""
+    try:
+        import tkinter as _tk
+        from tkinter import filedialog as _fd
+        root = _tk.Tk()
+        root.withdraw()          # hide the empty Tk window
+        root.attributes("-topmost", True)
+        initial = (request.json or {}).get("initial", str(Path.home()))
+        path = _fd.askdirectory(parent=root, title="Select output folder",
+                                initialdir=initial)
+        root.destroy()
+        if path:
+            return jsonify({"path": path})
+        return jsonify({"path": None})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
 @flask_app.route("/api/automation/run", methods=["POST"])
 def api_automation_run():
     global _auto_running
