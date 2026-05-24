@@ -367,51 +367,51 @@
 
     .auto-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; min-height:200px; color:var(--text-faint); }
     .auto-empty p { font-size:13px; color:var(--text-dim); }
-    .auto-select-hint { min-height:160px; }
 
-    /* two-panel layout */
-    .auto-layout { display:grid; grid-template-columns:1fr 200px; gap:14px; align-items:start; }
-    .auto-detail  { display:flex; flex-direction:column; gap:12px; min-width:0; }
+    /* per-test tab strip */
+    #auto-test-tabs {
+      display:flex; align-items:flex-end; gap:0;
+      border-bottom:1px solid var(--border);
+      background:var(--surface);
+      border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+      padding:0 4px; overflow-x:auto;
+    }
+    .auto-test-tab {
+      display:flex; align-items:center; gap:7px;
+      padding:9px 16px; cursor:pointer; white-space:nowrap;
+      font-size:12px; font-weight:500; color:var(--text-dim);
+      border:1px solid transparent; border-bottom:none;
+      border-radius:var(--radius) var(--radius) 0 0;
+      background:transparent; position:relative;
+      transition:color .12s, background .12s;
+      user-select:none;
+    }
+    .auto-test-tab:hover { color:var(--text); background:var(--surface2); }
+    .auto-test-tab.active {
+      color:var(--text); background:var(--bg);
+      border-color:var(--border);
+    }
+    .auto-test-tab.active::after {
+      content:''; position:absolute; bottom:-1px; left:0; right:0;
+      height:2px; background:var(--accent); border-radius:1px 1px 0 0;
+    }
+    .auto-test-tab-icon { font-size:13px; }
 
-    /* test sidebar */
-    .test-sidebar {
-      background:var(--surface); border:1px solid var(--border);
-      border-radius:var(--radius-lg); overflow:hidden;
-      display:flex; flex-direction:column;
+    /* test cards — full width, no gap between tab strip and card */
+    #test-grid {
+      display:flex; flex-direction:column; gap:0;
+      border:1px solid var(--border); border-top:none;
+      border-radius:0 0 var(--radius-lg) var(--radius-lg);
+      overflow:hidden;
     }
-    .test-sidebar-hdr {
-      padding:8px 12px; font-size:10px; font-weight:700; letter-spacing:.08em;
-      text-transform:uppercase; color:var(--text-faint);
-      background:var(--surface2); border-bottom:1px solid var(--border);
-    }
-    .test-list-item {
-      display:flex; align-items:center; gap:8px;
-      padding:9px 12px; cursor:pointer;
-      border-left:2px solid transparent;
-      transition:background .12s, border-color .12s;
-    }
-    .test-list-item:hover  { background:var(--surface2); }
-    .test-list-item.active { background:var(--surface2); border-left-color:var(--accent); }
-    .test-list-item + .test-list-item { border-top:1px solid var(--border); }
-    .test-list-icon {
-      width:24px; height:24px; border-radius:6px; flex-shrink:0;
-      display:flex; align-items:center; justify-content:center;
-      font-size:13px; background:rgba(26,86,196,.12); color:var(--accent);
-    }
-    .test-list-name { font-size:12px; font-weight:500; color:var(--text); line-height:1.3; }
 
-    /* test cards inside detail column — no grid, just stacked */
-    #test-grid { display:flex; flex-direction:column; gap:0; }
-
-    /* test card */
+    /* test card — borderless; container (#test-grid) provides the frame */
     .test-card {
-      background:var(--surface); border:1px solid var(--border);
-      border-radius:var(--radius-lg); overflow:hidden;
+      background:var(--surface);
       transition:border-color .2s;
     }
-    .test-card:hover { border-color:var(--border2); }
-    .test-card.running { border-color:rgba(26,86,196,.5); }
-    .test-card.done    { border-color:rgba(21,128,61,.45); }
+    .test-card.running { box-shadow:inset 0 2px 0 var(--accent); }
+    .test-card.done    { box-shadow:inset 0 2px 0 var(--green); }
 
     .test-card-header {
       display:flex; align-items:center; gap:10px;
@@ -450,8 +450,10 @@
 
     /* ── Results panel ───────────────────────────────────────────── */
     #results-panel {
-      background:var(--surface); border:1px solid var(--border);
-      border-radius:var(--radius-lg); overflow:hidden; display:none;
+      background:var(--surface);
+      border:1px solid var(--border); border-top:none;
+      border-radius:0 0 var(--radius-lg) var(--radius-lg);
+      overflow:hidden; display:none;
     }
     #results-panel.visible { display:block; }
     .results-header {
@@ -638,52 +640,37 @@
         <small>Connect instruments with compatible types (scope+AWG, PSU, or DMM)</small>
       </div>
 
-      <!-- ── Two-panel layout (detail + sidebar) ──────────────────── -->
-      <div id="auto-layout" class="auto-layout hidden">
+      <!-- ── Test tab strip + content ─────────────────────────────── -->
+      <div id="auto-layout" class="hidden" style="display:none; flex-direction:column; gap:0;">
 
-        <!-- centre: selected-test controls + inline results -->
-        <div class="auto-detail">
+        <!-- tab strip -->
+        <div id="auto-test-tabs"></div>
 
-          <!-- placeholder shown before any test is selected -->
-          <div class="auto-empty auto-select-hint" id="auto-empty-select">
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <rect x="3" y="3" width="18" height="18" rx="2"/>
-              <polyline points="9 12 12 15 15 12"/>
-              <line x1="12" y1="9" x2="12" y2="15"/>
+        <!-- test cards (only selected one is visible) -->
+        <div id="test-grid"></div>
+
+        <!-- results panel, flush below the card -->
+        <div id="results-panel">
+          <div class="results-header">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
             </svg>
-            <p>Select a test from the list</p>
+            <span class="results-title" id="results-title">Results</span>
+            <span class="results-count" id="results-count"></span>
           </div>
-
-          <!-- test cards injected here; only selected one is visible -->
-          <div id="test-grid"></div>
-
-          <!-- results panel (inline, below the selected card) -->
-          <div id="results-panel">
-            <div class="results-header">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-              </svg>
-              <span class="results-title" id="results-title">Results</span>
-              <span class="results-count" id="results-count"></span>
-            </div>
-            <div class="results-table-wrap">
-              <table class="results-tbl" id="results-tbl">
-                <thead id="results-thead"></thead>
-                <tbody id="results-tbody"></tbody>
-              </table>
-            </div>
-            <div class="results-footer">
-              <span class="results-msg" id="results-msg"></span>
-              <button class="btn btn-ghost" style="font-size:11px;" onclick="exportCSV()" id="export-btn">
-                ⬇ Export CSV
-              </button>
-            </div>
+          <div class="results-table-wrap">
+            <table class="results-tbl" id="results-tbl">
+              <thead id="results-thead"></thead>
+              <tbody id="results-tbody"></tbody>
+            </table>
           </div>
-
-        </div><!-- /auto-detail -->
-
-        <!-- right: test list sidebar -->
-        <div class="test-sidebar" id="test-sidebar"></div>
+          <div class="results-footer">
+            <span class="results-msg" id="results-msg"></span>
+            <button class="btn btn-ghost" style="font-size:11px;" onclick="exportCSV()" id="export-btn">
+              ⬇ Export CSV
+            </button>
+          </div>
+        </div>
 
       </div><!-- /auto-layout -->
 
@@ -1458,13 +1445,26 @@ function refreshAutoTab() {
     return;
   }
   noTests.classList.add("hidden");
+  layout.style.display = "flex";
   layout.classList.remove("hidden");
   buildTestGrid(state.autoTests);
 }
 
 function buildTestGrid(tests) {
-  const icons = { ac_frequency_sweep:"〜", dc_sweep:"⚡", dmm_logger:"Ω",
+  const icons = { ac_frequency_sweep:"〼", dc_sweep:"⚡", dmm_logger:"Ω",
                   waveform_analysis:"∿",  harmonic_analysis:"≋" };
+
+  // ── Build tab strip ──────────────────────────────────────────────────
+  const tabStrip = document.getElementById("auto-test-tabs");
+  tabStrip.innerHTML = "";
+  for (const test of tests) {
+    const tab = document.createElement("button");
+    tab.className      = "auto-test-tab";
+    tab.dataset.testId = test.id;
+    tab.onclick        = () => selectTest(test.id);
+    tab.innerHTML      = `<span class="auto-test-tab-icon">${icons[test.id] || "▶"}</span>${escHtml(test.name)}`;
+    tabStrip.appendChild(tab);
+  }
 
   // ── Build test cards (all hidden; selected one revealed by selectTest) ──
   const grid = document.getElementById("test-grid");
@@ -1473,9 +1473,7 @@ function buildTestGrid(tests) {
     const card = test.custom_ui ? buildDcSweepCard(test) : buildTestCard(test);
     card.classList.add("hidden");
     grid.appendChild(card);
-    // Custom cards need post-append init (DOM elements must exist for getElementById)
     if (test.custom_ui) {
-      // Reset measurement items to default whenever a fresh card is built
       _dcSw.measItems = [
         { kind:"measurement", instrument:"psu", measure:"voltage", samples:1, settle:0.1, label:"" },
       ];
@@ -1484,23 +1482,8 @@ function buildTestGrid(tests) {
     }
   }
 
-  // ── Build sidebar ──────────────────��─────────────────────────────────────
-  const sidebar = document.getElementById("test-sidebar");
-  sidebar.innerHTML = '<div class="test-sidebar-hdr">Tests</div>';
-  for (const test of tests) {
-    const item = document.createElement("div");
-    item.className = "test-list-item";
-    item.dataset.testId = test.id;
-    item.onclick = () => selectTest(test.id);
-    item.innerHTML = `
-      <div class="test-list-icon">${icons[test.id] || "▶"}</div>
-      <div class="test-list-name">${escHtml(test.name)}</div>`;
-    sidebar.appendChild(item);
-  }
-
   // Auto-select the first test (or reselect the previously active one)
-  const current = state.selectedTestId &&
-        tests.find(t => t.id === state.selectedTestId);
+  const current = state.selectedTestId && tests.find(t => t.id === state.selectedTestId);
   selectTest(current ? current.id : tests[0].id);
 }
 
@@ -1512,14 +1495,10 @@ function selectTest(testId) {
     card.classList.toggle("hidden", card.id !== `test-card-${testId}`);
   });
 
-  // Update sidebar active state
-  document.querySelectorAll(".test-list-item").forEach(item => {
-    item.classList.toggle("active", item.dataset.testId === testId);
+  // Update tab active state
+  document.querySelectorAll(".auto-test-tab").forEach(tab => {
+    tab.classList.toggle("active", tab.dataset.testId === testId);
   });
-
-  // Hide the "select a test" hint
-  const hint = document.getElementById("auto-empty-select");
-  if (hint) hint.classList.add("hidden");
 }
 
 function buildTestCard(test) {
