@@ -341,8 +341,29 @@
     .save-form input:focus { border-color:var(--accent); }
 
     /* ── Automation tab ──────────────────────────────────────────── */
-    #auto-tab { display:none; flex-direction:column; gap:20px; }
+    #auto-tab { display:none; flex-direction:column; gap:16px; }
     #auto-tab.visible { display:flex; }
+    /* Output path bar */
+    #auto-outpath-bar {
+      display:flex; align-items:center; gap:10px;
+      background:var(--surface); border:1px solid var(--border);
+      border-radius:var(--radius-lg); padding:10px 14px;
+    }
+    #auto-outpath-bar label {
+      font-size:10px; font-weight:700; letter-spacing:.08em;
+      text-transform:uppercase; color:var(--text-faint); white-space:nowrap;
+    }
+    #auto-outpath-input {
+      flex:1; background:var(--surface2); border:1px solid var(--border);
+      border-radius:var(--radius); color:var(--text); font:inherit;
+      font-family:var(--mono); font-size:11px;
+      padding:5px 10px; outline:none; transition:border-color .15s;
+    }
+    #auto-outpath-input:focus { border-color:var(--accent); }
+    #auto-outpath-input::placeholder { color:var(--text-faint); }
+    #auto-outpath-browse {
+      padding:5px 10px; font-size:11px; white-space:nowrap;
+    }
 
     .auto-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; min-height:200px; color:var(--text-faint); }
     .auto-empty p { font-size:13px; color:var(--text-dim); }
@@ -588,6 +609,14 @@
 
     <!-- ── Automation tab ─────────────────────────────────────────── -->
     <div id="auto-tab">
+
+      <!-- ── Output path bar ──────────────────────────────────────── -->
+      <div id="auto-outpath-bar">
+        <label>Output path</label>
+        <input id="auto-outpath-input" type="text"
+               placeholder="~/Desktop/sweep_results  (leave blank to use working directory)"
+               spellcheck="false" autocomplete="off" />
+      </div>
 
       <!-- no workbench (full-width placeholder) -->
       <div class="auto-empty" id="auto-empty-nowb">
@@ -1568,7 +1597,8 @@ async function runTest(testId) {
   if (state.autoRunning) { toast("A test is already running","error"); return; }
   if (!state.connected)  { toast("Not connected to instruments","error"); return; }
 
-  const params = testId === "dc_sweep" ? getDcSweepParams() : getTestParams(testId);
+  const params      = testId === "dc_sweep" ? getDcSweepParams() : getTestParams(testId);
+  const output_path = document.getElementById("auto-outpath-input")?.value.trim() || "";
   state.autoRunning = true;
   state.autoTestId  = testId;
   state.autoRows    = [];
@@ -1588,7 +1618,7 @@ async function runTest(testId) {
   initResultsPanel(testId, state.autoCols);
 
   try {
-    await POST("/api/automation/run",{test_id:testId, params});
+    await POST("/api/automation/run",{test_id:testId, params, output_path});
   } catch(e) {
     toast("Failed to start test: "+e.message,"error");
     testFinished(testId, null);
@@ -1625,19 +1655,19 @@ socket.on("automation_row", ({ test_id, row, columns, progress }) => {
   appendResultRow(row, columns);
 });
 
-socket.on("automation_done", ({ test_id, columns, rows, error }) => {
+socket.on("automation_done", ({ test_id, columns, rows, error, csv_path }) => {
   state.autoRunning = false;
   if (error) {
     toast("Test failed: "+error,"error");
     logMsg(`✗ [auto/${test_id}] ${error}`,"error");
   } else {
     toast(`Test complete — ${(rows||[]).length} rows`,"ok");
-    logMsg(`✓ [auto/${test_id}] done (${(rows||[]).length} rows)`,"ok");
+    logMsg(`✓ [auto/${test_id}] done (${(rows||[]).length} rows)${csv_path ? " → "+csv_path : ""}`,"ok");
   }
-  testFinished(test_id, error);
+  testFinished(test_id, error, csv_path);
 });
 
-function testFinished(testId, error) {
+function testFinished(testId, error, csv_path) {
   state.autoRunning = false;
   const card = document.getElementById(`test-card-${testId}`);
   if (card) {
@@ -1655,7 +1685,15 @@ function testFinished(testId, error) {
   if (fill && !error) fill.style.width = "100%";
 
   const msg = document.getElementById("results-msg");
-  if (msg) msg.textContent = error ? `Error: ${error}` : `${state.autoRows.length} rows collected`;
+  if (msg) {
+    if (error) {
+      msg.textContent = `Error: ${error}`;
+    } else if (csv_path) {
+      msg.innerHTML = `${state.autoRows.length} rows &nbsp;·&nbsp; <span style="font-family:var(--mono);font-size:10px;color:var(--green);">💾 ${escHtml(csv_path)}</span>`;
+    } else {
+      msg.textContent = `${state.autoRows.length} rows collected`;
+    }
+  }
 
   const cnt = document.getElementById("results-count");
   if (cnt) cnt.textContent = `${state.autoRows.length} rows`;

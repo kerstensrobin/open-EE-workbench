@@ -891,6 +891,9 @@ def api_automation_run():
     d       = request.json or {}
     test_id = d.get("test_id")
     params  = d.get("params", {})
+    # Resolve output directory: expand ~ and make absolute
+    raw_out = (d.get("output_path") or "").strip()
+    out_dir = Path(os.path.expanduser(raw_out)).resolve() if raw_out else Path.cwd()
 
     if not test_id:
         return jsonify({"error": "test_id required"}), 400
@@ -907,8 +910,26 @@ def api_automation_run():
     def _done(rows, columns, error=None):
         global _auto_running
         _auto_running = False
-        sio.emit("automation_done", {"test_id": test_id, "columns": columns,
-                                     "rows": rows, "error": error})
+        # Auto-save CSV to output directory
+        csv_path = None
+        if rows and columns and not error:
+            try:
+                ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
+                out_dir.mkdir(parents=True, exist_ok=True)
+                csv_path = out_dir / f"{test_id}_{ts}.csv"
+                with open(csv_path, "w", newline="") as f:
+                    import csv as _csv
+                    w = _csv.writer(f)
+                    w.writerow(columns)
+                    w.writerows(rows)
+                _log(f"[auto] saved CSV → {csv_path}")
+            except Exception as exc:
+                _log(f"[auto] CSV save failed: {exc}")
+        sio.emit("automation_done", {
+            "test_id": test_id, "columns": columns,
+            "rows": rows, "error": error,
+            "csv_path": str(csv_path) if csv_path else None,
+        })
         # Resume PSU polling now that automation has released the resources
         if _state.get("connected"):
             _start_polling()
@@ -1133,10 +1154,11 @@ def api_automation_run():
                             ts    = datetime.now().strftime("%Y%m%d_%H%M%S")
                             step  = step_ctx.get("step", 0)
                             fname = f"sweep_{step:04d}_{ts}.png"
-                            fpath = Path("screenshots") / fname
+                            fpath = out_dir / "screenshots" / fname
                             fpath.parent.mkdir(parents=True, exist_ok=True)
                             fpath.write_bytes(data)
-                            return fname
+                            _log(f"[auto] screenshot → {fpath}")
+                            return str(fpath)
                     except Exception as exc:
                         _log(f"[auto] screenshot: {exc}")
                     return None
