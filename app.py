@@ -402,6 +402,46 @@ def api_scope_measure():
     return jsonify({"status": "ok"})
 
 
+@flask_app.route("/api/scope/measure_batch", methods=["POST"])
+def api_scope_measure_batch():
+    """Run a list of measurements sequentially with a configurable inter-command delay."""
+    d            = request.json or {}
+    items        = d.get("measurements", [])   # [{op, ch}, ...]
+    delay_s      = max(0, min(int(d.get("delay_ms", 50)), 2000)) / 1000.0
+
+    def _do():
+        res, fam = _find_instrument("scope")
+        if res is None:
+            sio.emit("log", {"msg": "⚠ No scope connected"})
+            sio.emit("scope_measurement_batch_done", {})
+            return
+        for idx, m in enumerate(items):
+            if idx > 0 and delay_s > 0:
+                time.sleep(delay_s)
+            op = m.get("op", "")
+            ch = int(m.get("ch", 1))
+            if op not in _SCOPE_MEASURES:
+                continue
+            try:
+                raw = _run_steps(res, get_command(fam, op, ch=ch))
+                val = float(raw) if raw is not None else None
+                label, unit = _SCOPE_MEASURES[op]
+                sio.emit("scope_measurement",
+                         {"measurement": op, "label": label, "unit": unit,
+                          "ch": ch, "value": val})
+            except KeyError:
+                sio.emit("scope_measurement",
+                         {"measurement": op, "ch": ch,
+                          "error": f"{op!r} not supported on this scope"})
+            except Exception as exc:
+                sio.emit("scope_measurement",
+                         {"measurement": op, "ch": ch, "error": str(exc)})
+        sio.emit("scope_measurement_batch_done", {})
+
+    _executor.submit(_do)
+    return jsonify({"status": "ok"})
+
+
 @flask_app.route("/api/scope/screenshot", methods=["POST"])
 def api_screenshot():
     filename = (request.json or {}).get("filename", "screenshot")
@@ -471,6 +511,38 @@ def api_screenshot():
 
         _log(f"✓ Screenshot saved: {name}  ({len(data)} bytes)")
         sio.emit("screenshot_done", {"path": str(path), "filename": name})
+
+    _executor.submit(_do)
+    return jsonify({"status": "ok"})
+
+
+# ── Scope controls ────────────────────────────────────────────────────────────
+_SCOPE_SET_OPS = {
+    "channel_on", "channel_off", "channel_scale", "channel_offset",
+    "channel_coupling", "channel_probe", "channel_label",
+    "timebase_scale", "timebase_position",
+    "trigger_level", "trigger_slope", "trigger_source",
+}
+
+@flask_app.route("/api/scope/set", methods=["POST"])
+def api_scope_set():
+    """Send a single write-type scope command (channel or timebase setting)."""
+    d  = request.json or {}
+    op = d.get("op", "")
+    kw = {k: v for k, v in d.items() if k != "op"}
+    if op not in _SCOPE_SET_OPS:
+        return jsonify({"error": f"unknown op {op!r}"}), 400
+
+    def _do():
+        res, fam = _find_instrument("scope")
+        if res is None:
+            sio.emit("log", {"msg": "⚠ No scope connected"}); return
+        try:
+            _run_steps(res, get_command(fam, op, **kw))
+        except KeyError:
+            sio.emit("log", {"msg": f"⚠ scope: {op!r} not supported on this scope model"})
+        except Exception as exc:
+            sio.emit("log", {"msg": f"✗ scope {op}: {exc}"})
 
     _executor.submit(_do)
     return jsonify({"status": "ok"})
@@ -789,19 +861,23 @@ def _suggest_tests() -> list:
         })
 
     if "psu" in types:
-        all_instr  = wb.get("_unique", [])
-        psu_list   = [i for i in all_instr if i.get("type") == "psu"]
-        dmm_list   = [i for i in all_instr if i.get("type") == "dmm"]
+        all_instr   = wb.get("_unique", [])
+        psu_list    = [i for i in all_instr if i.get("type") == "psu"]
+        dmm_list    = [i for i in all_instr if i.get("type") == "dmm"]
+        scope_list  = [i for i in all_instr if i.get("type") == "scope"]
 
         # Source options: one entry per PSU in the workbench
         source_opts = [
             {"value": i["resource"], "label": i.get("model", "PSU")}
             for i in psu_list if i.get("resource")
         ]
-        # Current-meter options: PSU built-in, then any DMMs
-        i_meter_opts = [{"value": "psu", "label": "PSU (built-in)"}] + [
-            {"value": i["resource"], "label": f"DMM · {i.get('model', 'DMM')}"}
+        # Meter options: PSU built-in → DMMs → Scopes (type tag lets frontend pick right measure list)
+        i_meter_opts = [{"value": "psu", "label": "PSU (built-in)", "itype": "psu"}] + [
+            {"value": i["resource"], "label": f"DMM · {i.get('model', 'DMM')}", "itype": "dmm"}
             for i in dmm_list if i.get("resource")
+        ] + [
+            {"value": i["resource"], "label": f"Scope · {i.get('model', 'Scope')}", "itype": "scope"}
+            for i in scope_list if i.get("resource")
         ]
 
         tests.append({
@@ -811,7 +887,7 @@ def _suggest_tests() -> list:
             "requires":    ["psu"],
             "custom_ui":   True,          # rendered by buildDcSweepCard() in the frontend
             "sources":     source_opts,   # [{value, label}] — available voltage sources
-            "meters":      i_meter_opts,  # [{value, label}] — available measurement instruments
+            "meters":      i_meter_opts,  # [{value, label, itype}] — available measurement instruments
             "params":      [],            # param collection handled by the custom card UI
             "columns":     ["step", "measurement"],   # overridden at runtime by the runner
         })
@@ -1095,13 +1171,22 @@ def api_automation_run():
                                         "columns": cols, "progress": progress})
 
         # ── Per-item execution ────────────────────────────────────────────────
-        # Maps measurement type → (PSU SCPI op, DMM SCPI op, auto column name)
+        # Maps measurement type → (PSU SCPI op, DMM SCPI op, Scope SCPI op, auto column abbr)
         _MEAS_MAP = {
-            "voltage": ("measure_voltage", "measure_vdc",  "V"),
-            "current": ("measure_current", "measure_idc",  "I"),
-            "vac":     (None,              "measure_vac",  "Vac"),
-            "r":       (None,              "measure_r",    "R"),
-            "r4w":     (None,              "measure_r4w",  "R4w"),
+            "voltage":   ("measure_voltage", "measure_vdc",      None,                    "V"),
+            "current":   ("measure_current", "measure_idc",      None,                    "I"),
+            "vac":       (None,              "measure_vac",      None,                    "Vac"),
+            "r":         (None,              "measure_r",        None,                    "R"),
+            "r4w":       (None,              "measure_r4w",      None,                    "R4w"),
+            # Scope measurements
+            "vpp":       (None,              None,               "measure_vpp",           "Vpp"),
+            "vrms":      (None,              None,               "measure_vrms",          "Vrms"),
+            "freq":      (None,              None,               "measure_freq",          "Freq"),
+            "duty":      (None,              None,               "measure_dutycycle",     "Duty"),
+            "rise":      (None,              None,               "measure_risetime",      "Rise"),
+            "fall":      (None,              None,               "measure_falltime",      "Fall"),
+            "overshoot": (None,              None,               "measure_overshoot",     "Ovs"),
+            "period":    (None,              None,               "measure_period",        "Per"),
         }
 
         def _auto_label(item, idx):
@@ -1111,7 +1196,7 @@ def api_automation_run():
             kind = item.get("kind", "measurement")
             if kind == "measurement":
                 abbr = _MEAS_MAP.get(item.get("measure", "voltage"),
-                                     ("", "", "val"))[2]
+                                     ("", "", "", "val"))[3]
             elif item.get("action") == "screenshot":
                 abbr = "img"
             else:
@@ -1128,30 +1213,44 @@ def api_automation_run():
                 measure  = item.get("measure",    "voltage")
                 samples  = max(1, int(item.get("samples", 1)))
                 settle   = float(item.get("settle", 0.1))
+                instr_ch = max(1, int(item.get("instr_ch", 1) or 1))
 
                 use_ext = instr_id not in ("psu", "")
                 if use_ext:
                     res = _state["resources"].get(instr_id)
                     fam = _state["families"].get(instr_id)
+                    # Determine instrument type from workbench for correct dispatch
+                    wb_instr = next(
+                        (i for i in (_state.get("workbench") or {}).get("_unique", [])
+                         if i.get("resource") == instr_id), None)
+                    instr_type = (wb_instr.get("type", "dmm") if wb_instr else "dmm")
                 else:
                     res = ch_handles[0]["res"]
                     fam = ch_handles[0]["fam"]
+                    instr_type = "psu"
 
                 if res is None:
                     return None
 
-                psu_op, dmm_op, _ = _MEAS_MAP.get(
-                    measure, ("measure_voltage", "measure_vdc", "V"))
+                psu_op, dmm_op, scope_op, _ = _MEAS_MAP.get(
+                    measure, ("measure_voltage", "measure_vdc", None, "V"))
 
                 time.sleep(settle)
 
                 def _once():
                     try:
-                        if use_ext:
+                        if instr_type == "scope":
+                            if scope_op is None:
+                                return None
+                            # Use query-only path (no re-enable write needed for one-off reads)
+                            return _scope_query_only(res, fam, scope_op, ch=instr_ch)
+                        elif use_ext:
+                            if dmm_op is None:
+                                return None
                             return _safe(_run_steps(res, get_command(fam, dmm_op)))
                         elif psu_op:
                             return _safe(_run_steps(res, get_command(
-                                fam, psu_op, ch=ch_handles[0]["cfg"]["ch"])))
+                                fam, psu_op, ch=instr_ch)))
                         return None
                     except Exception:
                         return None
@@ -1167,25 +1266,41 @@ def api_automation_run():
                 if action == "screenshot":
                     scope_res, scope_fam = _find_instrument("scope")
                     if scope_res is None:
-                        _log("[auto] screenshot: no scope connected"); return None
+                        _log("[auto] capture: no scope connected"); return None
+                    data = b""
                     try:
                         steps   = get_command(scope_fam, "screenshot")
                         raw_idx = next(
                             (i for i, (a, _) in enumerate(steps) if a == "raw_query"),
                             None)
                         if raw_idx is None:
-                            _log("[auto] screenshot: no raw_query step in command")
+                            _log("[auto] capture: no raw_query step in screenshot command")
                             return None
-                        pre   = [s for a, s in steps[:raw_idx]      if a == "write"]
+                        pre   = [s for a, s in steps[:raw_idx]     if a == "write"]
                         cmd_  = steps[raw_idx][1]
-                        post  = [s for a, s in steps[raw_idx + 1:]  if a == "write"]
+                        post  = [s for a, s in steps[raw_idx + 1:] if a == "write"]
+
+                        # STOP the scope before capturing.
+                        # In run/waiting-for-trigger state some InfiniiVision
+                        # firmware versions hold :DISPlay:DATA? until the next
+                        # complete acquisition — which may never arrive (e.g.
+                        # DUT is off at 0 V).  :STOP freezes the display and
+                        # guarantees an immediate response.
+                        scope_stopped = False
+                        try:
+                            _run_steps(scope_res,
+                                       get_command(scope_fam, "stop"))
+                            scope_stopped = True
+                            time.sleep(0.2)   # let scope latch the frozen frame
+                        except Exception:
+                            pass              # scope family has no stop cmd — proceed anyway
 
                         orig_timeout = scope_res.timeout
                         try:
                             scope_res.timeout = 20_000  # screenshots can take several seconds
                             for s in pre:
                                 scope_res.write(s)
-                            time.sleep(1.0)             # let scope compose the image
+                            time.sleep(0.5)             # let scope compose the image
                             scope_res.write(cmd_)
                             data = scope_res.read_raw()
                             for s in post:
@@ -1194,18 +1309,36 @@ def api_automation_run():
                         finally:
                             try: scope_res.timeout = orig_timeout
                             except Exception: pass
+                            # Always resume acquisition after the capture attempt
+                            if scope_stopped:
+                                try:
+                                    _run_steps(scope_res,
+                                               get_command(scope_fam, "run"))
+                                except Exception:
+                                    pass
 
-                        if data and len(data) > 0:
-                            ts    = datetime.now().strftime("%Y%m%d_%H%M%S")
-                            step  = step_ctx.get("step", 0)
-                            fname = f"sweep_{step:04d}_{ts}.png"
-                            fpath = out_dir / "screenshots" / fname
-                            fpath.parent.mkdir(parents=True, exist_ok=True)
-                            fpath.write_bytes(data)
-                            _log(f"[auto] screenshot → {fpath}")
-                            return str(fpath)
+                        if not data:
+                            _log("[auto] capture: scope returned empty data")
+                            return None
+
+                        # Strip leading SCPI binary block header (#NXXXXXXX...)
+                        # before the actual image magic bytes
+                        ext = ".bin"
+                        for magic, e in [(b"\x89PNG", ".png"), (b"BM", ".bmp")]:
+                            idx = data.find(magic)
+                            if idx != -1:
+                                data = data[idx:]; ext = e; break
+
+                        ts    = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        step  = step_ctx.get("step", 0)
+                        fname = f"sweep_{step:04d}_{ts}{ext}"
+                        fpath = out_dir / "screenshots" / fname
+                        fpath.parent.mkdir(parents=True, exist_ok=True)
+                        fpath.write_bytes(data)
+                        _log(f"[auto] capture → {fpath}  ({len(data)} bytes)")
+                        return str(fpath)
                     except Exception as exc:
-                        _log(f"[auto] screenshot: {exc}")
+                        _log(f"[auto] capture error: {exc}")
                     return None
 
                 elif action == "scpi":

@@ -1,20 +1,33 @@
 {
   "schema_version": "1.0",
   "name": null,
-  "created_at": "2026-05-19T14:48:45.632163+00:00",
-  "host": "cachyos",
+  "created_at": "2026-05-24T18:53:59.312102+00:00",
+  "host": "robin-unix",
   "instruments": [
     {
-      "resource": "USB0::10893::6006::MY56271144::0::INSTR",
+      "resource": "ASRL/dev/ttyUSB0::INSTR",
+      "connection": "Serial",
+      "manufacturer": "Keithley instruments",
+      "model": "2231A-30-3",
+      "serial": "802196102777770069",
+      "firmware": "1.04-0.01",
+      "type": "psu",
+      "role": "psu",
+      "family_id": "keithley_2200psu"
+    },
+    {
+      "resource": "USB0::6833::1230::DS1ZA171307147::0::INSTR",
       "connection": "USB",
-      "manufacturer": "KEYSIGHT TECHNOLOGIES",
-      "model": "MSO-X 3024T",
-      "serial": "MY56271144",
-      "firmware": "04.07.2016040803",
+      "manufacturer": "RIGOL TECHNOLOGIES",
+      "model": "DS1104Z",
+      "serial": "DS1ZA171307147",
+      "firmware": "00.04.02.SP4",
       "type": "scope",
       "role": "scope",
-      "family_id": "keysight_infiniivision"
+      "family_id": "rigol_ds1000z"
     }
   ],
-  "suggested_tests": []
+  "suggested_tests": [
+    "psu_ramp_capture"
+  ]
 }

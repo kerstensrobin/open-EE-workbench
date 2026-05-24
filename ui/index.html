@@ -537,6 +537,87 @@
     .flex { display:flex; }
     .items-center { align-items:center; }
 
+    /* ── Scope channel controls ──────────────────────────────────── */
+    .scope-ch-grid { display:flex; flex-direction:column; gap:5px; margin-bottom:4px; }
+    .scope-ch-row  { display:flex; align-items:center; gap:6px; flex-wrap:nowrap; }
+    .scope-ch-badge {
+      display:inline-flex; align-items:center; justify-content:center;
+      width:28px; height:20px; border-radius:4px; font-size:10px;
+      font-weight:700; letter-spacing:.5px; flex-shrink:0; color:#000;
+    }
+    .scope-ch-badge.ch1 { background:#f59e0b; }
+    .scope-ch-badge.ch2 { background:#22d3ee; }
+    .scope-ch-badge.ch3 { background:#e879f9; }
+    .scope-ch-badge.ch4 { background:#4ade80; }
+    .scope-ch-tog {
+      display:inline-flex; align-items:center; gap:4px;
+      padding:2px 8px; border-radius:4px; font-size:10px; font-weight:600;
+      border:1px solid var(--border); background:var(--surface2);
+      color:var(--text-muted); cursor:pointer; transition:background .15s,color .15s;
+      white-space:nowrap; flex-shrink:0;
+    }
+    .scope-ch-tog.on { background:#16a34a22; border-color:#4ade80; color:#4ade80; }
+    .scope-ch-tog .tog-dot {
+      width:7px; height:7px; border-radius:50%; background:currentColor;
+      transition:background .15s;
+    }
+    .scope-sel {
+      flex:1; min-width:0; padding:3px 5px; border-radius:4px;
+      border:1px solid var(--border); background:var(--surface2);
+      color:var(--text); font-size:10px; cursor:pointer;
+    }
+    .scope-sel:hover { border-color:var(--accent); }
+    .scope-sel option { background:var(--surface2); }
+    .scope-tb-row {
+      display:flex; align-items:center; gap:6px; margin-bottom:4px;
+    }
+    .scope-tb-label {
+      font-size:10px; font-weight:600; color:var(--text-muted);
+      white-space:nowrap; flex-shrink:0; width:52px;
+    }
+    .section-label-row {
+      display:flex; align-items:center; gap:8px; margin-bottom:6px;
+    }
+    .section-label-row .section-label { margin-bottom:0; flex:1; }
+    /* ── Scope multi-measurement list ─── */
+    .scope-meas-list { display:flex; flex-direction:column; gap:4px; margin-bottom:5px; min-height:0; }
+    .scope-meas-item {
+      display:flex; align-items:center; gap:6px;
+      background:var(--surface2); border:1px solid var(--border);
+      border-radius:4px; padding:4px 6px;
+    }
+    .scope-meas-label { flex:1; font-size:11px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .scope-meas-val {
+      font-family:var(--mono); font-size:12px; font-weight:600; color:var(--accent);
+      white-space:nowrap; min-width:70px; text-align:right;
+    }
+    .scope-meas-val.dim { color:var(--text-faint); }
+    .scope-meas-remove {
+      background:none; border:none; color:var(--text-faint); cursor:pointer;
+      font-size:14px; line-height:1; padding:0 2px; flex-shrink:0;
+    }
+    .scope-meas-remove:hover { color:var(--error,#f87171); }
+    .scope-meas-add-row { display:flex; align-items:center; gap:5px; margin-bottom:5px; }
+    .scope-ch-label-inp {
+      flex:1; min-width:0; padding:2px 5px; border-radius:4px;
+      border:1px solid var(--border); background:var(--surface2);
+      color:var(--text); font-size:10px; font-family:var(--mono);
+    }
+    .scope-ch-label-inp::placeholder { color:var(--text-faint); font-family:inherit; }
+    .scope-ch-label-inp:focus { outline:none; border-color:var(--accent); }
+    .scope-meas-controls {
+      display:flex; align-items:center; gap:5px; margin-bottom:8px; flex-wrap:wrap;
+    }
+    .scope-meas-controls .btn { padding:4px 12px; font-size:10px; flex-shrink:0; }
+    .scope-auto-tog {
+      display:inline-flex; align-items:center; gap:4px; padding:4px 10px;
+      border-radius:4px; font-size:10px; font-weight:600; border:1px solid var(--border);
+      background:var(--surface2); color:var(--text-muted); cursor:pointer;
+      transition:background .15s,color .15s; white-space:nowrap; flex-shrink:0;
+    }
+    .scope-auto-tog.on { background:#1e3a5f; border-color:#60a5fa; color:#93c5fd; }
+    .scope-auto-tog .tog-dot { width:7px;height:7px;border-radius:50%;background:currentColor; }
+
     /* ── Responsive ──────────────────────────────────────────────── */
     @media (max-width:900px) { #log-panel{display:none;} #instrument-grid{grid-template-columns:1fr;} }
     @media (max-width:600px) { #content{padding:12px;} .nav-title{display:none;} }
@@ -900,6 +981,7 @@ socket.on("disconnected", () => {
   $connectBtn.className   = "btn btn-primary";
   $connectBtn.disabled    = !state.workbench;
   resetCardStatus();
+  _scopeStopAuto();
   logMsg("Disconnected","warn");
 });
 
@@ -934,25 +1016,47 @@ socket.on("screenshot_done", ({ path, filename, error }) => {
 });
 
 // ── Scope measurement ──────────────────────────────────────────────
-socket.on("scope_measurement", ({ value, label, unit, ch, error }) => {
-  const $val  = document.getElementById("scope-meas-value");
-  const $meta = document.getElementById("scope-meas-meta");
-  if (!$val) return;
-  if (error) { $val.innerHTML="ERR"; $val.classList.add("dim"); $meta.textContent=error; toast(error,"error"); return; }
-  $val.classList.remove("dim");
-  if (value===null||isNaN(value)||!isFinite(value)||Math.abs(value)>1e37) {
-    $val.innerHTML="—"; $val.classList.add("dim"); $meta.textContent=`${label} · CH${ch}`; return;
-  }
+function _fmtMeasVal(value, unit) {
+  if (value===null||value===undefined||isNaN(value)||!isFinite(value)||Math.abs(value)>1e37) return "—";
   const mag=Math.abs(value); let disp, dispUnit=unit;
-  if (unit==="%") { disp=value.toPrecision(5).replace(/\.?0+$/,""); }
-  else if (mag>=1e6)               { disp=(value/1e6).toPrecision(5); dispUnit="M"+unit; }
-  else if (mag>=1e3)               { disp=(value/1e3).toPrecision(5); dispUnit="k"+unit; }
-  else if (mag<1e-6&&mag>0)        { disp=(value*1e9).toPrecision(5); dispUnit="n"+unit; }
-  else if (mag<1e-3&&mag>0)        { disp=(value*1e6).toPrecision(5); dispUnit="µ"+unit; }
-  else if (mag<1&&unit==="s")      { disp=(value*1e3).toPrecision(5); dispUnit="ms"; }
-  else                             { disp=value.toPrecision(6).replace(/\.?0+$/,""); }
-  $val.innerHTML=`${escHtml(disp)}<span class="meas-value-unit">${escHtml(dispUnit)}</span>`;
-  $meta.textContent=`${label} · CH${ch}`;
+  if (unit==="%") { disp=value.toPrecision(4).replace(/\.?0+$/,""); }
+  else if (mag>=1e6)               { disp=(value/1e6).toPrecision(4); dispUnit="M"+unit; }
+  else if (mag>=1e3)               { disp=(value/1e3).toPrecision(4); dispUnit="k"+unit; }
+  else if (mag<1e-6&&mag>0)        { disp=(value*1e9).toPrecision(4); dispUnit="n"+unit; }
+  else if (mag<1e-3&&mag>0)        { disp=(value*1e6).toPrecision(4); dispUnit="µ"+unit; }
+  else if (mag<1&&unit==="s")      { disp=(value*1e3).toPrecision(4); dispUnit="ms"; }
+  else                             { disp=value.toPrecision(5).replace(/\.?0+$/,""); }
+  return `${disp} ${dispUnit}`;
+}
+
+socket.on("scope_measurement", ({ value, label, unit, ch, measurement, error }) => {
+  // Update every matching slot in the measurement list
+  document.querySelectorAll(`.scope-meas-item[data-ch="${ch}"][data-meas="${measurement}"]`).forEach(item => {
+    const $v = item.querySelector(".scope-meas-val");
+    if (!$v) return;
+    if (error) { $v.textContent="ERR"; $v.classList.add("dim"); toast(error,"error"); return; }
+    const txt = _fmtMeasVal(value, unit);
+    $v.textContent = txt;
+    $v.classList.toggle("dim", txt==="—");
+  });
+});
+
+// ── Scope auto-refresh ─────────────────────────────────────────────
+let _scopeAutoOn       = false;
+let _scopeAutoTimer    = null;
+let _scopeAutoInterval = 500;   // ms
+
+function _scopeStopAuto() {
+  _scopeAutoOn = false;
+  if (_scopeAutoTimer) { clearTimeout(_scopeAutoTimer); _scopeAutoTimer = null; }
+  const btn = document.getElementById("scope-auto-btn");
+  if (btn) { btn.classList.remove("on"); btn.innerHTML=`<span class="tog-dot"></span>Auto`; }
+}
+
+socket.on("scope_measurement_batch_done", () => {
+  if (_scopeAutoOn) {
+    _scopeAutoTimer = setTimeout(scopeMeasureAll, _scopeAutoInterval);
+  }
 });
 
 // ── Workbench loading ──────────────────────────────────────────────
@@ -1074,17 +1178,182 @@ const SCOPE_MEASURES = [
   {op:"measure_dutycycle",label:"Duty",   unit:"%",  group:"Time"},
 ];
 
+// V/div values: 1-2-5 sequence 1 mV → 100 V (Rigol DS1000Z max = 100 V/div with 10× probe)
+const SCOPE_VDIV_VALS = [
+  1e-3,2e-3,5e-3,
+  0.01,0.02,0.05,
+  0.1,0.2,0.5,
+  1,2,5,10,20,50,100
+];
+// Time/div values: 1-2-5 sequence from 1 ns to 50 s
+const SCOPE_TDIV_VALS = [
+  1e-9,2e-9,5e-9,
+  1e-8,2e-8,5e-8,
+  1e-7,2e-7,5e-7,
+  1e-6,2e-6,5e-6,
+  1e-5,2e-5,5e-5,
+  1e-4,2e-4,5e-4,
+  1e-3,2e-3,5e-3,
+  0.01,0.02,0.05,
+  0.1,0.2,0.5,
+  1,2,5,10,20,50
+];
+
+function fmtDiv(v) {
+  if (v < 1e-6) return (v*1e9).toPrecision(3).replace(/\.?0+$/,"")+" ns";
+  if (v < 1e-3) return (v*1e6).toPrecision(3).replace(/\.?0+$/,"")+" µs";
+  if (v < 1)    return (v*1e3).toPrecision(3).replace(/\.?0+$/,"")+" ms";
+  return v.toPrecision(3).replace(/\.?0+$/,"")+" s";
+}
+function fmtVDiv(v) {
+  if (v < 1) return (v*1e3).toPrecision(3).replace(/\.?0+$/,"")+" mV";
+  return v.toPrecision(3).replace(/\.?0+$/,"")+" V";
+}
+function scopeOptHTML(vals, fmtFn, selected) {
+  return vals.map(v=>{
+    const label=fmtFn(v);
+    const sel=(Math.abs(v-selected)<v*0.01)?' selected':''
+    return `<option value="${v}"${sel}>${label}</option>`;
+  }).join("");
+}
+function scopeSet(op, params) {
+  POST("/api/scope/set", {op, ...params}).catch(e=>toast(e.message,"error"));
+}
+function scopeToggleCh(btn, ch) {
+  const isOn = btn.classList.toggle("on");
+  scopeSet(isOn ? "channel_on" : "channel_off", {ch});
+  btn.innerHTML = `<span class="tog-dot"></span>${isOn?"ON":"OFF"}`;
+}
+
+// All probe ratios supported by Rigol DS1000Z (confirmed by driver source)
+const SCOPE_PROBE_RATIOS = [0.01,0.02,0.05,0.1,0.2,0.5,1,2,5,10,20,50,100,200,500,1000];
+
+function _probeOptHTML(selected=1) {
+  return SCOPE_PROBE_RATIOS.map(r => {
+    const sel = r===selected?' selected':'';
+    const label = r < 1 ? `${r}×` : `${r}×`;
+    return `<option value="${r}"${sel}>${label}</option>`;
+  }).join("");
+}
+
+function _scopeChRowsHTML(nCh) {
+  const chColors = ["ch1","ch2","ch3","ch4","ch5","ch6","ch7","ch8"];
+  let html = "";
+  for (let i=1;i<=nCh;i++) {
+    const cc = chColors[i-1]||"";
+    html += `<div class="scope-ch-row">
+      <span class="scope-ch-badge ${cc}">CH${i}</span>
+      <button class="scope-ch-tog on" onclick="scopeToggleCh(this,${i})">
+        <span class="tog-dot"></span>ON
+      </button>
+      <input class="scope-ch-label-inp" type="text" maxlength="4" placeholder="label"
+             title="Channel label (shown on scope display; max 4 chars)"
+             onkeydown="if(event.key==='Enter')scopeSetLabel(this,${i})"
+             onblur="scopeSetLabel(this,${i})"/>
+      <select class="scope-sel" title="V/div" onchange="scopeSet('channel_scale',{ch:${i},value:this.value})">
+        ${scopeOptHTML(SCOPE_VDIV_VALS, fmtVDiv, 1)}
+      </select>
+      <select class="scope-sel" title="Coupling" onchange="scopeSet('channel_coupling',{ch:${i},coupling:this.value})">
+        <option value="DC">DC</option><option value="AC">AC</option><option value="GND">GND</option>
+      </select>
+      <select class="scope-sel" title="Probe ×" onchange="scopeSet('channel_probe',{ch:${i},attenuation:this.value})">
+        ${_probeOptHTML(1)}
+      </select>
+    </div>`;
+  }
+  return html;
+}
+
+function scopeSetLabel(inp, ch) {
+  const lbl = inp.value.trim().slice(0, 4);  // DS1000Z max label length is 4 chars
+  inp.value = lbl;
+  scopeSet('channel_label', {ch, label: lbl});
+}
+
+function _scopeChSelOpts(nCh) {
+  return Array.from({length:nCh},(_,i)=>`<option value="${i+1}">CH${i+1}</option>`).join("");
+}
+
+function scopeSetChannelCount(sel) {
+  const n = parseInt(sel.value);
+  const grid = document.getElementById("scope-ch-grid");
+  if (grid) grid.innerHTML = _scopeChRowsHTML(n);
+  // update channel selector in the add-measurement row
+  const addCh = document.getElementById("scope-add-ch-sel");
+  if (addCh) addCh.innerHTML = _scopeChSelOpts(n);
+}
+
+let _scopeMeasCounter = 0;
+function scopeAddMeasurement() {
+  const chSel  = document.getElementById("scope-add-ch-sel");
+  const measSel = document.getElementById("scope-add-meas-sel");
+  if (!chSel || !measSel) return;
+  const ch  = parseInt(chSel.value);
+  const op  = measSel.value;
+  const meas = SCOPE_MEASURES.find(m=>m.op===op);
+  if (!meas) return;
+  const id = ++_scopeMeasCounter;
+  const chColors = ["ch1","ch2","ch3","ch4","ch5","ch6","ch7","ch8"];
+  const cc = chColors[ch-1]||"ch1";
+  const item = document.createElement("div");
+  item.className = "scope-meas-item";
+  item.dataset.ch   = ch;
+  item.dataset.meas = op;
+  item.dataset.id   = id;
+  item.innerHTML = `
+    <span class="scope-ch-badge ${cc}">CH${ch}</span>
+    <span class="scope-meas-label">${escHtml(meas.label)}</span>
+    <span class="scope-meas-val dim" id="smv-${id}">—</span>
+    <button class="scope-meas-remove" onclick="this.closest('.scope-meas-item').remove()" title="Remove">×</button>`;
+  const list = document.getElementById("scope-meas-list");
+  if (list) list.appendChild(item);
+}
+
+function scopeMeasureAll() {
+  const items = [...document.querySelectorAll(".scope-meas-item")];
+  if (!items.length) { toast("Add a measurement first","warn"); return; }
+  // Show spinners on all slots
+  items.forEach(item => {
+    const $v = document.getElementById(`smv-${item.dataset.id}`);
+    if ($v) { $v.innerHTML=`<span class="spinner" style="width:10px;height:10px;border-width:2px;"></span>`; $v.classList.remove("dim"); }
+  });
+  const measurements = items.map(item => ({op:item.dataset.meas, ch:parseInt(item.dataset.ch)}));
+  POST("/api/scope/measure_batch", {measurements, delay_ms:50}).catch(e => {
+    _scopeStopAuto();
+    items.forEach(item => {
+      const $v = document.getElementById(`smv-${item.dataset.id}`);
+      if ($v) { $v.textContent="ERR"; $v.classList.add("dim"); }
+    });
+    toast(e.message,"error");
+  });
+}
+
+function scopeToggleAuto(btn) {
+  const sel = document.getElementById("scope-auto-interval");
+  _scopeAutoOn = !_scopeAutoOn;
+  if (_scopeAutoOn) {
+    _scopeAutoInterval = sel ? parseInt(sel.value) : 500;
+    btn.classList.add("on");
+    btn.innerHTML=`<span class="tog-dot"></span>Auto`;
+    scopeMeasureAll();
+  } else {
+    _scopeStopAuto();
+  }
+}
+
 function buildScopeCard(instr) {
   const nCh = (() => {
     const m=(instr.model||"").toUpperCase();
-    const mx=m.match(/(\d)(?:04|02|0[A-Z]|[A-Z]+)\s*$/);
-    if (mx){const n=parseInt(mx[1]);if(n>=1&&n<=8)return n;}
+    // Rigol DS1000Z: DS1[2-digit BW][channels]Z  e.g. DS1054Z→4ch, DS1104Z→4ch
+    const mx = m.match(/DS1\d\d(\d)/);
+    if (mx) { const n=parseInt(mx[1]); if(n>=1&&n<=8) return n; }
     return 4;
   })();
-  const chTabs = Array.from({length:nCh},(_,i)=>
-    `<button class="ch-tab${i===0?" active":""}" data-ch="${i+1}" onclick="scopeMeasChSelect(this)">${i+1}</button>`
-  ).join("");
-  const opts = SCOPE_MEASURES.map(m=>`<option value="${m.op}">${m.label}</option>`).join("");
+
+  const chCountOpts = [1,2,4,8].map(n=>
+    `<option value="${n}"${n===nCh?" selected":""}>${n} ch</option>`).join("");
+  const measOpts = SCOPE_MEASURES.map(m=>`<option value="${m.op}">${m.label}</option>`).join("");
+
   const div = document.createElement("div");
   div.className="card"; div.dataset.type="scope"; div.dataset.model=instr.model||"";
   div.innerHTML=`
@@ -1097,51 +1366,54 @@ function buildScopeCard(instr) {
       <div class="card-status-dot"></div>
     </div>
     <div class="card-body scope-controls">
-      <div class="section-label">Transport</div>
+      <div class="section-label-row">
+        <span class="section-label">Channels</span>
+        <select class="scope-sel" style="flex:0 0 auto;width:auto;" title="Number of channels"
+                onchange="scopeSetChannelCount(this)">${chCountOpts}</select>
+      </div>
+      <div class="scope-ch-grid" id="scope-ch-grid">${_scopeChRowsHTML(nCh)}</div>
+      <div class="section-label mt4">Timebase</div>
+      <div class="scope-tb-row">
+        <span class="scope-tb-label">s/div</span>
+        <select class="scope-sel" title="Time/div" onchange="scopeSet('timebase_scale',{value:this.value})">
+          ${scopeOptHTML(SCOPE_TDIV_VALS, fmtDiv, 1e-3)}
+        </select>
+      </div>
+      <div class="section-label mt4">Transport</div>
       <div class="transport-row">
         <button class="btn run"    onclick="scopeCmd('run')">▶ Run</button>
         <button class="btn stop"   onclick="scopeCmd('stop')">■ Stop</button>
         <button class="btn single" onclick="scopeCmd('single')">↓ Single</button>
         <button class="btn auto"   onclick="scopeCmd('autoscale')">⟳ Auto</button>
       </div>
-      <div class="section-label">Measurement</div>
-      <div class="meas-panel">
-        <div class="meas-row">
-          <div class="ch-tabs" id="scope-meas-ch-tabs" style="flex-shrink:0;">${chTabs}</div>
-          <div class="meas-select-wrap">
-            <select class="meas-select" id="scope-meas-select">${opts}</select>
-          </div>
-          <button class="btn btn-primary" style="padding:6px 12px;font-size:11px;" onclick="scopeMeasure()">Measure</button>
-        </div>
-        <div class="meas-display">
-          <div class="meas-value dim" id="scope-meas-value">—</div>
-          <div class="meas-meta"      id="scope-meas-meta"></div>
-        </div>
+      <div class="section-label mt4">Measurements</div>
+      <div id="scope-meas-list" class="scope-meas-list"></div>
+      <div class="scope-meas-add-row">
+        <select class="scope-sel" id="scope-add-ch-sel" style="flex:0 0 56px;">${_scopeChSelOpts(nCh)}</select>
+        <select class="scope-sel" id="scope-add-meas-sel">${measOpts}</select>
+        <button class="btn" style="padding:3px 10px;font-size:10px;flex-shrink:0;"
+                onclick="scopeAddMeasurement()">+ Add</button>
+      </div>
+      <div class="scope-meas-controls">
+        <button class="btn btn-primary" onclick="scopeMeasureAll()">▷ Execute</button>
+        <select class="scope-sel" id="scope-auto-interval" style="flex:0 0 auto;width:auto;"
+                onchange="if(_scopeAutoOn){_scopeAutoInterval=parseInt(this.value);}">
+          <option value="200">200 ms</option>
+          <option value="500" selected>500 ms</option>
+          <option value="1000">1 s</option>
+          <option value="2000">2 s</option>
+          <option value="5000">5 s</option>
+        </select>
+        <button class="scope-auto-tog" id="scope-auto-btn" onclick="scopeToggleAuto(this)">
+          <span class="tog-dot"></span>Auto
+        </button>
       </div>
       <button class="screenshot-btn" id="screenshot-btn" onclick="doScreenshot()">📷 Screenshot</button>
     </div>`;
   return div;
 }
 
-let _scopeMeasCh = 1;
-function scopeMeasChSelect(btn) {
-  document.querySelectorAll("#scope-meas-ch-tabs .ch-tab").forEach(b=>b.classList.remove("active"));
-  btn.classList.add("active");
-  _scopeMeasCh = parseInt(btn.dataset.ch);
-}
 function scopeCmd(cmd) { POST(`/api/scope/${cmd}`).catch(e=>toast(e.message,"error")); }
-function scopeMeasure() {
-  const sel=document.getElementById("scope-meas-select");
-  const meas=sel?sel.value:"measure_vpp";
-  const $val=document.getElementById("scope-meas-value");
-  const $meta=document.getElementById("scope-meas-meta");
-  if ($val){$val.innerHTML=`<span class="spinner" style="width:14px;height:14px;border-width:2px;"></span>`;$val.classList.add("dim");}
-  if ($meta) $meta.textContent="";
-  POST("/api/scope/measure",{measurement:meas,ch:_scopeMeasCh}).catch(e=>{
-    toast(e.message,"error");
-    if ($val){$val.innerHTML="—";$val.classList.add("dim");}
-  });
-}
 function doScreenshot() {
   const btn=document.getElementById("screenshot-btn");
   if (btn){btn.disabled=true;btn.innerHTML=`<span class="spinner"></span> Capturing…`;}
@@ -1475,7 +1747,7 @@ function buildTestGrid(tests) {
     grid.appendChild(card);
     if (test.custom_ui) {
       _dcSw.measItems = [
-        { kind:"measurement", instrument:"psu", measure:"voltage", samples:1, settle:0.1, label:"" },
+        { kind:"measurement", instrument:"psu", measure:"voltage", instr_ch:1, samples:1, settle:0.1, label:"" },
       ];
       _dcSwRenderChannels();
       _dcSwRenderMeasList();
@@ -1870,7 +2142,7 @@ const _dcSw = {
   })),
   // Measurement / action items
   measItems: [
-    { kind:"measurement", instrument:"psu", measure:"voltage", samples:1, settle:0.1, label:"" },
+    { kind:"measurement", instrument:"psu", measure:"voltage", instr_ch:1, samples:1, settle:0.1, label:"" },
   ],
 };
 
@@ -1991,6 +2263,11 @@ const _MEAS_OPTS_DMM = [
   ["voltage","DC Voltage (V)"], ["current","DC Current (A)"],
   ["vac","AC Voltage (V)"],     ["r","Resistance (Ω)"], ["r4w","4W Resistance (Ω)"],
 ];
+const _MEAS_OPTS_SCOPE = [
+  ["vpp","Vpp (V)"],      ["vrms","Vrms (V)"],  ["freq","Frequency (Hz)"],
+  ["duty","Duty cycle (%)"], ["rise","Rise time (s)"], ["fall","Fall time (s)"],
+  ["overshoot","Overshoot (%)"], ["period","Period (s)"],
+];
 
 // Read current DOM values back into _dcSw.measItems
 function _dcSwSnapshotMeasItems() {
@@ -2004,6 +2281,7 @@ function _dcSwSnapshotMeasItems() {
         kind:       "measurement",
         instrument: el.querySelector(`[data-field="instrument"]`)?.value ?? "psu",
         measure:    el.querySelector(`[data-field="measure"]`)?.value    ?? "voltage",
+        instr_ch:   parseInt(el.querySelector(`[data-field="instr_ch"]`)?.value ?? "1"),
         samples:    parseInt(el.querySelector(`[data-field="samples"]`)?.value  ?? "1"),
         settle:     parseFloat(el.querySelector(`[data-field="settle"]`)?.value ?? "0.1"),
         label:      el.querySelector(`[data-field="label"]`)?.value      ?? "",
@@ -2043,26 +2321,39 @@ function _dcSwTriggerOpts(selected) {
   ).join("");
 }
 
+// Resolve instrument type ("psu" | "dmm" | "scope" | "awg" ...) from a resource string.
+// Uses test.meters (populated by backend) which includes an itype field.
+function _getInstrType(instrValue) {
+  if (!instrValue || instrValue === "psu") return "psu";
+  const test = _dcSw.test;
+  if (test && test.meters) {
+    const m = test.meters.find(m => m.value === instrValue);
+    if (m && m.itype) return m.itype;
+  }
+  // Fallback: look up in state.instruments (all connected)
+  const instr = (state.instruments || []).find(i => i.resource === instrValue);
+  return instr ? (instr.type || "dmm") : "dmm";
+}
+
 // Build the option HTML for the measure-type dropdown in item i
 function _dcSwMeasTypeOpts(item) {
-  const isPsu = (item.instrument === "psu" || item.instrument === "");
-  const opts  = isPsu ? _MEAS_OPTS_PSU : _MEAS_OPTS_DMM;
+  const type = _getInstrType(item.instrument);
+  let opts;
+  if      (type === "scope") opts = _MEAS_OPTS_SCOPE;
+  else if (type === "psu")   opts = _MEAS_OPTS_PSU;
+  else                       opts = _MEAS_OPTS_DMM;
   return opts.map(([v, l]) =>
     `<option value="${v}"${v === item.measure ? " selected" : ""}>${l}</option>`
   ).join("");
 }
 
-// Build the instrument options HTML for a measurement item (PSU + DMMs)
+// Build the instrument options HTML for a measurement item (PSU + DMMs + Scopes)
 function _dcSwInstrOpts(item) {
   const test  = _dcSw.test;
-  const sources = test ? test.meters : [];
-  // "PSU (built-in)" is always first
-  const base = `<option value="psu"${item.instrument === "psu" ? " selected" : ""}>PSU (built-in)</option>`;
-  const rest = sources
-    .filter(m => m.value !== "psu")
+  const sources = test ? (test.meters || []) : [];
+  return sources
     .map(m => `<option value="${escHtml(m.value)}"${m.value === item.instrument ? " selected" : ""}>${escHtml(m.label)}</option>`)
     .join("");
-  return base + rest;
 }
 
 // Build instrument options for SCPI query — all connected instruments
@@ -2082,6 +2373,9 @@ function _dcSwBuildMeasItem(item, i) {
   el.dataset.kind = item.kind;
 
   if (item.kind === "measurement") {
+    const itype   = _getInstrType(item.instrument);
+    const needsCh = (itype === "scope" || itype === "psu");
+    const instrCh = item.instr_ch || 1;
     el.innerHTML = `
       <div class="dcsw-mi-hdr">
         <span class="dcsw-mi-tag meas">Measurement</span>
@@ -2092,6 +2386,15 @@ function _dcSwBuildMeasItem(item, i) {
           <span class="dcsw-field-label">Instrument</span>
           <select class="dcsw-select" data-field="instrument"
                   onchange="_dcSwMeasInstrChange(this)">${_dcSwInstrOpts(item)}</select>
+        </div>
+        <div class="dcsw-field" style="display:${needsCh ? "" : "none"};" data-meas-row="instr_ch">
+          <span class="dcsw-field-label">Channel</span>
+          <select class="dcsw-select" data-field="instr_ch">
+            <option value="1"${instrCh==1?" selected":""}>CH 1</option>
+            <option value="2"${instrCh==2?" selected":""}>CH 2</option>
+            <option value="3"${instrCh==3?" selected":""}>CH 3</option>
+            <option value="4"${instrCh==4?" selected":""}>CH 4</option>
+          </select>
         </div>
         <div class="dcsw-field">
           <span class="dcsw-field-label">Measure</span>
@@ -2138,7 +2441,7 @@ function _dcSwBuildMeasItem(item, i) {
           <span class="dcsw-field-label">Action</span>
           <select class="dcsw-select" data-field="action"
                   onchange="_dcSwActionTypeChange(this)">
-            <option value="screenshot"${!isScript && !isScpi ? " selected" : ""}>📷 Scope screenshot</option>
+            <option value="screenshot"${!isScript && !isScpi ? " selected" : ""}>📷 Capture screen data</option>
             <option value="scpi"${isScpi ? " selected" : ""}>📡 SCPI query</option>
             <option value="script"${isScript ? " selected" : ""}>⚙ External script</option>
           </select>
@@ -2215,7 +2518,7 @@ function _dcSwAddItem(kind) {
   _dcSwSnapshotMeasItems();
   if (kind === "measurement") {
     _dcSw.measItems.push({ kind:"measurement", instrument:"psu", measure:"voltage",
-                           samples:1, settle:0.1, label:"" });
+                           instr_ch:1, samples:1, settle:0.1, label:"" });
   } else {
     _dcSw.measItems.push({ kind:"action", action:"screenshot", script:"", label:"" });
   }
@@ -2231,15 +2534,25 @@ function _dcSwRemoveItem(i) {
 
 // Called when instrument dropdown inside a measurement item changes
 function _dcSwMeasInstrChange(sel) {
-  const mi   = sel.closest(".dcsw-mi");
-  const msel = mi.querySelector('[data-field="measure"]');
+  const mi     = sel.closest(".dcsw-mi");
+  const msel   = mi.querySelector('[data-field="measure"]');
+  const chRow  = mi.querySelector('[data-meas-row="instr_ch"]');
   if (!msel) return;
-  const isPsu = (sel.value === "psu" || sel.value === "");
-  const prev  = msel.value;
-  const opts  = isPsu ? _MEAS_OPTS_PSU : _MEAS_OPTS_DMM;
+
+  const type = _getInstrType(sel.value);
+  const prev = msel.value;
+  let opts;
+  if      (type === "scope") opts = _MEAS_OPTS_SCOPE;
+  else if (type === "psu")   opts = _MEAS_OPTS_PSU;
+  else                       opts = _MEAS_OPTS_DMM;
+
+  // Rebuild measure type options (keep existing selection if compatible)
   msel.innerHTML = opts.map(([v, l]) =>
     `<option value="${v}"${v === prev ? " selected" : ""}>${l}</option>`
   ).join("");
+
+  // Show channel picker for PSU and scope; DMMs are single-channel
+  if (chRow) chRow.style.display = (type === "psu" || type === "scope") ? "" : "none";
 }
 
 // Called when action type dropdown changes — show/hide conditional rows

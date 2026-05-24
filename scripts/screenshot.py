@@ -7,6 +7,10 @@ import sys
 import time
 
 import pyvisa
+
+# Allow running from any directory: add setup/ (where workbench.py / instruments.py live)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'setup'))
+
 from workbench import load_workbench, open_by_role
 
 try:

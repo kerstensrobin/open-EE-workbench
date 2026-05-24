@@ -228,3 +228,7 @@ documentation/*.pdf
 # Regenerate with:  python setup_launcher.py
 open-EE-workbench.desktop
 gui_assets/icon.png
+
+# Measurement / sweep output data (generated at runtime)
+data/
+*.csv
