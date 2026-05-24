@@ -1108,7 +1108,14 @@ def main():
             ]
 
         if args.usb_only:
-            resources = [name for name in resources if name.upper().startswith("USB")]
+            # Keep native USB VISA resources *and* USB-to-serial ports (ASRL).
+            # USB-serial adapters (FTDI, CH340, CP2102, Prolific …) are USB
+            # devices; is_usb_serial_resource() already confirmed their VID/PID.
+            resources = [
+                name for name in resources
+                if name.upper().startswith("USB")
+                or is_usb_serial_resource(name, serial_metadata)
+            ]
 
         instrument_reports = []
         instrument_data = []

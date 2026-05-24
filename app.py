@@ -14,7 +14,9 @@ Usage
 
 import argparse
 import atexit
+import json as _json
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -670,8 +672,9 @@ def api_scan():
             return False
 
         resources = [r for r in resources if _keep_resource(r)]
-        if usb_only:
-            resources = [r for r in resources if not r.upper().startswith("ASRL")]
+        # usb_only skips LAN scanning (done above) but must keep USB-serial
+        # (ASRL) resources — they are USB devices too.  _keep_resource already
+        # filtered ASRL down to ttyUSB/ttyACM/COM ports, so nothing extra needed.
 
         # 4 — identify each resource
         _emit(f"Identifying {len(resources)} resource(s)…")
@@ -752,11 +755,20 @@ _auto_running = False
 
 
 def _suggest_tests() -> list:
-    """Return tests available for the current workbench based on instrument types present."""
+    """Return tests available based on instruments that are *actually connected*.
+
+    Using connected resources (not just workbench contents) means a PSU-only
+    test (dc_sweep) appears even when a scope in the workbench is switched off.
+    """
     wb = _state.get("workbench")
     if not wb:
         return []
-    types = {instr.get("type") for instr in wb.get("_unique", [])}
+    connected = set(_state.get("resources", {}).keys())
+    types = {
+        instr.get("type")
+        for instr in wb.get("_unique", [])
+        if instr.get("resource", "") in connected
+    }
     tests = []
 
     if "awg" in types and "scope" in types:
@@ -794,42 +806,13 @@ def _suggest_tests() -> list:
         tests.append({
             "id":          "dc_sweep",
             "name":        "DC Sweep",
-            "description": "Sweep PSU voltage(s) and measure current — single, simultaneous, or nested",
+            "description": "Sweep voltage source(s) across N channels and record measurements",
             "requires":    ["psu"],
-            "params": [
-                # ── Instrument selectors ──────────────────────────────────────────
-                {"id": "source",      "label": "V source",  "type": "select",
-                 "options": source_opts,
-                 "default": source_opts[0]["value"] if source_opts else ""},
-                # ── Sweep mode ────────────────────────────────────────────────────
-                {"id": "sweep_mode",  "label": "Mode",      "type": "select",
-                 "options": [
-                     {"value": "single",       "label": "Single channel"},
-                     {"value": "simultaneous", "label": "Simultaneous (same range)"},
-                     {"value": "nested",       "label": "Nested (CH1 inner, CH2 outer)"},
-                 ], "default": "single"},
-                # ── CH1 (primary / inner) ─────────────────────────────────────────
-                {"id": "source_ch",   "label": "CH1",       "type": "select",
-                 "options": ["1", "2", "3", "4"], "default": "1"},
-                {"id": "v_start",     "label": "V1 start",  "unit": "V",  "default": 0,   "type": "number"},
-                {"id": "v_stop",      "label": "V1 stop",   "unit": "V",  "default": 5,   "type": "number"},
-                {"id": "v_step",      "label": "V1 step",   "unit": "V",  "default": 0.1, "type": "number"},
-                {"id": "i_limit",     "label": "I1 limit",  "unit": "A",  "default": 0.5, "type": "number"},
-                # ── CH2 (simultaneous partner / outer for nested) ─────────────────
-                {"id": "source_ch2",  "label": "CH2",       "type": "select",
-                 "options": ["none", "1", "2", "3", "4"], "default": "none"},
-                {"id": "v2_start",    "label": "V2 start",  "unit": "V",  "default": 0,   "type": "number"},
-                {"id": "v2_stop",     "label": "V2 stop",   "unit": "V",  "default": 3,   "type": "number"},
-                {"id": "v2_step",     "label": "V2 step",   "unit": "V",  "default": 1,   "type": "number"},
-                {"id": "i2_limit",    "label": "I2 limit",  "unit": "A",  "default": 0.5, "type": "number"},
-                # ── Measurement & timing ──────────────────────────────────────────
-                {"id": "i_meter",     "label": "I meter",   "type": "select",
-                 "options": i_meter_opts, "default": "psu"},
-                {"id": "settle_time", "label": "Settle",    "unit": "s",  "default": 0.1, "type": "number"},
-            ],
-            # Columns are overridden at runtime by the runner based on sweep_mode;
-            # this placeholder is used only for the initial table header.
-            "columns": ["v_set_V", "v_meas_V", "i_meas_A"],
+            "custom_ui":   True,          # rendered by buildDcSweepCard() in the frontend
+            "sources":     source_opts,   # [{value, label}] — available voltage sources
+            "meters":      i_meter_opts,  # [{value, label}] — available measurement instruments
+            "params":      [],            # param collection handled by the custom card UI
+            "columns":     ["step", "measurement"],   # overridden at runtime by the runner
         })
 
     if "dmm" in types:
@@ -926,6 +909,9 @@ def api_automation_run():
         _auto_running = False
         sio.emit("automation_done", {"test_id": test_id, "columns": columns,
                                      "rows": rows, "error": error})
+        # Resume PSU polling now that automation has released the resources
+        if _state.get("connected"):
+            _start_polling()
 
     def _run_ac_sweep():
         freq_start  = float(params.get("freq_start",  100))
@@ -986,44 +972,47 @@ def api_automation_run():
         _done(rows, cols)
 
     def _run_dc_sweep():
-        source_rstr = str(params.get("source",      ""))
-        sweep_mode  = str(params.get("sweep_mode",  "single"))
-        ch1         = int(params.get("source_ch",   1))
-        ch2_raw     = str(params.get("source_ch2",  "none"))
-        ch2         = None if ch2_raw in ("none", "") else int(ch2_raw)
-        v_start     = float(params.get("v_start",   0))
-        v_stop      = float(params.get("v_stop",    5))
-        v_step      = abs(float(params.get("v_step", 0.1))) or 0.1
-        i_limit     = float(params.get("i_limit",   0.5))
-        v2_start    = float(params.get("v2_start",  0))
-        v2_stop     = float(params.get("v2_stop",   3))
-        v2_step     = abs(float(params.get("v2_step", 1.0))) or 1.0
-        i2_limit    = float(params.get("i2_limit",  0.5))
-        i_meter_id  = str(params.get("i_meter",     "psu"))
-        settle_time = float(params.get("settle_time", 0.1))
+        num_ch     = max(1, int(params.get("num_channels", 1)))
+        sweep_mode = str(params.get("sweep_mode", "simultaneous"))
 
-        # single if ch2 not chosen regardless of mode selector
-        if ch2 is None:
-            sweep_mode = "single"
+        # ── Parse measurement / action items ─────────────────────────────────
+        # Each item: {kind, instrument?, measure?, samples?, settle?, label?,
+        #             action?, script?}
+        raw_meas = params.get("measurements", "[]")
+        try:
+            meas_items = _json.loads(raw_meas) if isinstance(raw_meas, str) else []
+        except Exception:
+            meas_items = []
+        # Default: single voltage readout from PSU
+        if not meas_items:
+            meas_items = [{"kind": "measurement", "instrument": "psu",
+                           "measure": "voltage", "samples": 1, "settle": 0.1}]
 
-        # ── Resolve voltage-source instrument ────────────────────────────────
-        psu_res = _state["resources"].get(source_rstr)
-        psu_fam = _state["families"].get(source_rstr)
-        if psu_res is None:
-            psu_res, psu_fam = _find_instrument("psu")   # fallback
-        if psu_res is None:
-            _done([], [], "Voltage source not connected"); return
+        # ── Per-channel configs ──────────────────────────────────────────────
+        ch_cfgs = []
+        for n in range(num_ch):
+            ch_cfgs.append({
+                "resource": str(params.get(f"ch{n}_resource", "")),
+                "ch":       max(1, int(params.get(f"ch{n}_ch",      n + 1))),
+                "v_start":  float(params.get(f"ch{n}_v_start", 0)),
+                "v_step":   abs(float(params.get(f"ch{n}_v_step",  0.1))) or 0.1,
+                "v_stop":   float(params.get(f"ch{n}_v_stop",  5)),
+                "i_limit":  float(params.get(f"ch{n}_i_limit", 0.5)),
+                "settle":   float(params.get(f"ch{n}_settle",  0.1)),
+            })
 
-        # ── Resolve current-meter ────────────────────────────────────────────
-        use_dmm = (i_meter_id not in ("psu", ""))
-        if use_dmm:
-            imtr_res = _state["resources"].get(i_meter_id)
-            imtr_fam = _state["families"].get(i_meter_id)
-            if imtr_res is None:
-                _done([], [], f"Current meter not connected ({i_meter_id})"); return
-        else:
-            imtr_res, imtr_fam = psu_res, psu_fam
+        # ── Resolve per-channel instrument handles ───────────────────────────
+        ch_handles = []
+        for n, cfg in enumerate(ch_cfgs):
+            res = _state["resources"].get(cfg["resource"])
+            fam = _state["families"].get(cfg["resource"])
+            if res is None:
+                res, fam = _find_instrument("psu")
+            if res is None:
+                _done([], [], f"CH{n + 1} voltage source not connected"); return
+            ch_handles.append({"res": res, "fam": fam, "cfg": cfg})
 
+        # ── Shared helpers ────────────────────────────────────────────────────
         def _safe(r):
             try:
                 v = float(r)
@@ -1031,148 +1020,253 @@ def api_automation_run():
             except Exception:
                 return None
 
-        def _meas_v(ch):
+        def _make_vols(cfg):
+            n = round(abs(cfg["v_stop"] - cfg["v_start"]) / cfg["v_step"])
+            s = 1 if cfg["v_stop"] >= cfg["v_start"] else -1
+            return [round(cfg["v_start"] + k * s * cfg["v_step"], 10)
+                    for k in range(n + 1)]
+
+        def _set_v(handle, v):
+            _run_steps(handle["res"], get_command(
+                handle["fam"], "set_voltage",
+                ch=handle["cfg"]["ch"], value=f"{v:.6f}"))
+
+        def _setup_ch(handle):
+            _run_steps(handle["res"], get_command(
+                handle["fam"], "set_current_limit",
+                ch=handle["cfg"]["ch"], value=f"{handle['cfg']['i_limit']:.4f}"))
+            _run_steps(handle["res"], get_command(
+                handle["fam"], "output_on", ch=handle["cfg"]["ch"]))
+
+        def _teardown_ch(handle):
             try:
-                return _safe(_run_steps(psu_res, get_command(psu_fam, "measure_voltage", ch=ch)))
-            except Exception:
-                return None
-
-        def _meas_i(ch):
-            try:
-                if use_dmm:
-                    return _safe(_run_steps(imtr_res, get_command(imtr_fam, "measure_idc")))
-                return _safe(_run_steps(imtr_res, get_command(imtr_fam, "measure_current", ch=ch)))
-            except Exception:
-                return None
-
-        def _set_v(ch, v):
-            _run_steps(psu_res, get_command(psu_fam, "set_voltage", ch=ch, value=f"{v:.6f}"))
-
-        def _emit_row(row, cols, progress):
-            rows.append(row)
-            sio.emit("automation_row", {"test_id": test_id, "row": row,
-                                        "columns": cols, "progress": progress})
-
-        def _setup_ch(ch, ilim):
-            _run_steps(psu_res, get_command(psu_fam, "set_current_limit",
-                                            ch=ch, value=f"{ilim:.4f}"))
-            _run_steps(psu_res, get_command(psu_fam, "output_on", ch=ch))
-
-        def _teardown_ch(ch):
-            try:
-                _run_steps(psu_res, get_command(psu_fam, "set_voltage", ch=ch, value="0.0"))
-                _run_steps(psu_res, get_command(psu_fam, "output_off", ch=ch))
+                _run_steps(handle["res"], get_command(
+                    handle["fam"], "set_voltage",
+                    ch=handle["cfg"]["ch"], value="0.0"))
+                _run_steps(handle["res"], get_command(
+                    handle["fam"], "output_off", ch=handle["cfg"]["ch"]))
             except Exception:
                 pass
 
+        def _emit_row(row, cols, progress):
+            sio.emit("automation_row", {"test_id": test_id, "row": row,
+                                        "columns": cols, "progress": progress})
+
+        # ── Per-item execution ────────────────────────────────────────────────
+        # Maps measurement type → (PSU SCPI op, DMM SCPI op, auto column name)
+        _MEAS_MAP = {
+            "voltage": ("measure_voltage", "measure_vdc",  "V"),
+            "current": ("measure_current", "measure_idc",  "I"),
+            "vac":     (None,              "measure_vac",  "Vac"),
+            "r":       (None,              "measure_r",    "R"),
+            "r4w":     (None,              "measure_r4w",  "R4w"),
+        }
+
+        def _auto_label(item, idx):
+            lbl = (item.get("label") or "").strip()
+            if lbl:
+                return lbl
+            kind = item.get("kind", "measurement")
+            if kind == "measurement":
+                abbr = _MEAS_MAP.get(item.get("measure", "voltage"),
+                                     ("", "", "val"))[2]
+            elif item.get("action") == "screenshot":
+                abbr = "img"
+            else:
+                abbr = "script"
+            return f"{abbr}_{idx + 1}"
+
+        def _exec_item(item, step_ctx):
+            """Execute one measurement/action item; return its value."""
+            kind = item.get("kind", "measurement")
+
+            # ── Measurement ──────────────────────────────────────────────────
+            if kind == "measurement":
+                instr_id = item.get("instrument", "psu")
+                measure  = item.get("measure",    "voltage")
+                samples  = max(1, int(item.get("samples", 1)))
+                settle   = float(item.get("settle", 0.1))
+
+                use_ext = instr_id not in ("psu", "")
+                if use_ext:
+                    res = _state["resources"].get(instr_id)
+                    fam = _state["families"].get(instr_id)
+                else:
+                    res = ch_handles[0]["res"]
+                    fam = ch_handles[0]["fam"]
+
+                if res is None:
+                    return None
+
+                psu_op, dmm_op, _ = _MEAS_MAP.get(
+                    measure, ("measure_voltage", "measure_vdc", "V"))
+
+                time.sleep(settle)
+
+                def _once():
+                    try:
+                        if use_ext:
+                            return _safe(_run_steps(res, get_command(fam, dmm_op)))
+                        elif psu_op:
+                            return _safe(_run_steps(res, get_command(
+                                fam, psu_op, ch=ch_handles[0]["cfg"]["ch"])))
+                        return None
+                    except Exception:
+                        return None
+
+                vals = [_once() for _ in range(samples)]
+                nums = [v for v in vals if v is not None]
+                return round(sum(nums) / len(nums), 6) if nums else None
+
+            # ── Action ───────────────────────────────────────────────────────
+            elif kind == "action":
+                action = item.get("action", "screenshot")
+
+                if action == "screenshot":
+                    scope_res, scope_fam = _find_instrument("scope")
+                    if scope_res is None:
+                        _log("[auto] screenshot: no scope connected"); return None
+                    try:
+                        data = _run_steps(scope_res,
+                                          get_command(scope_fam, "screenshot"))
+                        if data and len(data) > 0:
+                            ts    = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            step  = step_ctx.get("step", 0)
+                            fname = f"sweep_{step:04d}_{ts}.png"
+                            fpath = Path("screenshots") / fname
+                            fpath.parent.mkdir(parents=True, exist_ok=True)
+                            fpath.write_bytes(data)
+                            return fname
+                    except Exception as exc:
+                        _log(f"[auto] screenshot: {exc}")
+                    return None
+
+                elif action == "script":
+                    script = (item.get("script") or "").strip()
+                    if not script:
+                        return None
+                    try:
+                        env = {
+                            **os.environ,
+                            **{f"SWEEP_{k.upper()}": str(v)
+                               for k, v in step_ctx.items()},
+                        }
+                        result = subprocess.run(
+                            [script], env=env,
+                            capture_output=True, text=True, timeout=30,
+                        )
+                        out = (result.stdout or "").strip().split("\n")[0]
+                        if out:
+                            try:
+                                return round(float(out), 6)
+                            except ValueError:
+                                return out
+                    except Exception as exc:
+                        _log(f"[auto] script '{script}': {exc}")
+                    return None
+
+            return None
+
+        def _exec_all(step_ctx):
+            """Run every measurement/action item; return list of values."""
+            return [_exec_item(item, step_ctx) for item in meas_items]
+
+        # ── Build result columns ──────────────────────────────────────────────
+        meas_cols = [_auto_label(item, i) for i, item in enumerate(meas_items)]
+
         rows = []
 
-        # ── Build inner voltage array (CH1 / only channel) ──────────────────
-        n1 = round(abs(v_stop - v_start) / v_step)
-        s1 = 1 if v_stop >= v_start else -1
-        vols1 = [round(v_start + k * s1 * v_step, 10) for k in range(n1 + 1)]
+        # ════════════════════════════════════════════════════════════════════
+        # SIMULTANEOUS (or single channel)
+        # Every channel follows its own range; step count = the longest range.
+        # Shorter ranges clamp at their v_stop for remaining steps.
+        # ════════════════════════════════════════════════════════════════════
+        if sweep_mode == "simultaneous" or num_ch == 1:
+            vols_all = [_make_vols(h["cfg"]) for h in ch_handles]
+            total    = max(len(v) for v in vols_all)
 
-        # ════════════════════════════════════════════════════════════════════
-        # MODE: SINGLE
-        # ════════════════════════════════════════════════════════════════════
-        if sweep_mode == "single":
-            cols = ["v_set_V", "v_meas_V", "i_meas_A"]
-            _emit_progress(f"DC Sweep — single CH{ch1}: {len(vols1)} pts")
+            if num_ch == 1:
+                cols = ["v_set_V"] + meas_cols
+            else:
+                cols = [f"ch{n + 1}_v_set_V" for n in range(num_ch)] + meas_cols
+
+            _emit_progress(f"DC Sweep — {num_ch} ch simultaneous: {total} steps")
             try:
-                _setup_ch(ch1, i_limit)
+                for h in ch_handles:
+                    _setup_ch(h)
             except Exception as exc:
-                _done([], cols, f"PSU setup failed: {exc}"); return
+                _done([], cols, f"Setup failed: {exc}"); return
 
-            for k, v in enumerate(vols1):
+            for k in range(total):
                 if _auto_stop.is_set():
                     _emit_progress("Stopped by user"); break
                 try:
-                    _set_v(ch1, v)
-                    time.sleep(settle_time)
-                    _emit_row([round(v, 6), _meas_v(ch1), _meas_i(ch1)],
-                              cols, (k + 1) / len(vols1))
+                    v_sets = {}
+                    for n, h in enumerate(ch_handles):
+                        v = vols_all[n][min(k, len(vols_all[n]) - 1)]
+                        _set_v(h, v)
+                        v_sets[f"ch{n + 1}"] = round(v, 6)
+                    time.sleep(ch_cfgs[0]["settle"])
+
+                    step_ctx = {"step": k + 1, **v_sets}
+                    meas_vals = _exec_all(step_ctx)
+
+                    if num_ch == 1:
+                        row = [v_sets["ch1"]] + meas_vals
+                    else:
+                        row = [v_sets[f"ch{n + 1}"] for n in range(num_ch)] + meas_vals
+
+                    rows.append(row)
+                    _emit_row(row, cols, (k + 1) / total)
                 except Exception as exc:
-                    _log(f"[auto] step {k+1}: {exc}")
+                    _log(f"[auto] step {k + 1}: {exc}")
 
-            _teardown_ch(ch1)
-
-        # ════════════════════════════════════════════════════════════════════
-        # MODE: SIMULTANEOUS — both channels ramp together with the same range
-        # ════════════════════════════════════════════════════════════════════
-        elif sweep_mode == "simultaneous":
-            cols = ["v_set_V",
-                    f"v_meas_ch{ch1}_V", f"i_meas_ch{ch1}_A",
-                    f"v_meas_ch{ch2}_V", f"i_meas_ch{ch2}_A"]
-            _emit_progress(f"DC Sweep — simultaneous CH{ch1}+CH{ch2}: {len(vols1)} pts")
-            try:
-                _setup_ch(ch1, i_limit)
-                _setup_ch(ch2, i2_limit)
-            except Exception as exc:
-                _done([], cols, f"PSU setup failed: {exc}"); return
-
-            for k, v in enumerate(vols1):
-                if _auto_stop.is_set():
-                    _emit_progress("Stopped by user"); break
-                try:
-                    _set_v(ch1, v)
-                    _set_v(ch2, v)
-                    time.sleep(settle_time)
-                    _emit_row([round(v, 6),
-                               _meas_v(ch1), _meas_i(ch1),
-                               _meas_v(ch2), _meas_i(ch2)],
-                              cols, (k + 1) / len(vols1))
-                except Exception as exc:
-                    _log(f"[auto] step {k+1}: {exc}")
-
-            _teardown_ch(ch1)
-            _teardown_ch(ch2)
+            for h in ch_handles:
+                _teardown_ch(h)
 
         # ════════════════════════════════════════════════════════════════════
-        # MODE: NESTED — CH1 (inner) sweeps full range per step of CH2 (outer)
-        # e.g. family of IV curves: CH2 = Vgs bias, CH1 = Vds sweep
+        # NESTED: CH 1 = inner (fast sweep), CH 2 = outer (one step per inner)
+        # Produces a family of curves, e.g. I-V at multiple bias points.
         # ════════════════════════════════════════════════════════════════════
-        elif sweep_mode == "nested":
-            n2 = round(abs(v2_stop - v2_start) / v2_step)
-            s2 = 1 if v2_stop >= v2_start else -1
-            vols2 = [round(v2_start + k * s2 * v2_step, 10) for k in range(n2 + 1)]
-            total = len(vols2) * len(vols1)
+        elif sweep_mode == "nested" and num_ch >= 2:
+            inner      = ch_handles[0]
+            outer      = ch_handles[1]
+            vols_inner = _make_vols(inner["cfg"])
+            vols_outer = _make_vols(outer["cfg"])
+            total      = len(vols_inner) * len(vols_outer)
 
-            cols = [f"v_ch{ch2}_set_V",    f"v_ch{ch1}_set_V",
-                    f"v_ch{ch2}_meas_V",   f"v_ch{ch1}_meas_V",
-                    f"i_ch{ch1}_meas_A"]
+            cols = ["v_outer_set_V", "v_inner_set_V"] + meas_cols
             _emit_progress(
-                f"DC Sweep — nested CH{ch2}(outer)×CH{ch1}(inner): "
-                f"{len(vols2)}×{len(vols1)} = {total} pts"
-            )
+                f"DC Sweep — nested "
+                f"{len(vols_outer)}×{len(vols_inner)} = {total} pts")
             try:
-                _setup_ch(ch2, i2_limit)   # outer first so it's stable
-                _setup_ch(ch1, i_limit)
+                _setup_ch(outer)
+                _setup_ch(inner)
             except Exception as exc:
-                _done([], cols, f"PSU setup failed: {exc}"); return
+                _done([], cols, f"Setup failed: {exc}"); return
 
-            step_num = 0
-            for j, v2 in enumerate(vols2):
+            step = 0
+            for v_out in vols_outer:
                 if _auto_stop.is_set():
                     _emit_progress("Stopped by user"); break
-                _set_v(ch2, v2)
-                _emit_progress(f"  CH{ch2} = {v2:.4g} V — sweeping CH{ch1}…")
-                time.sleep(settle_time)   # outer settle before inner sweep
+                _set_v(outer, v_out)
+                _emit_progress(f"  outer = {v_out:.4g} V — sweeping inner…")
+                time.sleep(outer["cfg"]["settle"])
 
-                for k, v1 in enumerate(vols1):
+                for v_in in vols_inner:
                     if _auto_stop.is_set():
                         break
-                    try:
-                        _set_v(ch1, v1)
-                        time.sleep(settle_time)
-                        step_num += 1
-                        _emit_row([round(v2, 6), round(v1, 6),
-                                   _meas_v(ch2), _meas_v(ch1), _meas_i(ch1)],
-                                  cols, step_num / total)
-                    except Exception as exc:
-                        _log(f"[auto] outer {j+1} inner {k+1}: {exc}")
+                    _set_v(inner, v_in)
+                    step += 1
+                    step_ctx  = {"step": step, "ch1": round(v_in, 6),
+                                 "ch2": round(v_out, 6)}
+                    meas_vals = _exec_all(step_ctx)
+                    row = [round(v_out, 6), round(v_in, 6)] + meas_vals
+                    rows.append(row)
+                    _emit_row(row, cols, step / total)
 
-            _teardown_ch(ch1)
-            _teardown_ch(ch2)
+            _teardown_ch(inner)
+            _teardown_ch(outer)
 
         else:
             _done([], [], f"Unknown sweep_mode {sweep_mode!r}"); return
@@ -1557,6 +1651,11 @@ def api_automation_run():
     if runner is None:
         _auto_running = False
         return jsonify({"error": f"Unknown test: {test_id!r}"}), 400
+
+    # Stop the PSU polling loop so automation has exclusive access to resources.
+    # PyVISA resource objects are not thread-safe; concurrent poller + runner
+    # calls produce "Invalid session handle" errors.  _done() will restart it.
+    _poll_stop.set()
 
     _executor.submit(runner)
     return jsonify({"status": "running", "test_id": test_id})

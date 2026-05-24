@@ -185,8 +185,6 @@
     /* ── Cards ───────────────────────────────────────────────────── */
     .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; transition:border-color .2s; }
     .card:hover { border-color:var(--border2); }
-    .card.connected { border-color:rgba(59,130,246,.25); }
-    .card.error { border-color:rgba(248,113,113,.25); }
     .card-header { display:flex; align-items:center; gap:10px; padding:12px 16px; background:var(--surface2); border-bottom:1px solid var(--border); }
     .card-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
     .card-icon.scope { background:rgba(59,130,246,.12); color:var(--accent); }
@@ -197,8 +195,12 @@
     .card-title    { font-weight:600; font-size:13px; color:var(--text); }
     .card-subtitle { font-size:11px; color:var(--text-dim); margin-top:1px; font-family:var(--mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .card-status-dot { width:7px; height:7px; border-radius:50%; background:var(--text-faint); flex-shrink:0; transition:all .3s; }
-    .card.connected .card-status-dot { background:var(--green); box-shadow:0 0 5px var(--green); }
-    .card.error .card-status-dot { background:var(--red); }
+    .card.pending   .card-status-dot { background:var(--amber); animation:pulse 2s ease-in-out infinite; }
+    .card.connected .card-status-dot { background:var(--green); box-shadow:0 0 5px var(--green); animation:none; }
+    .card.error     .card-status-dot { background:var(--red);   animation:none; }
+    .card.pending   { border-color:rgba(251,191,36,.18); }
+    .card.connected { border-color:rgba(59,130,246,.25); }
+    .card.error     { border-color:rgba(248,113,113,.25); }
     .card-body { padding:16px; }
     .section-label { font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--text-faint); margin-bottom:8px; }
 
@@ -468,6 +470,42 @@
       background:var(--surface2);
     }
     .results-msg { font-size:11px; color:var(--text-dim); flex:1; }
+
+    /* ── DC Sweep custom card ────────────────────────────────────── */
+    .dcsw-top { display:flex; align-items:flex-end; gap:20px; flex-wrap:wrap; }
+    .dcsw-seg { display:flex; border-radius:var(--radius); overflow:hidden; border:1px solid var(--border); }
+    .dcsw-seg-btn { padding:5px 14px; font:inherit; font-size:11px; font-weight:600; background:var(--surface3); color:var(--text-dim); border:none; border-right:1px solid var(--border); cursor:pointer; transition:all .12s; }
+    .dcsw-seg-btn:last-child { border-right:none; }
+    .dcsw-seg-btn.active { background:var(--accent-glow); color:var(--accent); }
+    .dcsw-seg-btn:hover:not(.active) { background:var(--surface4); color:var(--text); }
+    .dcsw-channels { display:flex; gap:10px; overflow-x:auto; padding-bottom:2px; }
+    .dcsw-ch { flex:1; min-width:148px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:10px 12px; display:flex; flex-direction:column; gap:6px; }
+    .dcsw-ch-hdr { font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); margin-bottom:2px; white-space:nowrap; }
+    .dcsw-field { display:flex; align-items:center; gap:6px; }
+    .dcsw-field-label { font-size:10px; color:var(--text-dim); width:52px; flex-shrink:0; }
+    .dcsw-field-iw { flex:1; display:flex; align-items:center; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; transition:border-color .15s; min-width:0; }
+    .dcsw-field-iw:focus-within { border-color:var(--accent); }
+    .dcsw-field-input { flex:1; background:none; border:none; color:var(--text); font:inherit; font-family:var(--mono); font-size:11px; padding:4px 7px; outline:none; min-width:0; width:0; }
+    .dcsw-field-unit { padding:4px 6px; font-size:9px; font-family:var(--mono); color:var(--text-dim); background:var(--surface3); border-left:1px solid var(--border); white-space:nowrap; flex-shrink:0; }
+    .dcsw-select { width:100%; appearance:none; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:var(--radius); padding:4px 8px; font:inherit; font-size:11px; cursor:pointer; outline:none; transition:border-color .15s; }
+    .dcsw-select:focus { border-color:var(--accent); }
+    .dcsw-select option { background:var(--surface2); }
+    .dcsw-meas { background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:10px 14px; display:flex; flex-direction:column; gap:9px; }
+    .dcsw-meas-hdr { font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--green); margin-bottom:2px; }
+    /* Measurement item list */
+    .dcsw-meas-list { display:flex; flex-direction:column; gap:8px; }
+    .dcsw-mi { background:var(--surface3); border:1px solid var(--border); border-radius:var(--radius); padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
+    .dcsw-mi-hdr { display:flex; align-items:center; gap:8px; }
+    .dcsw-mi-tag { font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; padding:2px 6px; border-radius:3px; }
+    .dcsw-mi-tag.meas   { color:var(--green);  background:rgba(52,211,153,.12); border:1px solid rgba(52,211,153,.25); }
+    .dcsw-mi-tag.action { color:var(--accent);  background:rgba(99,102,241,.12); border:1px solid rgba(99,102,241,.25); }
+    .dcsw-mi-remove { margin-left:auto; background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:16px; line-height:1; padding:0 2px; transition:color .15s; }
+    .dcsw-mi-remove:hover { color:var(--red); }
+    .dcsw-mi-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; }
+    /* Add-item buttons */
+    .dcsw-meas-add-row { display:flex; gap:8px; margin-top:2px; }
+    .dcsw-meas-add-btn { flex:1; padding:6px 0; font-size:11px; background:var(--surface2); border:1px dashed var(--border); border-radius:var(--radius); color:var(--text-dim); cursor:pointer; transition:border-color .15s, color .15s; text-align:center; }
+    .dcsw-meas-add-btn:hover { border-color:var(--accent); color:var(--text); }
 
     /* ── Utilities ───────────────────────────────────────────────── */
     .hidden { display:none !important; }
@@ -976,12 +1014,15 @@ function buildInstrumentGrid(instruments) {
       for (const instr of instrs) $grid.appendChild(buildGenericCard(instr));
     }
   }
+  // Cards are loaded but not yet connected — show amber pending dot
+  $grid.querySelectorAll(".card").forEach(c => c.classList.add("pending"));
 }
 
 function applyConnectionStatus(instruments) {
   for (const instr of instruments) {
     const card = document.querySelector(`.card[data-type="${instr.type}"]`);
     if (!card) continue;
+    card.classList.remove("pending");
     const sub = card.querySelector(".card-subtitle");
     if (instr.ok) { card.classList.add("connected"); if (sub) sub.textContent=instr.idn||instr.model; }
     else          { card.classList.add("error");     if (sub) sub.textContent=instr.error||"Connection failed"; }
@@ -991,6 +1032,8 @@ function applyConnectionStatus(instruments) {
 function resetCardStatus() {
   document.querySelectorAll(".card").forEach(c => {
     c.classList.remove("connected","error");
+    // If a workbench is still selected, go back to amber "pending" state
+    if (state.workbench) c.classList.add("pending");
     const sub = c.querySelector(".card-subtitle");
     if (sub) sub.textContent = c.dataset.model||"";
   });
@@ -1394,9 +1437,18 @@ function buildTestGrid(tests) {
   const grid = document.getElementById("test-grid");
   grid.innerHTML = "";
   for (const test of tests) {
-    const card = buildTestCard(test);
+    const card = test.custom_ui ? buildDcSweepCard(test) : buildTestCard(test);
     card.classList.add("hidden");
     grid.appendChild(card);
+    // Custom cards need post-append init (DOM elements must exist for getElementById)
+    if (test.custom_ui) {
+      // Reset measurement items to default whenever a fresh card is built
+      _dcSw.measItems = [
+        { kind:"measurement", instrument:"psu", measure:"voltage", samples:1, settle:0.1, label:"" },
+      ];
+      _dcSwRenderChannels();
+      _dcSwRenderMeasList();
+    }
   }
 
   // ── Build sidebar ──────────────────��─────────────────────────────────────
@@ -1516,7 +1568,7 @@ async function runTest(testId) {
   if (state.autoRunning) { toast("A test is already running","error"); return; }
   if (!state.connected)  { toast("Not connected to instruments","error"); return; }
 
-  const params = getTestParams(testId);
+  const params = testId === "dc_sweep" ? getDcSweepParams() : getTestParams(testId);
   state.autoRunning = true;
   state.autoTestId  = testId;
   state.autoRows    = [];
@@ -1759,6 +1811,450 @@ async function saveScanWorkbench() {
     await onWorkbenchSelect(name);
     closeScanModal();
   } catch(e) { toast("Save failed: "+e.message,"error"); }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// ── DC Sweep custom card ────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════
+
+const _dcSw = {
+  numCh:     1,
+  sweepMode: "simultaneous",
+  test:      null,
+  // Per-slot saved values — preserved when the user changes channel count
+  saved: Array.from({length: 4}, (_, n) => ({
+    resource: null,                          // null = "never set by user"
+    ch:       String(Math.min(n + 1, 4)),
+    v_start:  "0",
+    v_step:   n === 0 ? "0.1" : "1",
+    v_stop:   n === 0 ? "5"   : "3",
+    i_limit:  "0.5",
+    settle:   "0.1",
+  })),
+  // Measurement / action items
+  measItems: [
+    { kind:"measurement", instrument:"psu", measure:"voltage", samples:1, settle:0.1, label:"" },
+  ],
+};
+
+// ── Snapshot current DOM values into _dcSw.saved ────────────────────
+function _dcSwSnapshot() {
+  for (let n = 0; n < 4; n++) {
+    const s = _dcSw.saved[n];
+    const rEl = document.getElementById(`dcsw-ch${n}-instr`);
+    if (rEl) s.resource = rEl.value;
+    const map = {ch:"ch", vstart:"v_start", vstep:"v_step",
+                 vstop:"v_stop", ilim:"i_limit", settle:"settle"};
+    for (const [sfx, key] of Object.entries(map)) {
+      const el = document.getElementById(`dcsw-ch${n}-${sfx}`);
+      if (el) s[key] = el.value;
+    }
+  }
+}
+
+// ── Re-render channel columns ────────────────────────────────────────
+function _dcSwRenderChannels() {
+  const test = _dcSw.test;
+  const container = document.getElementById("dcsw-channels");
+  if (!container || !test) return;
+
+  _dcSwSnapshot();   // save current DOM values before wiping
+
+  container.innerHTML = "";
+
+  for (let n = 0; n < _dcSw.numCh; n++) {
+    const s = _dcSw.saved[n];
+
+    // Inherit instrument from CH0 when this slot has never been set
+    const defRes = s.resource !== null
+      ? s.resource
+      : (n > 0 ? (_dcSw.saved[0].resource ?? test.sources[0]?.value ?? "")
+               : (test.sources[0]?.value ?? ""));
+
+    // Column header
+    let hdr = `CH ${n + 1}`;
+    if (_dcSw.sweepMode === "nested") {
+      if (n === 0) hdr += " · inner";
+      else if (n === 1) hdr += " · outer";
+    }
+
+    // Instrument select
+    const instrHtml = test.sources.length
+      ? test.sources.map(src =>
+          `<option value="${escHtml(src.value)}"${src.value === defRes ? " selected" : ""}>${escHtml(src.label)}</option>`
+        ).join("")
+      : `<option value="">No PSU found</option>`;
+
+    // PSU output-channel select
+    const chHtml = ["1","2","3","4"].map(c =>
+      `<option${c === s.ch ? " selected" : ""}>${c}</option>`
+    ).join("");
+
+    const col = document.createElement("div");
+    col.className = "dcsw-ch";
+    col.innerHTML = `
+      <div class="dcsw-ch-hdr">${hdr}</div>
+      <div class="dcsw-field">
+        <span class="dcsw-field-label">Instr.</span>
+        <select class="dcsw-select" id="dcsw-ch${n}-instr">${instrHtml}</select>
+      </div>
+      <div class="dcsw-field">
+        <span class="dcsw-field-label">Output ch</span>
+        <select class="dcsw-select" id="dcsw-ch${n}-ch">${chHtml}</select>
+      </div>
+      <div class="dcsw-field">
+        <span class="dcsw-field-label">V start</span>
+        <div class="dcsw-field-iw">
+          <input class="dcsw-field-input" id="dcsw-ch${n}-vstart" type="number" step="any" value="${escHtml(s.v_start)}" />
+          <span class="dcsw-field-unit">V</span>
+        </div>
+      </div>
+      <div class="dcsw-field">
+        <span class="dcsw-field-label">V step</span>
+        <div class="dcsw-field-iw">
+          <input class="dcsw-field-input" id="dcsw-ch${n}-vstep" type="number" step="any" value="${escHtml(s.v_step)}" />
+          <span class="dcsw-field-unit">V</span>
+        </div>
+      </div>
+      <div class="dcsw-field">
+        <span class="dcsw-field-label">V stop</span>
+        <div class="dcsw-field-iw">
+          <input class="dcsw-field-input" id="dcsw-ch${n}-vstop" type="number" step="any" value="${escHtml(s.v_stop)}" />
+          <span class="dcsw-field-unit">V</span>
+        </div>
+      </div>
+      <div class="dcsw-field">
+        <span class="dcsw-field-label">I limit</span>
+        <div class="dcsw-field-iw">
+          <input class="dcsw-field-input" id="dcsw-ch${n}-ilim" type="number" step="any" value="${escHtml(s.i_limit)}" />
+          <span class="dcsw-field-unit">A</span>
+        </div>
+      </div>
+      <div class="dcsw-field">
+        <span class="dcsw-field-label">Settle</span>
+        <div class="dcsw-field-iw">
+          <input class="dcsw-field-input" id="dcsw-ch${n}-settle" type="number" step="any" value="${escHtml(s.settle)}" />
+          <span class="dcsw-field-unit">s</span>
+        </div>
+      </div>`;
+    container.appendChild(col);
+  }
+}
+
+// ── Measurement list helpers ─────────────────────────────────────────
+
+// Measure-type option lists
+const _MEAS_OPTS_PSU = [
+  ["voltage","Voltage (V)"], ["current","Current (A)"],
+];
+const _MEAS_OPTS_DMM = [
+  ["voltage","DC Voltage (V)"], ["current","DC Current (A)"],
+  ["vac","AC Voltage (V)"],     ["r","Resistance (Ω)"], ["r4w","4W Resistance (Ω)"],
+];
+
+// Read current DOM values back into _dcSw.measItems
+function _dcSwSnapshotMeasItems() {
+  const list = document.getElementById("dcsw-meas-list");
+  if (!list) return;
+  _dcSw.measItems = Array.from(list.querySelectorAll(".dcsw-mi")).map((el, i) => {
+    const kind = el.dataset.kind;
+    if (kind === "measurement") {
+      return {
+        kind:       "measurement",
+        instrument: el.querySelector(`[data-field="instrument"]`)?.value ?? "psu",
+        measure:    el.querySelector(`[data-field="measure"]`)?.value    ?? "voltage",
+        samples:    parseInt(el.querySelector(`[data-field="samples"]`)?.value  ?? "1"),
+        settle:     parseFloat(el.querySelector(`[data-field="settle"]`)?.value ?? "0.1"),
+        label:      el.querySelector(`[data-field="label"]`)?.value      ?? "",
+      };
+    } else {
+      const action = el.querySelector(`[data-field="action"]`)?.value ?? "screenshot";
+      return {
+        kind:   "action",
+        action: action,
+        script: action === "script" ? (el.querySelector(`[data-field="script"]`)?.value ?? "") : "",
+        label:  el.querySelector(`[data-field="label"]`)?.value ?? "",
+      };
+    }
+  });
+}
+
+// Build the option HTML for the measure-type dropdown in item i
+function _dcSwMeasTypeOpts(item) {
+  const isPsu = (item.instrument === "psu" || item.instrument === "");
+  const opts  = isPsu ? _MEAS_OPTS_PSU : _MEAS_OPTS_DMM;
+  return opts.map(([v, l]) =>
+    `<option value="${v}"${v === item.measure ? " selected" : ""}>${l}</option>`
+  ).join("");
+}
+
+// Build the instrument options HTML for a measurement item
+function _dcSwInstrOpts(item) {
+  const test  = _dcSw.test;
+  const sources = test ? test.meters : [];
+  // "PSU (built-in)" is always first
+  const base = `<option value="psu"${item.instrument === "psu" ? " selected" : ""}>PSU (built-in)</option>`;
+  const rest = sources
+    .filter(m => m.value !== "psu")
+    .map(m => `<option value="${escHtml(m.value)}"${m.value === item.instrument ? " selected" : ""}>${escHtml(m.label)}</option>`)
+    .join("");
+  return base + rest;
+}
+
+// Render a single measurement item element
+function _dcSwBuildMeasItem(item, i) {
+  const el = document.createElement("div");
+  el.className = "dcsw-mi";
+  el.dataset.kind = item.kind;
+
+  if (item.kind === "measurement") {
+    el.innerHTML = `
+      <div class="dcsw-mi-hdr">
+        <span class="dcsw-mi-tag meas">Measurement</span>
+        <button class="dcsw-mi-remove" onclick="_dcSwRemoveItem(${i})" title="Remove">×</button>
+      </div>
+      <div class="dcsw-mi-grid">
+        <div class="dcsw-field">
+          <span class="dcsw-field-label">Instrument</span>
+          <select class="dcsw-select" data-field="instrument"
+                  onchange="_dcSwMeasInstrChange(this)">${_dcSwInstrOpts(item)}</select>
+        </div>
+        <div class="dcsw-field">
+          <span class="dcsw-field-label">Measure</span>
+          <select class="dcsw-select" data-field="measure">${_dcSwMeasTypeOpts(item)}</select>
+        </div>
+        <div class="dcsw-field">
+          <span class="dcsw-field-label">Samples</span>
+          <div class="dcsw-field-iw">
+            <input class="dcsw-field-input" data-field="samples" type="number" min="1" step="1"
+                   value="${item.samples}" />
+          </div>
+        </div>
+        <div class="dcsw-field">
+          <span class="dcsw-field-label">Settle</span>
+          <div class="dcsw-field-iw">
+            <input class="dcsw-field-input" data-field="settle" type="number" step="0.01" min="0"
+                   value="${item.settle}" />
+            <span class="dcsw-field-unit">s</span>
+          </div>
+        </div>
+        <div class="dcsw-field" style="grid-column:1/-1;">
+          <span class="dcsw-field-label">Label</span>
+          <div class="dcsw-field-iw">
+            <input class="dcsw-field-input" data-field="label" type="text" placeholder="auto"
+                   value="${escHtml(item.label)}" />
+          </div>
+        </div>
+      </div>`;
+  } else {
+    // action
+    const isScript = (item.action === "script");
+    el.innerHTML = `
+      <div class="dcsw-mi-hdr">
+        <span class="dcsw-mi-tag action">Action</span>
+        <button class="dcsw-mi-remove" onclick="_dcSwRemoveItem(${i})" title="Remove">×</button>
+      </div>
+      <div class="dcsw-mi-grid">
+        <div class="dcsw-field" style="grid-column:1/-1;">
+          <span class="dcsw-field-label">Action</span>
+          <select class="dcsw-select" data-field="action"
+                  onchange="_dcSwActionTypeChange(this)">
+            <option value="screenshot"${!isScript ? " selected" : ""}>📷 Scope screenshot</option>
+            <option value="script"${isScript ? " selected" : ""}>⚙ External script</option>
+          </select>
+        </div>
+        <div class="dcsw-field" style="grid-column:1/-1; display:${isScript ? "" : "none"};"
+             data-script-row="1">
+          <span class="dcsw-field-label">Script</span>
+          <div class="dcsw-field-iw">
+            <input class="dcsw-field-input" data-field="script" type="text"
+                   placeholder="/path/to/script.py"
+                   value="${escHtml(item.script ?? "")}" />
+          </div>
+        </div>
+        <div class="dcsw-field" style="grid-column:1/-1;">
+          <span class="dcsw-field-label">Label</span>
+          <div class="dcsw-field-iw">
+            <input class="dcsw-field-input" data-field="label" type="text" placeholder="auto"
+                   value="${escHtml(item.label)}" />
+          </div>
+        </div>
+      </div>`;
+  }
+  return el;
+}
+
+// Rebuild the whole measurement list from _dcSw.measItems
+function _dcSwRenderMeasList() {
+  const list = document.getElementById("dcsw-meas-list");
+  if (!list) return;
+  list.innerHTML = "";
+  _dcSw.measItems.forEach((item, i) => {
+    list.appendChild(_dcSwBuildMeasItem(item, i));
+  });
+}
+
+// Add a new item (snapshots first to preserve edits)
+function _dcSwAddItem(kind) {
+  _dcSwSnapshotMeasItems();
+  if (kind === "measurement") {
+    _dcSw.measItems.push({ kind:"measurement", instrument:"psu", measure:"voltage",
+                           samples:1, settle:0.1, label:"" });
+  } else {
+    _dcSw.measItems.push({ kind:"action", action:"screenshot", script:"", label:"" });
+  }
+  _dcSwRenderMeasList();
+}
+
+// Remove item at index i
+function _dcSwRemoveItem(i) {
+  _dcSwSnapshotMeasItems();
+  _dcSw.measItems.splice(i, 1);
+  _dcSwRenderMeasList();
+}
+
+// Called when instrument dropdown inside a measurement item changes
+function _dcSwMeasInstrChange(sel) {
+  const mi   = sel.closest(".dcsw-mi");
+  const msel = mi.querySelector('[data-field="measure"]');
+  if (!msel) return;
+  const isPsu = (sel.value === "psu" || sel.value === "");
+  const prev  = msel.value;
+  const opts  = isPsu ? _MEAS_OPTS_PSU : _MEAS_OPTS_DMM;
+  msel.innerHTML = opts.map(([v, l]) =>
+    `<option value="${v}"${v === prev ? " selected" : ""}>${l}</option>`
+  ).join("");
+}
+
+// Called when action type dropdown changes — show/hide script row
+function _dcSwActionTypeChange(sel) {
+  const mi = sel.closest(".dcsw-mi");
+  const scriptRow = mi.querySelector('[data-script-row]');
+  if (scriptRow) scriptRow.style.display = sel.value === "script" ? "" : "none";
+}
+
+// ── Channel-count segmented control ─────────────────────────────────
+function dcSwSetNumCh(n) {
+  _dcSw.numCh = n;
+  document.querySelectorAll("#dcsw-nch-seg .dcsw-seg-btn").forEach((b, i) => {
+    b.classList.toggle("active", i + 1 === n);
+  });
+  // Mode selector only makes sense with 2+ channels
+  const modeWrap = document.getElementById("dcsw-mode-wrap");
+  if (modeWrap) modeWrap.style.display = n > 1 ? "" : "none";
+  _dcSwRenderChannels();
+}
+
+// ── Sweep-mode segmented control ────────────────────────────────────
+function dcSwSetMode(mode) {
+  _dcSw.sweepMode = mode;
+  document.getElementById("dcsw-mode-simul")?.classList.toggle("active", mode === "simultaneous");
+  document.getElementById("dcsw-mode-nested")?.classList.toggle("active", mode === "nested");
+  _dcSwRenderChannels();   // refresh labels (inner/outer annotations)
+}
+
+// ── Build the full DC Sweep card DOM ────────────────────────────────
+function buildDcSweepCard(test) {
+  _dcSw.test      = test;
+  _dcSw.numCh     = 1;
+  _dcSw.sweepMode = "simultaneous";
+  // Reset saved slots to defaults
+  _dcSw.saved = Array.from({length: 4}, (_, n) => ({
+    resource: null,
+    ch:       String(Math.min(n + 1, 4)),
+    v_start:  "0",
+    v_step:   n === 0 ? "0.1" : "1",
+    v_stop:   n === 0 ? "5"   : "3",
+    i_limit:  "0.5",
+    settle:   "0.1",
+  }));
+
+  const div = document.createElement("div");
+  div.className = "test-card";
+  div.id        = "test-card-dc_sweep";
+  div.innerHTML = `
+    <div class="test-card-header">
+      <div class="test-card-icon">⚡</div>
+      <div>
+        <div class="test-card-title">${escHtml(test.name)}</div>
+        <div class="test-card-desc">${escHtml(test.description)}</div>
+      </div>
+    </div>
+    <div class="test-card-body">
+
+      <!-- ── Top controls ─────────────────────────────────────── -->
+      <div class="dcsw-top">
+        <div>
+          <div class="section-label">Channels</div>
+          <div class="dcsw-seg" id="dcsw-nch-seg">
+            <button class="dcsw-seg-btn active" onclick="dcSwSetNumCh(1)">1</button>
+            <button class="dcsw-seg-btn"        onclick="dcSwSetNumCh(2)">2</button>
+            <button class="dcsw-seg-btn"        onclick="dcSwSetNumCh(3)">3</button>
+            <button class="dcsw-seg-btn"        onclick="dcSwSetNumCh(4)">4</button>
+          </div>
+        </div>
+        <div id="dcsw-mode-wrap" style="display:none;">
+          <div class="section-label">Sweep mode</div>
+          <div class="dcsw-seg">
+            <button class="dcsw-seg-btn active" id="dcsw-mode-simul"  onclick="dcSwSetMode('simultaneous')">Simultaneous</button>
+            <button class="dcsw-seg-btn"        id="dcsw-mode-nested" onclick="dcSwSetMode('nested')">Nested</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Channel columns (rendered dynamically) ───────────── -->
+      <div class="dcsw-channels" id="dcsw-channels"></div>
+
+      <!-- ── Measurement / action list ──────────────────────────── -->
+      <div class="dcsw-meas">
+        <div class="dcsw-meas-hdr">Measurements &amp; Actions</div>
+        <div class="dcsw-meas-list" id="dcsw-meas-list"></div>
+        <div class="dcsw-meas-add-row">
+          <button class="dcsw-meas-add-btn" onclick="_dcSwAddItem('measurement')">＋ Measurement</button>
+          <button class="dcsw-meas-add-btn" onclick="_dcSwAddItem('action')">＋ Action</button>
+        </div>
+      </div>
+
+      <!-- ── Progress bar ─────────────────────────────────────── -->
+      <div class="test-progress" id="tprog-dc_sweep">
+        <div class="progress-track">
+          <div class="progress-fill" id="tprog-fill-dc_sweep"></div>
+        </div>
+        <div class="progress-label" id="tprog-label-dc_sweep">Running…</div>
+      </div>
+
+      <!-- ── Run / Stop actions ───────────────────────────────── -->
+      <div class="test-actions">
+        <button class="btn btn-primary" id="trun-dc_sweep"
+                onclick="runTest('dc_sweep')">▶ Run</button>
+        <button class="btn btn-danger hidden" id="tstop-dc_sweep"
+                onclick="stopTest()">■ Stop</button>
+      </div>
+
+    </div>`;
+  return div;
+}
+
+// ── Collect params from the DC sweep card ───────────────────────────
+function getDcSweepParams() {
+  // Snapshot measurement list DOM → _dcSw.measItems
+  _dcSwSnapshotMeasItems();
+
+  const p = {
+    num_channels: _dcSw.numCh,
+    sweep_mode:   _dcSw.sweepMode,
+    measurements: JSON.stringify(_dcSw.measItems),
+  };
+  for (let n = 0; n < _dcSw.numCh; n++) {
+    p[`ch${n}_resource`] = document.getElementById(`dcsw-ch${n}-instr`)?.value  ?? "";
+    p[`ch${n}_ch`]       = parseInt(document.getElementById(`dcsw-ch${n}-ch`)?.value    ?? "1");
+    p[`ch${n}_v_start`]  = parseFloat(document.getElementById(`dcsw-ch${n}-vstart`)?.value ?? "0");
+    p[`ch${n}_v_step`]   = parseFloat(document.getElementById(`dcsw-ch${n}-vstep`)?.value  ?? "0.1");
+    p[`ch${n}_v_stop`]   = parseFloat(document.getElementById(`dcsw-ch${n}-vstop`)?.value  ?? "5");
+    p[`ch${n}_i_limit`]  = parseFloat(document.getElementById(`dcsw-ch${n}-ilim`)?.value   ?? "0.5");
+    p[`ch${n}_settle`]   = parseFloat(document.getElementById(`dcsw-ch${n}-settle`)?.value ?? "0.1");
+  }
+  return p;
 }
 
 // ── Init ──────────────────────────────────────────────────────────
