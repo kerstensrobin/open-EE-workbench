@@ -14,6 +14,7 @@ Usage
 
 import argparse
 import atexit
+import itertools
 import json as _json
 import os
 import subprocess
@@ -1262,8 +1263,28 @@ def api_automation_run():
             return None
 
         def _exec_all(step_ctx):
-            """Run every measurement/action item; return list of values."""
-            return [_exec_item(item, step_ctx) for item in meas_items]
+            """Run every measurement/action item; return list of values.
+
+            Items with a 'trigger' field other than 'every' are skipped
+            unless the matching loop level changed this step.
+            'every'  → always execute (default)
+            'inner'  → only when the inner loop ticks (always true in nested)
+            'outer'  → only when the outer loop changes
+            'mid'    → only when any mid-level loop changes
+            'midN'   → only when mid level N changes  (mid1, mid2)
+            """
+            level_changed = step_ctx.get("_level_changed", "inner")
+            results = []
+            for item in meas_items:
+                trigger = (item.get("trigger") or "every").strip().lower()
+                if trigger != "every" and trigger != level_changed:
+                    # For broad triggers: 'outer' fires when outer changed;
+                    # 'mid' fires for any mid* level.
+                    if not (trigger == "mid" and level_changed.startswith("mid")):
+                        results.append(None)
+                        continue
+                results.append(_exec_item(item, step_ctx))
+            return results
 
         # ── Build result columns ──────────────────────────────────────────────
         meas_cols = [_auto_label(item, i) for i, item in enumerate(meas_items)]
@@ -1319,48 +1340,98 @@ def api_automation_run():
                 _teardown_ch(h)
 
         # ════════════════════════════════════════════════════════════════════
-        # NESTED: CH 1 = inner (fast sweep), CH 2 = outer (one step per inner)
-        # Produces a family of curves, e.g. I-V at multiple bias points.
+        # NESTED: CH1 = inner (fastest loop), CHN = outer (slowest loop).
+        # Generalised to 2–4 channels using itertools.product.
+        # Naming: inner / mid / mid1,mid2 / outer  (by channel index)
         # ════════════════════════════════════════════════════════════════════
         elif sweep_mode == "nested" and num_ch >= 2:
-            inner      = ch_handles[0]
-            outer      = ch_handles[1]
-            vols_inner = _make_vols(inner["cfg"])
-            vols_outer = _make_vols(outer["cfg"])
-            total      = len(vols_inner) * len(vols_outer)
 
-            cols = ["v_outer_set_V", "v_inner_set_V"] + meas_cols
+            def _nest_name(n):
+                """n=0 is inner (fastest), n=num_ch-1 is outer (slowest)."""
+                if n == 0:             return "inner"
+                if n == num_ch - 1:   return "outer"
+                mid_n = n             # 1, 2, …
+                if num_ch == 3:       return "mid"
+                return f"mid{mid_n}"  # mid1, mid2 for 4-ch
+
+            # Volumes per channel, index 0 = inner
+            vols_per_ch = [_make_vols(h["cfg"]) for h in ch_handles]
+            # For itertools.product we iterate outermost first → reversed
+            vols_outer_first   = list(reversed(vols_per_ch))
+            handles_outer_first = list(reversed(ch_handles))
+
+            total = 1
+            for v in vols_per_ch:
+                total *= len(v)
+
+            # Column order: outermost voltage first, innermost last
+            # e.g. 3-ch: ["v_outer_V", "v_mid_V", "v_inner_V"]
+            cols = [f"v_{_nest_name(n)}_V"
+                    for n in reversed(range(num_ch))] + meas_cols
+
+            shape_str = "×".join(str(len(v)) for v in vols_outer_first)
             _emit_progress(
-                f"DC Sweep — nested "
-                f"{len(vols_outer)}×{len(vols_inner)} = {total} pts")
+                f"DC Sweep — nested {num_ch}-ch  "
+                f"{shape_str} = {total} pts")
             try:
-                _setup_ch(outer)
-                _setup_ch(inner)
+                for h in ch_handles:
+                    _setup_ch(h)
             except Exception as exc:
                 _done([], cols, f"Setup failed: {exc}"); return
 
-            step = 0
-            for v_out in vols_outer:
+            step       = 0
+            prev_combo = None
+
+            for combo in itertools.product(*vols_outer_first):
+                # combo = (v_outer, [v_mid…], v_inner)
                 if _auto_stop.is_set():
                     _emit_progress("Stopped by user"); break
-                _set_v(outer, v_out)
-                _emit_progress(f"  outer = {v_out:.4g} V — sweeping inner…")
-                time.sleep(outer["cfg"]["settle"])
 
-                for v_in in vols_inner:
-                    if _auto_stop.is_set():
-                        break
-                    _set_v(inner, v_in)
-                    step += 1
-                    step_ctx  = {"step": step, "ch1": round(v_in, 6),
-                                 "ch2": round(v_out, 6)}
-                    meas_vals = _exec_all(step_ctx)
-                    row = [round(v_out, 6), round(v_in, 6)] + meas_vals
-                    rows.append(row)
-                    _emit_row(row, cols, step / total)
+                # Determine which level changed since last step
+                if prev_combo is None:
+                    first_changed = 0        # everything is new
+                else:
+                    first_changed = next(
+                        (i for i, (a, b) in enumerate(zip(combo, prev_combo))
+                         if a != b),
+                        num_ch - 1)
 
-            _teardown_ch(inner)
-            _teardown_ch(outer)
+                # Set only channels that changed; settle all but innermost
+                for i in range(first_changed, num_ch):
+                    h = handles_outer_first[i]
+                    _set_v(h, combo[i])
+                    if i < num_ch - 1:          # not the innermost
+                        time.sleep(h["cfg"]["settle"])
+
+                prev_combo = combo
+                step += 1
+
+                # step_ctx: ch1 = inner voltage, chN = outer voltage
+                step_ctx = {"step": step}
+                for i, v in enumerate(reversed(combo)):   # i=0 → inner
+                    step_ctx[f"ch{i + 1}"] = round(v, 6)
+
+                # level_changed: 0 = outer changed, num_ch-1 = only inner changed
+                # expressed as the *name* of the level that changed most
+                step_ctx["_level_changed"] = _nest_name(num_ch - 1 - first_changed)
+
+                meas_vals = _exec_all(step_ctx)
+                row       = [round(v, 6) for v in combo] + meas_vals
+                rows.append(row)
+                _emit_row(row, cols, step / total)
+
+                # Announce whenever an outer level completes its inner pass
+                if first_changed == 0 and step > 1:
+                    # inner just ticked — no announcement needed
+                    pass
+                elif first_changed < num_ch - 1:
+                    changed_name = _nest_name(num_ch - 1 - first_changed)
+                    changed_v    = combo[first_changed]
+                    _emit_progress(
+                        f"  {changed_name} = {changed_v:.4g} V — sweeping inner…")
+
+            for h in ch_handles:
+                _teardown_ch(h)
 
         else:
             _done([], [], f"Unknown sweep_mode {sweep_mode!r}"); return

@@ -1911,8 +1911,11 @@ function _dcSwRenderChannels() {
     // Column header
     let hdr = `CH ${n + 1}`;
     if (_dcSw.sweepMode === "nested") {
-      if (n === 0) hdr += " · inner";
-      else if (n === 1) hdr += " · outer";
+      const num = _dcSw.numCh;
+      if      (n === 0)        hdr += " · Inner";
+      else if (n === num - 1)  hdr += " · Outer";
+      else if (num === 3)      hdr += " · Mid";
+      else                     hdr += ` · Mid ${n}`;   // Mid 1, Mid 2 for 4-ch
     }
 
     // Instrument select
@@ -1995,6 +1998,7 @@ function _dcSwSnapshotMeasItems() {
   if (!list) return;
   _dcSw.measItems = Array.from(list.querySelectorAll(".dcsw-mi")).map((el, i) => {
     const kind = el.dataset.kind;
+    const trigger = el.querySelector(`[data-field="trigger"]`)?.value ?? "every";
     if (kind === "measurement") {
       return {
         kind:       "measurement",
@@ -2003,6 +2007,7 @@ function _dcSwSnapshotMeasItems() {
         samples:    parseInt(el.querySelector(`[data-field="samples"]`)?.value  ?? "1"),
         settle:     parseFloat(el.querySelector(`[data-field="settle"]`)?.value ?? "0.1"),
         label:      el.querySelector(`[data-field="label"]`)?.value      ?? "",
+        trigger,
       };
     } else {
       const action = el.querySelector(`[data-field="action"]`)?.value ?? "screenshot";
@@ -2014,9 +2019,28 @@ function _dcSwSnapshotMeasItems() {
         scpi_command:    action === "scpi"   ? (el.querySelector(`[data-field="scpi_command"]`)?.value    ?? "") : "",
         scpi_settle:     action === "scpi"   ? parseFloat(el.querySelector(`[data-field="scpi_settle"]`)?.value ?? "0.1") : 0,
         label:           el.querySelector(`[data-field="label"]`)?.value ?? "",
+        trigger,
       };
     }
   });
+}
+
+// Build trigger options based on current sweep mode / channel count
+function _dcSwTriggerOpts(selected) {
+  const sel = selected ?? "every";
+  const n   = _dcSw.numCh;
+  const nested = _dcSw.sweepMode === "nested" && n >= 2;
+
+  const opts = [["every", "Every step"]];
+  if (nested) {
+    opts.push(["inner", "Inner loop end"]);
+    if (n === 3) opts.push(["mid",  "Mid loop end"]);
+    if (n >= 4)  opts.push(["mid1", "Mid 1 loop end"], ["mid2", "Mid 2 loop end"]);
+    opts.push(["outer", "Outer loop end"]);
+  }
+  return opts.map(([v, l]) =>
+    `<option value="${v}"${v === sel ? " selected" : ""}>${l}</option>`
+  ).join("");
 }
 
 // Build the option HTML for the measure-type dropdown in item i
@@ -2095,6 +2119,10 @@ function _dcSwBuildMeasItem(item, i) {
                    value="${escHtml(item.label)}" />
           </div>
         </div>
+        <div class="dcsw-field" style="grid-column:1/-1;">
+          <span class="dcsw-field-label">Trigger</span>
+          <select class="dcsw-select" data-field="trigger">${_dcSwTriggerOpts(item.trigger)}</select>
+        </div>
       </div>`;
   } else {
     // action
@@ -2163,6 +2191,10 @@ function _dcSwBuildMeasItem(item, i) {
                    value="${escHtml(item.label)}" />
           </div>
         </div>
+        <div class="dcsw-field" style="grid-column:1/-1;">
+          <span class="dcsw-field-label">Trigger</span>
+          <select class="dcsw-select" data-field="trigger">${_dcSwTriggerOpts(item.trigger)}</select>
+        </div>
       </div>`;
   }
   return el;
@@ -2229,6 +2261,8 @@ function dcSwSetNumCh(n) {
   const modeWrap = document.getElementById("dcsw-mode-wrap");
   if (modeWrap) modeWrap.style.display = n > 1 ? "" : "none";
   _dcSwRenderChannels();
+  _dcSwSnapshotMeasItems();   // preserve edits, then re-render trigger dropdowns
+  _dcSwRenderMeasList();
 }
 
 // ── Sweep-mode segmented control ────────────────────────────────────
@@ -2237,6 +2271,8 @@ function dcSwSetMode(mode) {
   document.getElementById("dcsw-mode-simul")?.classList.toggle("active", mode === "simultaneous");
   document.getElementById("dcsw-mode-nested")?.classList.toggle("active", mode === "nested");
   _dcSwRenderChannels();   // refresh labels (inner/outer annotations)
+  _dcSwSnapshotMeasItems();
+  _dcSwRenderMeasList();   // refresh trigger dropdowns (options depend on mode)
 }
 
 // ── Build the full DC Sweep card DOM ────────────────────────────────
