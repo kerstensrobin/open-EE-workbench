@@ -25,12 +25,10 @@ _IMAGE_FORMATS = [
     (b'BM',      '.bmp'),
 ]
 
-SCREENSHOT_TIMEOUT_MS = 10_000
-# The Rigol DS1000Z (and likely other USBTMC scopes) only respond to
-# REQUEST_DEV_DEP_MSG_IN in small increments via pyvisa-py. Read in 4 KB
-# chunks until we receive a short packet (end of data).
+SCREENSHOT_TIMEOUT_MS = 20_000   # 20 s — PNG over USBTMC is usually <2 s
+# USBTMC delivers data in multiple bulk transfers; 4 KB is a safe chunk size.
+# We read until we get a short (< USBTMC_CHUNK_SIZE) packet which signals EOF.
 USBTMC_CHUNK_SIZE = 4096
-RENDER_SLEEP = 1.0  # seconds for scope to finish rendering before first read
 
 
 def _detect_format(data: bytes) -> tuple[int, str]:
@@ -42,24 +40,37 @@ def _detect_format(data: bytes) -> tuple[int, str]:
     return 0, ''
 
 
-def _screenshot_steps(idn: str) -> list[tuple[str, str]] | None:
-    """Return the screenshot step list for this IDN, or None if unsupported.
+def _run_scpi_writes(scope, family, op: str) -> bool:
+    """Send all write-type steps for an operation.  Returns True on success."""
+    if not (classify and get_command and family):
+        return False
+    try:
+        for action, scpi in get_command(family, op):
+            if action == 'write':
+                scope.write(scpi)
+        return True
+    except (KeyError, Exception):
+        return False
+
+
+def _screenshot_steps(family) -> list[tuple[str, str]] | None:
+    """Return the screenshot step list for this family, or None if unsupported.
 
     Falls back to a single :DISPlay:DATA? raw_query for unrecognised instruments.
     Returns None only when the instrument is known and screenshot is explicitly null.
     """
-    if classify and get_command:
-        family = classify(idn)
-        if family:
-            try:
-                return get_command(family, 'screenshot')
-            except KeyError:
-                return None  # known scope, screenshot explicitly unsupported
+    if get_command and family:
+        try:
+            return get_command(family, 'screenshot')
+        except KeyError:
+            return None   # known scope, screenshot explicitly unsupported
     return [('raw_query', ':DISPlay:DATA?')]
 
 
 def get_screenshot(scope, idn: str, filename: str):
-    steps = _screenshot_steps(idn)
+    family = classify(idn) if classify else None
+
+    steps = _screenshot_steps(family)
     if steps is None:
         raise RuntimeError(
             f"Screenshot not supported over VISA for this scope ({idn}).\n"
@@ -75,37 +86,55 @@ def get_screenshot(scope, idn: str, filename: str):
     if raw_idx is None:
         raise RuntimeError(f"Screenshot command for {idn} has no data-read step.")
 
-    pre_steps  = [(a, s) for a, s in steps[:raw_idx]      if a == 'write']
+    pre_steps  = [(a, s) for a, s in steps[:raw_idx]     if a == 'write']
     read_cmd   = steps[raw_idx][1]
-    post_steps = [(a, s) for a, s in steps[raw_idx + 1:]  if a == 'write']
+    post_steps = [(a, s) for a, s in steps[raw_idx + 1:] if a == 'write']
 
-    scope.timeout = SCREENSHOT_TIMEOUT_MS
+    # Stop the scope before capturing.
+    # In run/waiting-for-trigger state the scope holds :DISPlay:DATA? until the
+    # next complete acquisition — which may never arrive (e.g. DUT is off at 0 V).
+    # :STOP freezes the display and guarantees an immediate response.
+    scope_stopped = _run_scpi_writes(scope, family, 'stop')
+    if scope_stopped:
+        time.sleep(0.15)   # let display latch the frozen frame
 
-    # USBTMC delivers data in small increments; loop until a short packet signals EOF.
-    # VXI-11 (TCPIP inst0) and raw SOCKET connections return the full payload in one read.
     is_usbtmc = scope.resource_name.upper().startswith('USB')
     if is_usbtmc:
         scope.chunk_size = USBTMC_CHUNK_SIZE
 
-    for _action, scpi in pre_steps:
-        scope.write(scpi)
+    orig_timeout = scope.timeout
+    try:
+        scope.timeout = SCREENSHOT_TIMEOUT_MS
 
-    time.sleep(RENDER_SLEEP)
-    scope.write(read_cmd)
+        for _action, scpi in pre_steps:
+            scope.write(scpi)
 
-    if is_usbtmc:
-        chunks = []
-        while True:
-            chunk = scope.read_raw()
-            chunks.append(chunk)
-            if len(chunk) < USBTMC_CHUNK_SIZE:
-                break  # short packet signals end of transfer
-        data = b''.join(chunks)
-    else:
-        data = scope.read_raw()
+        scope.write(read_cmd)
 
-    for _action, scpi in post_steps:
-        scope.write(scpi)
+        if is_usbtmc:
+            # USBTMC delivers large payloads in multiple bulk transfers.
+            # Read 4 KB chunks until a short packet signals end-of-transfer.
+            chunks = []
+            while True:
+                chunk = scope.read_raw()
+                chunks.append(chunk)
+                if len(chunk) < USBTMC_CHUNK_SIZE:
+                    break
+            data = b''.join(chunks)
+        else:
+            data = scope.read_raw()
+
+        for _action, scpi in post_steps:
+            scope.write(scpi)
+
+    finally:
+        try:
+            scope.timeout = orig_timeout
+        except Exception:
+            pass
+        # Always resume acquisition after the capture attempt
+        if scope_stopped:
+            _run_scpi_writes(scope, family, 'run')
 
     offset, detected_ext = _detect_format(data)
     data = data[offset:]
@@ -150,7 +179,7 @@ def main():
 
     # Resolve the final filename (extension may be added after format detection)
     base, ext = os.path.splitext(args.filename)
-    check_path = args.filename if ext else args.filename  # check before we know extension
+    check_path = args.filename if ext else args.filename
 
     if os.path.exists(check_path):
         try:
@@ -164,12 +193,6 @@ def main():
             rm.close()
             sys.exit(0)
 
-    # Optional: annotation and channel labels
-    # scope.write(':DISPlay:ANNotation:TEXT "my note"')
-    # scope.write(':DISPlay:ANNotation ON')
-    # scope.write(':CHANnel1:LABel "CH1"')
-    # scope.write(':DISPlay:LABel ON')
-
     try:
         get_screenshot(scope, idn, args.filename)
     except RuntimeError as exc:
@@ -180,7 +203,7 @@ def main():
     except pyvisa.errors.VisaIOError as exc:
         if 'timeout' in str(exc).lower() or 'VI_ERROR_TMO' in str(exc):
             print("Error: Scope did not respond in time. "
-                  "Check that the scope is ready and (if applicable) a USB stick is inserted.")
+                  "Check that the scope is ready and try again.")
         else:
             print(f"Error: VISA communication failed — {exc}")
         scope.close()

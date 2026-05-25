@@ -466,17 +466,28 @@ def api_screenshot():
         cmd_ = steps[raw_idx][1]
         post = [(a, s) for a, s in steps[raw_idx + 1:] if a == "write"]
 
+        # Stop the scope before capturing so :DISPlay:DATA? returns immediately
+        # instead of blocking until the next triggered acquisition.
+        scope_stopped = False
+        try:
+            _run_steps(res, get_command(fam, "stop"))
+            scope_stopped = True
+            time.sleep(0.15)    # let display latch the frozen frame
+        except Exception:
+            pass                # scope family has no stop cmd — proceed anyway
+
         orig_timeout = res.timeout
         try:
-            res.timeout = 20_000    # screenshots can take several seconds
+            res.timeout = 20_000    # PNG over USB typically <2 s; keep headroom
 
             for _, s in pre:
                 res.write(s)
-            time.sleep(1.0)         # let scope compose the image before we ask
 
             res.write(cmd_)
-            # pyvisa's read_raw() handles USBTMC end-of-transfer natively;
-            # manual chunking is unreliable (hangs when data is a multiple of chunk_size).
+            # pyvisa's read_raw() handles USBTMC end-of-transfer natively.
+            # We request PNG (set in instruments.json) so the payload is
+            # ~100-400 KB rather than BMP24's ~1.15 MB, which avoids the
+            # PyVISA-Py 1 MB read-buffer limit over USBTMC.
             data = res.read_raw()
 
             for _, s in post:
@@ -490,6 +501,12 @@ def api_screenshot():
         finally:
             try: res.timeout = orig_timeout
             except Exception: pass
+            # Always resume acquisition after the capture attempt
+            if scope_stopped:
+                try:
+                    _run_steps(res, get_command(fam, "run"))
+                except Exception:
+                    pass
 
         if not data:
             sio.emit("screenshot_done", {"error": "Scope returned empty data"}); return

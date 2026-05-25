@@ -188,14 +188,15 @@
           "query": ":MEASure:ITEM? PREShoot,CHANnel{ch}"
         },
         "screenshot": {
-          "raw_query": ":DISPlay:DATA?"
+          "raw_query": ":DISPlay:DATA? ON,OFF,PNG"
         },
         "measure_clear_all": ":MEASure:CLEar ALL",
         "annotation_text": null,
         "annotation_on": null,
         "annotation_off": null,
         "labels_on": null,
-        "labels_off": null
+        "labels_off": null,
+        "channel_label": null
       }
     },
     {

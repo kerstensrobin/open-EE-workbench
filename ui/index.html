@@ -1236,20 +1236,28 @@ function _probeOptHTML(selected=1) {
   }).join("");
 }
 
-function _scopeChRowsHTML(nCh) {
+// Families known to NOT support :CHANnel<n>:LABel (command is null in instruments.json)
+const SCOPE_NO_LABEL_FAMILIES = new Set([
+  'rigol_ds1000z','rigol_ds1000z_plus','rigol_ds6000z','rigol_mso5000',
+]);
+
+function _scopeChRowsHTML(nCh, hasLabel=false) {
   const chColors = ["ch1","ch2","ch3","ch4","ch5","ch6","ch7","ch8"];
   let html = "";
   for (let i=1;i<=nCh;i++) {
     const cc = chColors[i-1]||"";
+    const labelInp = hasLabel
+      ? `<input class="scope-ch-label-inp" type="text" maxlength="4" placeholder="label"
+               title="Channel label (shown on scope display; max 4 chars)"
+               onkeydown="if(event.key==='Enter')scopeSetLabel(this,${i})"
+               onblur="scopeSetLabel(this,${i})"/>`
+      : '';
     html += `<div class="scope-ch-row">
       <span class="scope-ch-badge ${cc}">CH${i}</span>
       <button class="scope-ch-tog on" onclick="scopeToggleCh(this,${i})">
         <span class="tog-dot"></span>ON
       </button>
-      <input class="scope-ch-label-inp" type="text" maxlength="4" placeholder="label"
-             title="Channel label (shown on scope display; max 4 chars)"
-             onkeydown="if(event.key==='Enter')scopeSetLabel(this,${i})"
-             onblur="scopeSetLabel(this,${i})"/>
+      ${labelInp}
       <select class="scope-sel" title="V/div" onchange="scopeSet('channel_scale',{ch:${i},value:this.value})">
         ${scopeOptHTML(SCOPE_VDIV_VALS, fmtVDiv, 1)}
       </select>
@@ -1277,7 +1285,8 @@ function _scopeChSelOpts(nCh) {
 function scopeSetChannelCount(sel) {
   const n = parseInt(sel.value);
   const grid = document.getElementById("scope-ch-grid");
-  if (grid) grid.innerHTML = _scopeChRowsHTML(n);
+  const hasLabel = grid ? grid.dataset.hasLabel === "1" : false;
+  if (grid) grid.innerHTML = _scopeChRowsHTML(n, hasLabel);
   // update channel selector in the add-measurement row
   const addCh = document.getElementById("scope-add-ch-sel");
   if (addCh) addCh.innerHTML = _scopeChSelOpts(n);
@@ -1350,6 +1359,9 @@ function buildScopeCard(instr) {
     return 4;
   })();
 
+  // Channel labels are NOT supported on DS1000Z (no :CHANnel<n>:LABel command)
+  const hasLabel = !SCOPE_NO_LABEL_FAMILIES.has(instr.family_id||"");
+
   const chCountOpts = [1,2,4,8].map(n=>
     `<option value="${n}"${n===nCh?" selected":""}>${n} ch</option>`).join("");
   const measOpts = SCOPE_MEASURES.map(m=>`<option value="${m.op}">${m.label}</option>`).join("");
@@ -1371,7 +1383,7 @@ function buildScopeCard(instr) {
         <select class="scope-sel" style="flex:0 0 auto;width:auto;" title="Number of channels"
                 onchange="scopeSetChannelCount(this)">${chCountOpts}</select>
       </div>
-      <div class="scope-ch-grid" id="scope-ch-grid">${_scopeChRowsHTML(nCh)}</div>
+      <div class="scope-ch-grid" id="scope-ch-grid" data-has-label="${hasLabel?'1':'0'}">${_scopeChRowsHTML(nCh, hasLabel)}</div>
       <div class="section-label mt4">Timebase</div>
       <div class="scope-tb-row">
         <span class="scope-tb-label">s/div</span>

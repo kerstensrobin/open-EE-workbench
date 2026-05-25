@@ -1,20 +1,9 @@
 {
   "schema_version": "1.0",
   "name": null,
-  "created_at": "2026-05-24T18:53:59.312102+00:00",
+  "created_at": "2026-05-25T14:55:36.581440+00:00",
   "host": "robin-unix",
   "instruments": [
-    {
-      "resource": "ASRL/dev/ttyUSB0::INSTR",
-      "connection": "Serial",
-      "manufacturer": "Keithley instruments",
-      "model": "2231A-30-3",
-      "serial": "802196102777770069",
-      "firmware": "1.04-0.01",
-      "type": "psu",
-      "role": "psu",
-      "family_id": "keithley_2200psu"
-    },
     {
       "resource": "USB0::6833::1230::DS1ZA171307147::0::INSTR",
       "connection": "USB",
@@ -27,7 +16,5 @@
       "family_id": "rigol_ds1000z"
     }
   ],
-  "suggested_tests": [
-    "psu_ramp_capture"
-  ]
+  "suggested_tests": []
 }
