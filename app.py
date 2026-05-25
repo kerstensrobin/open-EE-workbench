@@ -50,6 +50,80 @@ try:
 except ImportError:
     PYVISA_OK = False
 
+# ── PyVISA-Py USBTMC bug fix ──────────────────────────────────────────────────
+# pyvisa-py ≤ 0.8.1: USBTMC.read() inner while uses `or` instead of `and`,
+# causing it to call raw_read() without a new REQUEST when the device sends
+# exactly wMaxPacketSize-byte chunks (e.g. Rigol DS1000Z :DISPlay:DATA?).
+# Fix: replace `or` with `and` so the loop only continues when BOTH conditions
+# are true: last USB packet was full-sized AND we still need more bytes.
+def _apply_usbtmc_patch():
+    import math
+    try:
+        from pyvisa_py.protocols import usbtmc as _usbtmc_mod
+        from pyvisa_py.protocols.usbtmc import BulkInMessage, USBRaw, USBTMC
+        import usb.core as _usb_core
+    except ImportError:
+        return
+
+    def _patched_read(self, size):
+        usbtmc_header_size = 12
+        eom = False
+        raw_read  = USBRaw.read.__get__(self, USBTMC)
+        raw_write = USBRaw.write.__get__(self, USBTMC)
+        received_message = bytearray()
+        while not eom:
+            received_transfer = bytearray()
+            self._btag = (self._btag % 255) + 1
+            req = BulkInMessage.build_array(self._btag, size, None)
+            raw_write(req)
+            try:
+                chunk_size = (
+                    math.floor(
+                        (size + usbtmc_header_size) / self.usb_recv_ep.wMaxPacketSize
+                    ) + 1
+                ) * self.usb_recv_ep.wMaxPacketSize
+                resp = raw_read(chunk_size)
+                if len(resp) < 12:
+                    # ZLP / short response — scope not ready, outer loop retries.
+                    continue
+                response = BulkInMessage.from_bytes(resp)
+                received_transfer.extend(response.data)
+                if len(received_transfer) >= response.transfer_size:
+                    eom = response.transfer_attributes & 1
+                if not eom and len(received_transfer) >= size:
+                    eom = True
+                else:
+                    while (
+                        (len(resp) % self.usb_recv_ep.wMaxPacketSize) == 0
+                        and len(received_transfer) < response.transfer_size  # AND (was OR)
+                    ) and not eom:
+                        chunk_size = (
+                            math.floor(
+                                (size - len(received_transfer))
+                                / self.usb_recv_ep.wMaxPacketSize
+                            ) + 1
+                        ) * self.usb_recv_ep.wMaxPacketSize
+                        resp = raw_read(chunk_size)
+                        received_transfer.extend(resp)
+                    if len(received_transfer) >= response.transfer_size:
+                        eom = response.transfer_attributes & 1
+                    if not eom and len(received_transfer) >= size:
+                        eom = True
+                received_message.extend(received_transfer[: response.transfer_size])
+            except (_usb_core.USBError, ValueError):
+                self._abort_bulk_in(self._btag)
+                raise
+        return bytes(received_message)
+
+    _usbtmc_mod.USBTMC.read = _patched_read
+
+if PYVISA_OK:
+    _apply_usbtmc_patch()
+
+# chunk size for binary screenshot reads — must exceed the image size so
+# USBTMC.read() accumulates all chunks and returns the full image in one call.
+_SCREENSHOT_CHUNK_SIZE = 2 * 1024 * 1024   # 2 MB
+
 from flask import Flask, jsonify, request, send_from_directory
 from flask_socketio import SocketIO
 
@@ -96,7 +170,16 @@ def _run_steps(resource, steps: list) -> object:
             result = resource.query(scpi).strip()
         elif action == "raw_query":
             resource.write(scpi)
-            result = resource.read_raw()
+            # Use a large chunk_size so USBTMC.read() accumulates the full
+            # binary payload (e.g. 1.15 MB BMP) before returning.
+            orig_chunk = getattr(resource, 'chunk_size', None)
+            try:
+                resource.chunk_size = _SCREENSHOT_CHUNK_SIZE
+                result = resource.read_raw()
+            finally:
+                if orig_chunk is not None:
+                    try: resource.chunk_size = orig_chunk
+                    except Exception: pass
     return result
 
 
@@ -478,14 +561,23 @@ def api_screenshot():
 
         orig_timeout = res.timeout
         try:
-            res.timeout = 20_000    # screenshots can take several seconds
+            res.timeout = 35_000    # BMP over USB takes ~16 s; 35 s gives margin
 
             for _, s in pre:
                 res.write(s)
-            time.sleep(0.5)         # let scope compose the image
 
             res.write(cmd_)
-            data = res.read_raw()
+            time.sleep(0.5)         # let scope compose the image before REQUESTing data
+            # chunk_size is set inside _run_steps; here we call read_raw directly
+            # so we must set it ourselves.
+            orig_chunk = getattr(res, 'chunk_size', None)
+            try:
+                res.chunk_size = _SCREENSHOT_CHUNK_SIZE
+                data = res.read_raw()
+            finally:
+                if orig_chunk is not None:
+                    try: res.chunk_size = orig_chunk
+                    except Exception: pass
 
             for _, s in post:
                 try: res.write(s)

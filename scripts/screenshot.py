@@ -2,6 +2,7 @@
 # nacho.works — capture a screenshot from the active workbench scope
 
 import argparse
+import math
 import os
 import sys
 import time
@@ -25,11 +26,112 @@ _IMAGE_FORMATS = [
     (b'BM',      '.bmp'),
 ]
 
-SCREENSHOT_TIMEOUT_MS = 20_000   # 20 s — PNG over USBTMC is usually <2 s
-# USBTMC delivers data in multiple bulk transfers; 4 KB is a safe chunk size.
-# We read until we get a short (< USBTMC_CHUNK_SIZE) packet which signals EOF.
-USBTMC_CHUNK_SIZE = 4096
+SCREENSHOT_TIMEOUT_MS = 30_000   # 30 s — BMP over USBTMC takes ~16 s
 
+# BMP24 screenshot is ~1.15 MB; set chunk_size larger than the image so
+# USBTMC.read() accumulates all chunks internally and returns the full image
+# from a single read_raw() call.
+SCREENSHOT_CHUNK_SIZE = 2 * 1024 * 1024   # 2 MB
+
+
+# ─── PyVISA-Py USBTMC bug fix ─────────────────────────────────────────────────
+#
+# pyvisa-py ≤ 0.8.1 has a bug in USBTMC.read(): the inner while loop uses
+#
+#   (len(resp) % wMaxPacketSize == 0) OR (received < transfer_size)
+#
+# The OR causes it to call raw_read() again without sending a new
+# REQUEST_DEV_DEP_MSG_IN when the scope's USBTMC chunk is exactly
+# wMaxPacketSize bytes.  Rigol DS1000Z sends each :DISPlay:DATA? chunk as
+# a 64-byte USB packet (12 header + 52 data = wMaxPacketSize), which
+# triggers the bug on every chunk → the read hangs waiting for data that
+# never arrives → VI_ERROR_TMO.
+#
+# Fix: change OR → AND so the inner loop only continues when BOTH:
+#   • the last USB packet was full-sized (possible more data in this transfer)
+#   • we have not yet received all transfer_size bytes for this chunk
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _apply_usbtmc_patch():
+    """Monkey-patch PyVISA-Py USBTMC.read() to fix the 'or → and' inner loop."""
+    try:
+        from pyvisa_py.protocols import usbtmc as _usbtmc_mod
+        from pyvisa_py.protocols.usbtmc import BulkInMessage, USBRaw, USBTMC
+    except ImportError:
+        return   # not using pyvisa-py — nothing to patch
+
+    try:
+        import usb.core as _usb_core
+    except ImportError:
+        return
+
+    def _patched_read(self, size):
+        usbtmc_header_size = 12
+        eom = False
+        raw_read  = USBRaw.read.__get__(self, USBTMC)
+        raw_write = USBRaw.write.__get__(self, USBTMC)
+        received_message = bytearray()
+
+        while not eom:
+            received_transfer = bytearray()
+            self._btag = (self._btag % 255) + 1
+            req = BulkInMessage.build_array(self._btag, size, None)
+            raw_write(req)
+            try:
+                chunk_size = (
+                    math.floor(
+                        (size + usbtmc_header_size) / self.usb_recv_ep.wMaxPacketSize
+                    ) + 1
+                ) * self.usb_recv_ep.wMaxPacketSize
+                resp = raw_read(chunk_size)
+                if len(resp) < 12:
+                    # Zero-length packet / short response — scope not ready yet.
+                    # Outer loop will increment btag and issue a fresh REQUEST.
+                    continue
+
+                response = BulkInMessage.from_bytes(resp)
+                received_transfer.extend(response.data)
+
+                if len(received_transfer) >= response.transfer_size:
+                    eom = response.transfer_attributes & 1
+                if not eom and len(received_transfer) >= size:
+                    eom = True
+                else:
+                    # FIX: AND instead of OR — stop when all transfer_size bytes
+                    # received, even if last USB packet was exactly wMaxPacketSize.
+                    while (
+                        (len(resp) % self.usb_recv_ep.wMaxPacketSize) == 0
+                        and len(received_transfer) < response.transfer_size
+                    ) and not eom:
+                        chunk_size = (
+                            math.floor(
+                                (size - len(received_transfer))
+                                / self.usb_recv_ep.wMaxPacketSize
+                            ) + 1
+                        ) * self.usb_recv_ep.wMaxPacketSize
+                        resp = raw_read(chunk_size)
+                        received_transfer.extend(resp)
+                    if len(received_transfer) >= response.transfer_size:
+                        eom = response.transfer_attributes & 1
+                    if not eom and len(received_transfer) >= size:
+                        eom = True
+
+                received_message.extend(received_transfer[: response.transfer_size])
+            except (_usb_core.USBError, ValueError):
+                self._abort_bulk_in(self._btag)
+                raise
+
+        return bytes(received_message)
+
+    _usbtmc_mod.USBTMC.read = _patched_read
+
+
+# Apply the patch once at import time.
+_apply_usbtmc_patch()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 def _detect_format(data: bytes) -> tuple[int, str]:
     """Return (offset, extension) for the first recognised image magic in data."""
@@ -98,39 +200,28 @@ def get_screenshot(scope, idn: str, filename: str):
     if scope_stopped:
         time.sleep(0.2)    # let display latch the frozen frame
 
-    is_usbtmc = scope.resource_name.upper().startswith('USB')
-    if is_usbtmc:
-        scope.chunk_size = USBTMC_CHUNK_SIZE
-
-    orig_timeout = scope.timeout
+    orig_timeout    = scope.timeout
+    orig_chunk_size = scope.chunk_size
     try:
-        scope.timeout = SCREENSHOT_TIMEOUT_MS
+        scope.timeout    = SCREENSHOT_TIMEOUT_MS
+        # Must be > image size so USBTMC.read() accumulates until EOM instead
+        # of returning on the first chunk_size boundary.
+        scope.chunk_size = SCREENSHOT_CHUNK_SIZE
 
         for _action, scpi in pre_steps:
             scope.write(scpi)
-        time.sleep(0.5)    # let scope compose the image
 
         scope.write(read_cmd)
-
-        if is_usbtmc:
-            # USBTMC delivers large payloads in multiple bulk transfers.
-            # Read 4 KB chunks until a short packet signals end-of-transfer.
-            chunks = []
-            while True:
-                chunk = scope.read_raw()
-                chunks.append(chunk)
-                if len(chunk) < USBTMC_CHUNK_SIZE:
-                    break
-            data = b''.join(chunks)
-        else:
-            data = scope.read_raw()
+        time.sleep(0.5)    # let scope compose the image before we REQUEST data
+        data = scope.read_raw()
 
         for _action, scpi in post_steps:
             scope.write(scpi)
 
     finally:
         try:
-            scope.timeout = orig_timeout
+            scope.timeout    = orig_timeout
+            scope.chunk_size = orig_chunk_size
         except Exception:
             pass
         # Always resume acquisition after the capture attempt
