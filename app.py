@@ -472,22 +472,19 @@ def api_screenshot():
         try:
             _run_steps(res, get_command(fam, "stop"))
             scope_stopped = True
-            time.sleep(0.15)    # let display latch the frozen frame
+            time.sleep(0.2)     # let display latch the frozen frame
         except Exception:
             pass                # scope family has no stop cmd — proceed anyway
 
         orig_timeout = res.timeout
         try:
-            res.timeout = 20_000    # PNG over USB typically <2 s; keep headroom
+            res.timeout = 20_000    # screenshots can take several seconds
 
             for _, s in pre:
                 res.write(s)
+            time.sleep(0.5)         # let scope compose the image
 
             res.write(cmd_)
-            # pyvisa's read_raw() handles USBTMC end-of-transfer natively.
-            # We request PNG (set in instruments.json) so the payload is
-            # ~100-400 KB rather than BMP24's ~1.15 MB, which avoids the
-            # PyVISA-Py 1 MB read-buffer limit over USBTMC.
             data = res.read_raw()
 
             for _, s in post:

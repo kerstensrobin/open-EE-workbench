@@ -96,7 +96,7 @@ def get_screenshot(scope, idn: str, filename: str):
     # :STOP freezes the display and guarantees an immediate response.
     scope_stopped = _run_scpi_writes(scope, family, 'stop')
     if scope_stopped:
-        time.sleep(0.15)   # let display latch the frozen frame
+        time.sleep(0.2)    # let display latch the frozen frame
 
     is_usbtmc = scope.resource_name.upper().startswith('USB')
     if is_usbtmc:
@@ -108,6 +108,7 @@ def get_screenshot(scope, idn: str, filename: str):
 
         for _action, scpi in pre_steps:
             scope.write(scpi)
+        time.sleep(0.5)    # let scope compose the image
 
         scope.write(read_cmd)
 
