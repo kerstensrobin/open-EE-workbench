@@ -523,7 +523,9 @@ def api_scope_measure_batch():
 
 @flask_app.route("/api/scope/screenshot", methods=["POST"])
 def api_screenshot():
-    filename = (request.json or {}).get("filename", "screenshot")
+    d        = request.json or {}
+    filename = d.get("filename", "screenshot")
+    out_dir  = d.get("output_path", "").strip()
 
     def _do():
         res, fam = _find_instrument("scope")
@@ -605,7 +607,13 @@ def api_screenshot():
 
         ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
         name = f"{filename}_{ts}{ext or '.bin'}"
-        path = ROOT / name
+        if out_dir:
+            import pathlib as _pl
+            save_dir = _pl.Path(out_dir)
+            save_dir.mkdir(parents=True, exist_ok=True)
+            path = save_dir / name
+        else:
+            path = ROOT / name
         try:
             path.write_bytes(data)
         except Exception as exc:
@@ -645,6 +653,86 @@ def api_scope_set():
             sio.emit("log", {"msg": f"⚠ scope: {op!r} not supported on this scope model"})
         except Exception as exc:
             sio.emit("log", {"msg": f"✗ scope {op}: {exc}"})
+
+    _executor.submit(_do)
+    return jsonify({"status": "ok"})
+
+
+@flask_app.route("/api/scope/sync", methods=["POST"])
+def api_scope_sync():
+    """Query current scope settings (timebase, per-channel scale/coupling/probe/display)
+    and emit a scope_state SocketIO event so the UI can update its controls."""
+    def _do():
+        res, fam = _find_instrument("scope")
+        if res is None:
+            sio.emit("log", {"msg": "⚠ scope sync: not connected"}); return
+
+        state: dict = {"channels": []}
+
+        # Timebase
+        try:
+            for act, scpi in get_command(fam, "timebase_scale", value=1):
+                if act == "query":
+                    state["timebase_scale"] = float(res.query(scpi).strip())
+        except Exception:
+            pass
+
+        # Per-channel: display, scale, coupling, probe  (query up to 4)
+        for ch in range(1, 5):
+            ch_state: dict = {"ch": ch}
+            try:
+                ch_state["display"] = res.query(f":CHANnel{ch}:DISPlay?").strip() in ("1", "ON")
+            except Exception:
+                pass
+            for op, kw in [("channel_scale", {"value": 1}),
+                           ("channel_coupling", {"coupling": "DC"}),
+                           ("channel_probe", {"attenuation": 1})]:
+                try:
+                    for act, scpi in get_command(fam, op, ch=ch, **kw):
+                        if act == "query":
+                            raw = res.query(scpi).strip()
+                            if op == "channel_coupling":
+                                ch_state["coupling"] = raw.upper()
+                            else:
+                                ch_state[op.split("_")[1]] = float(raw)
+                except Exception:
+                    pass
+            state["channels"].append(ch_state)
+
+        sio.emit("scope_state", state)
+        _log("↻ Scope settings synced")
+
+    _executor.submit(_do)
+    return jsonify({"status": "ok"})
+
+
+@flask_app.route("/api/scpi", methods=["POST"])
+def api_scpi():
+    """Send an arbitrary SCPI command to an instrument identified by role.
+    If the command contains '?', queries and returns the result via scpi_result event."""
+    d    = request.json or {}
+    role = d.get("role", "scope")
+    cmd  = d.get("cmd", "").strip()
+    if not cmd:
+        return jsonify({"error": "no command"}), 400
+
+    def _do():
+        res, _fam = _find_instrument(role)
+        if res is None:
+            sio.emit("scpi_result", {"role": role, "cmd": cmd,
+                                     "error": f"{role} not connected"}); return
+        try:
+            if "?" in cmd:
+                result = res.query(cmd).strip()
+                sio.emit("scpi_result", {"role": role, "cmd": cmd, "result": result})
+                _log(f"[SCPI/{role}] {cmd}  →  {result}")
+            else:
+                res.write(cmd)
+                sio.emit("scpi_result", {"role": role, "cmd": cmd, "result": None})
+                _log(f"[SCPI/{role}] {cmd}")
+        except Exception as exc:
+            sio.emit("scpi_result", {"role": role, "cmd": cmd, "error": str(exc)})
+            _log(f"[SCPI/{role}] ✗ {cmd}: {exc}")
 
     _executor.submit(_do)
     return jsonify({"status": "ok"})

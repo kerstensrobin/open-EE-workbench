@@ -343,27 +343,33 @@
     /* ── Automation tab ──────────────────────────────────────────── */
     #auto-tab { display:none; flex-direction:column; gap:16px; }
     #auto-tab.visible { display:flex; }
-    /* Output path bar */
-    #auto-outpath-bar {
-      display:flex; align-items:center; gap:10px;
-      background:var(--surface); border:1px solid var(--border);
-      border-radius:var(--radius-lg); padding:10px 14px;
+    /* ── Global output path (navbar) ─────────────────────────────── */
+    #nav-outpath {
+      display:flex; align-items:center; gap:5px; flex:1; min-width:0; max-width:380px;
     }
-    #auto-outpath-bar label {
-      font-size:10px; font-weight:700; letter-spacing:.08em;
-      text-transform:uppercase; color:var(--text-faint); white-space:nowrap;
+    #nav-outpath-icon { font-size:14px; flex-shrink:0; opacity:.7; }
+    #outpath-input {
+      flex:1; min-width:60px; background:var(--surface3); border:1px solid var(--border2);
+      border-radius:var(--radius); color:var(--text); font:inherit; font-family:var(--mono);
+      font-size:11px; padding:4px 8px; outline:none; transition:border-color .15s;
     }
-    #auto-outpath-input {
+    #outpath-input:focus { border-color:var(--accent); }
+    #outpath-input::placeholder { color:var(--text-faint); }
+    #outpath-browse { padding:4px 8px; font-size:11px; white-space:nowrap; flex-shrink:0; }
+
+    /* ── SCPI console (per-card) ─────────────────────────────────── */
+    .scpi-row {
+      display:flex; gap:5px; margin-top:8px; padding-top:8px;
+      border-top:1px solid var(--border);
+    }
+    .scpi-inp {
       flex:1; background:var(--surface2); border:1px solid var(--border);
       border-radius:var(--radius); color:var(--text); font:inherit;
-      font-family:var(--mono); font-size:11px;
-      padding:5px 10px; outline:none; transition:border-color .15s;
+      font-family:var(--mono); font-size:10px; padding:3px 8px;
+      outline:none; transition:border-color .15s;
     }
-    #auto-outpath-input:focus { border-color:var(--accent); }
-    #auto-outpath-input::placeholder { color:var(--text-faint); }
-    #auto-outpath-browse {
-      padding:5px 10px; font-size:11px; white-space:nowrap;
-    }
+    .scpi-inp:focus { border-color:var(--accent); }
+    .scpi-inp::placeholder { color:var(--text-faint); }
 
     .auto-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; min-height:200px; color:var(--text-faint); }
     .auto-empty p { font-size:13px; color:var(--text-dim); }
@@ -632,6 +638,18 @@
   </a>
   <div class="nav-divider"></div>
   <span class="nav-title">open-EE-workbench</span>
+  <div class="nav-divider"></div>
+
+  <!-- ── Global output path ────────────────────────────────────── -->
+  <div id="nav-outpath">
+    <span id="nav-outpath-icon">📁</span>
+    <input id="outpath-input" type="text"
+           placeholder="output path (leave blank for working directory)"
+           spellcheck="false" autocomplete="off"
+           oninput="state.outputPath=this.value.trim()" />
+    <button class="btn btn-ghost" id="outpath-browse" onclick="browseOutputFolder()" title="Browse…">Browse</button>
+  </div>
+
   <div class="nav-spacer"></div>
 
   <div class="wb-select-wrap">
@@ -692,16 +710,6 @@
 
     <!-- ── Automation tab ─────────────────────────────────────────── -->
     <div id="auto-tab">
-
-      <!-- ── Output path bar ──────────────────────────────────────── -->
-      <div id="auto-outpath-bar">
-        <label>Output path</label>
-        <input id="auto-outpath-input" type="text"
-               placeholder="leave blank to use working directory"
-               spellcheck="false" autocomplete="off" />
-        <button class="btn btn-ghost" id="auto-outpath-browse"
-                onclick="browseOutputFolder()" title="Browse…">📁 Browse</button>
-      </div>
 
       <!-- no workbench (full-width placeholder) -->
       <div class="auto-empty" id="auto-empty-nowb">
@@ -858,6 +866,7 @@ let state = {
   connecting:  false,
   instruments: [],
   activeTab:   "workbench",
+  outputPath:  "",
   autoTests:      [],
   autoRunning:    false,
   autoRows:       [],
@@ -964,6 +973,8 @@ socket.on("connection_result", ({ connected, instruments }) => {
     logMsg(`✓ Connected (${instruments.filter(i=>i.ok).length}/${instruments.length} instruments)`,"ok");
     applyConnectionStatus(instruments);
     refreshAutoTests();
+    // Auto-sync scope controls to show real instrument state
+    if (instruments.some(i => i.ok && i.type === "scope")) doScopeSync();
   } else {
     setStatus("error","Failed");
     $connectBtn.textContent = "Connect";
@@ -1254,17 +1265,17 @@ function _scopeChRowsHTML(nCh, hasLabel=false) {
       : '';
     html += `<div class="scope-ch-row">
       <span class="scope-ch-badge ${cc}">CH${i}</span>
-      <button class="scope-ch-tog on" onclick="scopeToggleCh(this,${i})">
+      <button class="scope-ch-tog on" id="scope-ch-tog-${i}" onclick="scopeToggleCh(this,${i})">
         <span class="tog-dot"></span>ON
       </button>
       ${labelInp}
-      <select class="scope-sel" title="V/div" onchange="scopeSet('channel_scale',{ch:${i},value:this.value})">
+      <select class="scope-sel" id="scope-ch-vdiv-${i}" title="V/div" onchange="scopeSet('channel_scale',{ch:${i},value:this.value})">
         ${scopeOptHTML(SCOPE_VDIV_VALS, fmtVDiv, 1)}
       </select>
-      <select class="scope-sel" title="Coupling" onchange="scopeSet('channel_coupling',{ch:${i},coupling:this.value})">
+      <select class="scope-sel" id="scope-ch-coup-${i}" title="Coupling" onchange="scopeSet('channel_coupling',{ch:${i},coupling:this.value})">
         <option value="DC">DC</option><option value="AC">AC</option><option value="GND">GND</option>
       </select>
-      <select class="scope-sel" title="Probe ×" onchange="scopeSet('channel_probe',{ch:${i},attenuation:this.value})">
+      <select class="scope-sel" id="scope-ch-probe-${i}" title="Probe ×" onchange="scopeSet('channel_probe',{ch:${i},attenuation:this.value})">
         ${_probeOptHTML(1)}
       </select>
     </div>`;
@@ -1382,12 +1393,14 @@ function buildScopeCard(instr) {
         <span class="section-label">Channels</span>
         <select class="scope-sel" style="flex:0 0 auto;width:auto;" title="Number of channels"
                 onchange="scopeSetChannelCount(this)">${chCountOpts}</select>
+        <button class="btn btn-ghost" style="padding:3px 8px;font-size:10px;flex-shrink:0;"
+                onclick="doScopeSync()" title="Read current settings from scope">↻ Sync</button>
       </div>
       <div class="scope-ch-grid" id="scope-ch-grid" data-has-label="${hasLabel?'1':'0'}">${_scopeChRowsHTML(nCh, hasLabel)}</div>
       <div class="section-label mt4">Timebase</div>
       <div class="scope-tb-row">
         <span class="scope-tb-label">s/div</span>
-        <select class="scope-sel" title="Time/div" onchange="scopeSet('timebase_scale',{value:this.value})">
+        <select class="scope-sel" id="scope-tb-sel" title="Time/div" onchange="scopeSet('timebase_scale',{value:this.value})">
           ${scopeOptHTML(SCOPE_TDIV_VALS, fmtDiv, 1e-3)}
         </select>
       </div>
@@ -1421,6 +1434,13 @@ function buildScopeCard(instr) {
         </button>
       </div>
       <button class="screenshot-btn" id="screenshot-btn" onclick="doScreenshot()">📷 Screenshot</button>
+      <div class="scpi-row">
+        <input class="scpi-inp" type="text" placeholder="SCPI command…"
+               onkeydown="if(event.key==='Enter')sendScpi('scope',this)"
+               spellcheck="false" autocomplete="off" />
+        <button class="btn" style="padding:3px 8px;font-size:10px;flex-shrink:0;"
+                onclick="sendScpi('scope',this.previousElementSibling)">Send</button>
+      </div>
     </div>`;
   return div;
 }
@@ -1430,11 +1450,66 @@ function doScreenshot() {
   const btn=document.getElementById("screenshot-btn");
   if (btn){btn.disabled=true;btn.innerHTML=`<span class="spinner"></span> Capturing…`;}
   const ts=new Date().toISOString().replace(/[:.]/g,"-").slice(0,-5);
-  POST("/api/scope/screenshot",{filename:`scope_${ts}`}).catch(e=>{
+  POST("/api/scope/screenshot",{filename:`scope_${ts}`, output_path: state.outputPath}).catch(e=>{
     toast(e.message,"error");
     if (btn){btn.disabled=false;btn.innerHTML="📷 Screenshot";}
   });
 }
+
+// ── Scope sync ─────────────────────────────────────────────────────
+function doScopeSync() {
+  POST("/api/scope/sync").catch(e => toast("Sync failed: "+e.message,"error"));
+}
+
+function _setSelectNearest(sel, value, vals) {
+  if (!sel || value == null) return;
+  let best=0, bestDist=Infinity;
+  vals.forEach((v,i) => { const d=Math.abs(v-value)/(Math.abs(value)||1); if(d<bestDist){bestDist=d;best=i;} });
+  sel.selectedIndex = best;
+}
+
+function applyScopeState(s) {
+  // Timebase
+  const tbSel = document.getElementById("scope-tb-sel");
+  if (tbSel && s.timebase_scale != null) _setSelectNearest(tbSel, s.timebase_scale, SCOPE_TDIV_VALS);
+
+  // Per-channel
+  (s.channels || []).forEach(({ch, display, scale, coupling, probe}) => {
+    // Toggle button
+    const tog = document.getElementById(`scope-ch-tog-${ch}`);
+    if (tog && display != null) {
+      tog.className = "scope-ch-tog" + (display ? " on" : "");
+      tog.innerHTML = `<span class="tog-dot"></span>${display?"ON":"OFF"}`;
+    }
+    // V/div
+    const vdivSel = document.getElementById(`scope-ch-vdiv-${ch}`);
+    if (vdivSel && scale != null) _setSelectNearest(vdivSel, scale, SCOPE_VDIV_VALS);
+    // Coupling
+    const coupSel = document.getElementById(`scope-ch-coup-${ch}`);
+    if (coupSel && coupling != null) {
+      for (const opt of coupSel.options) { if (opt.value === coupling) { opt.selected=true; break; } }
+    }
+    // Probe
+    const probeSel = document.getElementById(`scope-ch-probe-${ch}`);
+    if (probeSel && probe != null) _setSelectNearest(probeSel, probe, SCOPE_PROBE_RATIOS);
+  });
+}
+
+socket.on("scope_state", applyScopeState);
+
+// ── Per-card SCPI console ──────────────────────────────────────────
+function sendScpi(role, inp) {
+  const cmd = (typeof inp === "string" ? inp : inp.value).trim();
+  if (!cmd) return;
+  if (typeof inp !== "string") inp.value = "";
+  POST("/api/scpi", {role, cmd}).catch(e => toast(e.message,"error"));
+}
+
+socket.on("scpi_result", ({role, cmd, result, error}) => {
+  if (error) { logMsg(`[SCPI/${role}] ✗ ${cmd}: ${error}`, "error"); toast(`SCPI error: ${error}`,"error"); }
+  else if (result != null) { logMsg(`[SCPI/${role}] ${cmd}  →  ${result}`, "ok"); }
+  else { logMsg(`[SCPI/${role}] ${cmd}`, "ok"); }
+});
 
 // ── PSU card ───────────────────────────────────────────────────────
 function buildPSUCard(instr) {
@@ -1491,6 +1566,13 @@ function buildPSUCard(instr) {
           <span class="tog-dot"></span>All OFF
         </button>
         <button class="btn btn-ghost" style="flex:1;font-size:11px;" onclick="psuReset()">↺ Reset all</button>
+      </div>
+      <div class="scpi-row">
+        <input class="scpi-inp" type="text" placeholder="SCPI command…"
+               onkeydown="if(event.key==='Enter')sendScpi('psu',this)"
+               spellcheck="false" autocomplete="off" />
+        <button class="btn" style="padding:3px 8px;font-size:10px;flex-shrink:0;"
+                onclick="sendScpi('psu',this.previousElementSibling)">Send</button>
       </div>
     </div>`;
   return div;
@@ -1586,6 +1668,13 @@ function buildAWGCard(instr) {
         <button class="btn btn-ghost" id="awg-out-btn" data-on="false" onclick="awgToggleOutput(this)">Output: OFF</button>
         <button class="btn btn-ghost" onclick="awgReset()">↺</button>
       </div>
+      <div class="scpi-row">
+        <input class="scpi-inp" type="text" placeholder="SCPI command…"
+               onkeydown="if(event.key==='Enter')sendScpi('awg',this)"
+               spellcheck="false" autocomplete="off" />
+        <button class="btn" style="padding:3px 8px;font-size:10px;flex-shrink:0;"
+                onclick="sendScpi('awg',this.previousElementSibling)">Send</button>
+      </div>
     </div>`;
   return div;
 }
@@ -1647,6 +1736,13 @@ function buildDMMCard(instr) {
       <div class="dmm-actions">
         <button class="btn btn-primary" onclick="dmmMeasure()">Measure</button>
         <button class="btn btn-ghost" id="dmm-cont-btn" data-on="false" onclick="dmmToggleContinuous(this)">Continuous: OFF</button>
+      </div>
+      <div class="scpi-row">
+        <input class="scpi-inp" type="text" placeholder="SCPI command…"
+               onkeydown="if(event.key==='Enter')sendScpi('dmm',this)"
+               spellcheck="false" autocomplete="off" />
+        <button class="btn" style="padding:3px 8px;font-size:10px;flex-shrink:0;"
+                onclick="sendScpi('dmm',this.previousElementSibling)">Send</button>
       </div>
     </div>`;
   return div;
@@ -1861,13 +1957,13 @@ function getTestParams(testId) {
 }
 
 async function browseOutputFolder() {
-  const input   = document.getElementById("auto-outpath-input");
+  const input   = document.getElementById("outpath-input");
   const initial = input.value.trim() || "";
-  const btn     = document.getElementById("auto-outpath-browse");
+  const btn     = document.getElementById("outpath-browse");
   btn.disabled  = true;
   try {
     const res = await POST("/api/pick-folder", { initial });
-    if (res.path) input.value = res.path;
+    if (res.path) { input.value = res.path; state.outputPath = res.path; }
   } catch(e) {
     toast("Folder picker failed: " + e.message, "error");
   } finally {
@@ -1880,7 +1976,7 @@ async function runTest(testId) {
   if (!state.connected)  { toast("Not connected to instruments","error"); return; }
 
   const params      = testId === "dc_sweep" ? getDcSweepParams() : getTestParams(testId);
-  const output_path = document.getElementById("auto-outpath-input")?.value.trim() || "";
+  const output_path = state.outputPath || "";
   state.autoRunning = true;
   state.autoTestId  = testId;
   state.autoRows    = [];
