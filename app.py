@@ -317,6 +317,7 @@ def api_connect():
             try:
                 res = rm.open_resource(rstr)
                 res.timeout = 8000
+                res._visa_lock = threading.Lock()  # serialise concurrent VISA ops
                 if "SOCKET" in rstr.upper():
                     res.read_termination  = "\n"
                     res.write_termination = "\n"
@@ -427,6 +428,14 @@ def _find_instrument(itype: str):
             if res:
                 return res, fam
     return None, None
+
+
+def _rlock(res):
+    """Return the per-resource VISA lock (a no-op RLock if res has none)."""
+    lock = getattr(res, "_visa_lock", None)
+    if lock is None:
+        lock = threading.Lock()
+    return lock
 
 
 _SCOPE_MEASURES = {
@@ -547,53 +556,55 @@ def api_screenshot():
         cmd_ = steps[raw_idx][1]
         post = [(a, s) for a, s in steps[raw_idx + 1:] if a == "write"]
 
-        # Stop the scope before capturing so :DISPlay:DATA? returns immediately
-        # instead of blocking until the next triggered acquisition.
-        scope_stopped = False
-        try:
-            _run_steps(res, get_command(fam, "stop"))
-            scope_stopped = True
-            time.sleep(0.1)     # let display latch the frozen frame
-        except Exception:
-            pass                # scope family has no stop cmd — proceed anyway
-
-        orig_timeout = res.timeout
-        try:
-            res.timeout = 35_000    # BMP over USB takes ~16 s; 35 s gives margin
-
-            for _, s in pre:
-                res.write(s)
-
-            res.write(cmd_)
-            time.sleep(0.1)         # let scope compose the image before REQUESTing data
-            # chunk_size is set inside _run_steps; here we call read_raw directly
-            # so we must set it ourselves.
-            orig_chunk = getattr(res, 'chunk_size', None)
+        data = None
+        with _rlock(res):
+            # Stop the scope before capturing so :DISPlay:DATA? returns immediately
+            # instead of blocking until the next triggered acquisition.
+            scope_stopped = False
             try:
-                res.chunk_size = _SCREENSHOT_CHUNK_SIZE
-                data = res.read_raw()
-            finally:
-                if orig_chunk is not None:
-                    try: res.chunk_size = orig_chunk
+                _run_steps(res, get_command(fam, "stop"))
+                scope_stopped = True
+                time.sleep(0.1)     # let display latch the frozen frame
+            except Exception:
+                pass                # scope family has no stop cmd — proceed anyway
+
+            orig_timeout = res.timeout
+            try:
+                res.timeout = 35_000    # BMP over USB takes ~16 s; 35 s gives margin
+
+                for _, s in pre:
+                    res.write(s)
+
+                res.write(cmd_)
+                time.sleep(0.1)         # let scope compose the image before REQUESTing data
+                # chunk_size is set inside _run_steps; here we call read_raw directly
+                # so we must set it ourselves.
+                orig_chunk = getattr(res, 'chunk_size', None)
+                try:
+                    res.chunk_size = _SCREENSHOT_CHUNK_SIZE
+                    data = res.read_raw()
+                finally:
+                    if orig_chunk is not None:
+                        try: res.chunk_size = orig_chunk
+                        except Exception: pass
+
+                for _, s in post:
+                    try: res.write(s)
                     except Exception: pass
 
-            for _, s in post:
-                try: res.write(s)
+            except Exception as exc:
+                _log(f"✗ Screenshot I/O error: {exc}")
+                sio.emit("screenshot_done", {"error": str(exc)})
+                return
+            finally:
+                try: res.timeout = orig_timeout
                 except Exception: pass
-
-        except Exception as exc:
-            _log(f"✗ Screenshot I/O error: {exc}")
-            sio.emit("screenshot_done", {"error": str(exc)})
-            return
-        finally:
-            try: res.timeout = orig_timeout
-            except Exception: pass
-            # Always resume acquisition after the capture attempt
-            if scope_stopped:
-                try:
-                    _run_steps(res, get_command(fam, "run"))
-                except Exception:
-                    pass
+                # Always resume acquisition after the capture attempt
+                if scope_stopped:
+                    try:
+                        _run_steps(res, get_command(fam, "run"))
+                    except Exception:
+                        pass
 
         if not data:
             sio.emit("screenshot_done", {"error": "Scope returned empty data"}); return
@@ -669,35 +680,36 @@ def api_scope_sync():
 
         state: dict = {"channels": []}
 
-        # Timebase
-        try:
-            for act, scpi in get_command(fam, "timebase_scale", value=1):
-                if act == "query":
-                    state["timebase_scale"] = float(res.query(scpi).strip())
-        except Exception:
-            pass
-
-        # Per-channel: display, scale, coupling, probe  (query up to 4)
-        for ch in range(1, 5):
-            ch_state: dict = {"ch": ch}
+        with _rlock(res):
+            # Timebase
             try:
-                ch_state["display"] = res.query(f":CHANnel{ch}:DISPlay?").strip() in ("1", "ON")
+                for act, scpi in get_command(fam, "timebase_scale", value=1):
+                    if act == "query":
+                        state["timebase_scale"] = float(res.query(scpi).strip())
             except Exception:
                 pass
-            for op, kw in [("channel_scale", {"value": 1}),
-                           ("channel_coupling", {"coupling": "DC"}),
-                           ("channel_probe", {"attenuation": 1})]:
+
+            # Per-channel: display, scale, coupling, probe  (query up to 4)
+            for ch in range(1, 5):
+                ch_state: dict = {"ch": ch}
                 try:
-                    for act, scpi in get_command(fam, op, ch=ch, **kw):
-                        if act == "query":
-                            raw = res.query(scpi).strip()
-                            if op == "channel_coupling":
-                                ch_state["coupling"] = raw.upper()
-                            else:
-                                ch_state[op.split("_")[1]] = float(raw)
+                    ch_state["display"] = res.query(f":CHANnel{ch}:DISPlay?").strip() in ("1", "ON")
                 except Exception:
                     pass
-            state["channels"].append(ch_state)
+                for op, kw in [("channel_scale", {"value": 1}),
+                               ("channel_coupling", {"coupling": "DC"}),
+                               ("channel_probe", {"attenuation": 1})]:
+                    try:
+                        for act, scpi in get_command(fam, op, ch=ch, **kw):
+                            if act == "query":
+                                raw = res.query(scpi).strip()
+                                if op == "channel_coupling":
+                                    ch_state["coupling"] = raw.upper()
+                                else:
+                                    ch_state[op.split("_")[1]] = float(raw)
+                    except Exception:
+                        pass
+                state["channels"].append(ch_state)
 
         sio.emit("scope_state", state)
         _log("↻ Scope settings synced")
@@ -722,14 +734,15 @@ def api_scpi():
             sio.emit("scpi_result", {"role": role, "cmd": cmd,
                                      "error": f"{role} not connected"}); return
         try:
-            if "?" in cmd:
-                result = res.query(cmd).strip()
-                sio.emit("scpi_result", {"role": role, "cmd": cmd, "result": result})
-                _log(f"[SCPI/{role}] {cmd}  →  {result}")
-            else:
-                res.write(cmd)
-                sio.emit("scpi_result", {"role": role, "cmd": cmd, "result": None})
-                _log(f"[SCPI/{role}] {cmd}")
+            with _rlock(res):
+                if "?" in cmd:
+                    result = res.query(cmd).strip()
+                    sio.emit("scpi_result", {"role": role, "cmd": cmd, "result": result})
+                    _log(f"[SCPI/{role}] {cmd}  →  {result}")
+                else:
+                    res.write(cmd)
+                    sio.emit("scpi_result", {"role": role, "cmd": cmd, "result": None})
+                    _log(f"[SCPI/{role}] {cmd}")
         except Exception as exc:
             sio.emit("scpi_result", {"role": role, "cmd": cmd, "error": str(exc)})
             _log(f"[SCPI/{role}] ✗ {cmd}: {exc}")
