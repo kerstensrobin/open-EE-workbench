@@ -54,7 +54,24 @@ SCREENSHOT_CHUNK_SIZE = 2 * 1024 * 1024   # 2 MB
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _apply_usbtmc_patch():
-    """Monkey-patch PyVISA-Py USBTMC.read() to fix the 'or → and' inner loop."""
+    """Replace PyVISA-Py USBTMC.read() with a faster direct-USB implementation.
+
+    Two problems with the stock pyvisa-py ≤ 0.8.1 USBTMC.read():
+
+    1. Bug: inner while loop uses 'or' instead of 'and', causing a spurious
+       raw_read() call when the scope's USBTMC chunk is exactly wMaxPacketSize
+       bytes → read hangs waiting for data that never arrives → VI_ERROR_TMO.
+
+    2. Performance: the inner loop calls USBRaw.read() once per 64-byte USB
+       packet. USBRaw.read() wraps pyusb with ~650 µs of Python overhead per
+       call. For a 1.15 MB BMP screenshot that means 18,001 calls × 650 µs =
+       ~12 s overhead. Calling the pyusb endpoint directly costs ~51 µs/call,
+       reducing the same transfer to ~1 s.
+
+    Fix: read the first packet through the normal path (to get the USBTMC
+    header), then drain remaining packets directly from the bulk-IN endpoint,
+    bypassing USBRaw.read() and its per-call Python overhead.
+    """
     try:
         from pyvisa_py.protocols import usbtmc as _usbtmc_mod
         from pyvisa_py.protocols.usbtmc import BulkInMessage, USBRaw, USBTMC
@@ -67,11 +84,12 @@ def _apply_usbtmc_patch():
         return
 
     def _patched_read(self, size):
-        usbtmc_header_size = 12
         eom = False
-        raw_read  = USBRaw.read.__get__(self, USBTMC)
         raw_write = USBRaw.write.__get__(self, USBTMC)
         received_message = bytearray()
+        ep  = self.usb_recv_ep      # pyusb Bulk-IN endpoint
+        pkt = ep.wMaxPacketSize     # 64 for USB Full Speed
+        to  = self.timeout          # ms
 
         while not eom:
             received_transfer = bytearray()
@@ -79,48 +97,31 @@ def _apply_usbtmc_patch():
             req = BulkInMessage.build_array(self._btag, size, None)
             raw_write(req)
             try:
-                chunk_size = (
-                    math.floor(
-                        (size + usbtmc_header_size) / self.usb_recv_ep.wMaxPacketSize
-                    ) + 1
-                ) * self.usb_recv_ep.wMaxPacketSize
-                resp = raw_read(chunk_size)
+                # First USB packet contains the 12-byte USBTMC header + first data.
+                resp = bytes(ep.read(pkt, to))
                 if len(resp) < 12:
-                    # Zero-length packet / short response — scope not ready yet.
-                    # Outer loop will increment btag and issue a fresh REQUEST.
+                    # ZLP / short response — scope not ready yet; retry with new btag.
                     continue
 
                 response = BulkInMessage.from_bytes(resp)
                 received_transfer.extend(response.data)
+                expected = response.transfer_size
 
-                if len(received_transfer) >= response.transfer_size:
-                    eom = response.transfer_attributes & 1
-                if not eom and len(received_transfer) >= size:
-                    eom = True
-                else:
-                    # FIX: AND instead of OR — stop when all transfer_size bytes
-                    # received, even if last USB packet was exactly wMaxPacketSize.
-                    while (
-                        (len(resp) % self.usb_recv_ep.wMaxPacketSize) == 0
-                        and len(received_transfer) < response.transfer_size
-                    ) and not eom:
-                        chunk_size = (
-                            math.floor(
-                                (size - len(received_transfer))
-                                / self.usb_recv_ep.wMaxPacketSize
-                            ) + 1
-                        ) * self.usb_recv_ep.wMaxPacketSize
-                        resp = raw_read(chunk_size)
-                        received_transfer.extend(resp)
-                    if len(received_transfer) >= response.transfer_size:
-                        eom = response.transfer_attributes & 1
-                    if not eom and len(received_transfer) >= size:
-                        eom = True
+                # Drain remaining packets directly — bypasses USBRaw.read()
+                # overhead (~650 µs/call → ~51 µs/call), ~10× faster for
+                # large binary payloads (screenshots, waveforms).
+                while len(received_transfer) < expected:
+                    n = min(expected - len(received_transfer) + pkt, 65536)
+                    received_transfer.extend(bytes(ep.read(n, to)))
 
-                received_message.extend(received_transfer[: response.transfer_size])
             except (_usb_core.USBError, ValueError):
                 self._abort_bulk_in(self._btag)
                 raise
+
+            eom = response.transfer_attributes & 1
+            if not eom and len(received_transfer) >= size:
+                eom = True
+            received_message.extend(received_transfer[:expected])
 
         return bytes(received_message)
 
@@ -198,7 +199,7 @@ def get_screenshot(scope, idn: str, filename: str):
     # :STOP freezes the display and guarantees an immediate response.
     scope_stopped = _run_scpi_writes(scope, family, 'stop')
     if scope_stopped:
-        time.sleep(0.2)    # let display latch the frozen frame
+        time.sleep(0.1)    # let display latch the frozen frame
 
     orig_timeout    = scope.timeout
     orig_chunk_size = scope.chunk_size
@@ -212,7 +213,7 @@ def get_screenshot(scope, idn: str, filename: str):
             scope.write(scpi)
 
         scope.write(read_cmd)
-        time.sleep(0.5)    # let scope compose the image before we REQUEST data
+        time.sleep(0.1)    # let scope compose the image before we REQUEST data
         data = scope.read_raw()
 
         for _action, scpi in post_steps:
