@@ -1025,6 +1025,54 @@ def api_scan_save():
         return jsonify({"error": str(exc)}), 500
 
 
+@flask_app.route("/api/fix-udev", methods=["POST"])
+def api_fix_udev():
+    """Write udev rules for blocked USBTMC devices and reload udev (Linux only)."""
+    if not sys.platform.startswith("linux"):
+        return jsonify({"error": "udev is only supported on Linux"}), 400
+
+    try:
+        from nachoVisa import probe_usb_devices, build_udev_rule, detect_usb_group, UDEV_RULES_PATH
+    except ImportError as exc:
+        return jsonify({"error": f"Import error: {exc}"}), 500
+
+    devices, errors = probe_usb_devices()
+    blocked = [d for d in devices if d["is_usbtmc"] and not d["can_write"]]
+
+    if not blocked:
+        usbtmc = [d for d in devices if d["is_usbtmc"]]
+        if usbtmc:
+            return jsonify({"status": "ok", "msg": "USBTMC devices found — permissions look fine. Try replugging.", "rules": [], "usermod_cmd": None})
+        return jsonify({"status": "ok", "msg": "No USBTMC devices detected on USB.", "rules": [], "usermod_cmd": None})
+
+    group, member = detect_usb_group()
+    world_writable = group is None
+    lines = [build_udev_rule(d["vendor_id"][2:], d["product_id"][2:], group, world_writable) for d in blocked]
+    content = "\n".join(lines) + "\n"
+
+    result = subprocess.run(["sudo", "-n", "tee", UDEV_RULES_PATH], input=content.encode(), capture_output=True)
+    if result.returncode != 0:
+        manual = (
+            [f"printf '%s\\n' {repr(line)} | sudo tee {UDEV_RULES_PATH}" for line in lines]
+            + ["sudo udevadm control --reload-rules", "sudo udevadm trigger --subsystem-match=usb"]
+        )
+        if group and not member:
+            manual.append(f"sudo usermod -aG {group} $USER  # then log out and back in")
+        return jsonify({"status": "manual", "rules": lines, "manual_cmds": manual})
+
+    for cmd in (["sudo", "-n", "udevadm", "control", "--reload-rules"],
+                ["sudo", "-n", "udevadm", "trigger", "--subsystem-match=usb"]):
+        r = subprocess.run(cmd, capture_output=True)
+        if r.returncode != 0:
+            return jsonify({"error": f"{' '.join(cmd)}: {r.stderr.decode().strip()}"}), 500
+
+    usermod_cmd = f"sudo usermod -aG {group} $USER" if group and not member else None
+    msg = "udev rules written and reloaded — replug your device."
+    if usermod_cmd:
+        msg += f"\nAlso run: {usermod_cmd}  (then log out and back in)"
+    return jsonify({"status": "ok", "msg": msg, "rules": lines, "usermod_cmd": usermod_cmd})
+
+
 # ── Automation ────────────────────────────────────────────────────────────────
 _auto_stop    = threading.Event()
 _auto_running = False
@@ -1178,6 +1226,22 @@ def api_pick_folder():
         if path:
             return jsonify({"path": path})
         return jsonify({"path": None})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@flask_app.route("/api/open-folder", methods=["POST"])
+def api_open_folder():
+    """Open a folder in the system file manager (Linux: xdg-open)."""
+    path = (request.json or {}).get("path", "").strip()
+    if not path:
+        return jsonify({"error": "path is required"}), 400
+    p = Path(path)
+    if not p.exists():
+        return jsonify({"error": f"Path does not exist: {path}"}), 404
+    try:
+        subprocess.Popen(["xdg-open", str(p)], close_fds=True)
+        return jsonify({"status": "ok"})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
@@ -1499,8 +1563,10 @@ def api_automation_run():
                             pass              # scope family has no stop cmd — proceed anyway
 
                         orig_timeout = scope_res.timeout
+                        orig_chunk   = getattr(scope_res, "chunk_size", None)
                         try:
-                            scope_res.timeout = 20_000  # screenshots can take several seconds
+                            scope_res.timeout    = 20_000  # screenshots can take several seconds
+                            scope_res.chunk_size = _SCREENSHOT_CHUNK_SIZE
                             for s in pre:
                                 scope_res.write(s)
                             scope_res.write(cmd_)
@@ -1512,6 +1578,9 @@ def api_automation_run():
                         finally:
                             try: scope_res.timeout = orig_timeout
                             except Exception: pass
+                            if orig_chunk is not None:
+                                try: scope_res.chunk_size = orig_chunk
+                                except Exception: pass
                             # Always resume acquisition after the capture attempt
                             if scope_stopped:
                                 try:
@@ -1532,9 +1601,10 @@ def api_automation_run():
                             if idx != -1:
                                 data = data[idx:]; ext = e; break
 
-                        ts    = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        step  = step_ctx.get("step", 0)
-                        fname = f"sweep_{step:04d}_{ts}{ext}"
+                        ts     = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        step   = step_ctx.get("step", 0)
+                        prefix = (item.get("filename_prefix") or "sweep").strip() or "sweep"
+                        fname  = f"{prefix}_{step:04d}_{ts}{ext}"
                         fpath = out_dir / "screenshots" / fname
                         fpath.parent.mkdir(parents=True, exist_ok=True)
                         fpath.write_bytes(data)

@@ -615,6 +615,7 @@
       display:flex; align-items:center; gap:5px; margin-bottom:8px; flex-wrap:wrap;
     }
     .scope-meas-controls .btn { padding:4px 12px; font-size:10px; flex-shrink:0; }
+    .btn.btn-primary.running { background:#7f1d1d; border-color:#ef4444; color:#fca5a5; }
     .scope-auto-tog {
       display:inline-flex; align-items:center; gap:4px; padding:4px 10px;
       border-radius:4px; font-size:10px; font-weight:600; border:1px solid var(--border);
@@ -815,6 +816,11 @@
             <div id="scan-errors-list"
                  style="font-family:var(--mono);font-size:10px;color:var(--red);margin-top:6px;line-height:1.6;white-space:pre-wrap;"></div>
           </details>
+        </div>
+        <div id="scan-udev-hint" class="hidden" style="margin-top:10px;padding:9px 12px;background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+          <span style="font-size:12px;color:var(--text-dim);flex:1;min-width:160px;">USB device not found?</span>
+          <button class="btn btn-ghost" style="font-size:11px;padding:3px 10px;flex-shrink:0;" onclick="fixUdev()">Fix udev permissions</button>
+          <div id="scan-udev-result" class="hidden" style="width:100%;font-family:var(--mono);font-size:10px;color:var(--text-dim);white-space:pre-wrap;line-height:1.6;margin-top:2px;"></div>
         </div>
       </div>
     </div>
@@ -1019,9 +1025,19 @@ socket.on("dmm_reading", ({ value, mode }) => {
   $val.classList.remove("dim");
 });
 
+let _lastScreenshotDir = null;
+
 socket.on("screenshot_done", ({ path, filename, error }) => {
   if (error) { toast("Screenshot failed: "+error,"error"); logMsg("✗ Screenshot: "+error,"error"); }
-  else { toast(`Screenshot saved: ${filename}`,"ok",5000); logMsg(`✓ Screenshot → ${filename}`,"ok"); }
+  else {
+    toast(`Screenshot saved: ${filename}`,"ok",5000);
+    logMsg(`✓ Screenshot → ${filename}`,"ok");
+    if (path) {
+      _lastScreenshotDir = path.substring(0, Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"))) || path;
+      const fb = document.getElementById("screenshot-folder-btn");
+      if (fb) fb.disabled = false;
+    }
+  }
   const btn = document.getElementById("screenshot-btn");
   if (btn) { btn.disabled=false; btn.innerHTML="📷 Screenshot"; }
 });
@@ -1053,22 +1069,34 @@ socket.on("scope_measurement", ({ value, label, unit, ch, measurement, error }) 
 });
 
 // ── Scope auto-refresh ─────────────────────────────────────────────
-let _scopeAutoOn       = false;
-let _scopeAutoTimer    = null;
-let _scopeAutoInterval = 500;   // ms
+let _scopeAutoOn        = false;
+let _scopeAutoTimer     = null;
+let _scopeAutoInterval  = 500;   // ms
+let _scopeBatchInFlight = false;
 
 function _scopeStopAuto() {
   _scopeAutoOn = false;
   if (_scopeAutoTimer) { clearTimeout(_scopeAutoTimer); _scopeAutoTimer = null; }
-  const btn = document.getElementById("scope-auto-btn");
-  if (btn) { btn.classList.remove("on"); btn.innerHTML=`<span class="tog-dot"></span>Auto`; }
+  const btn = document.getElementById("scope-exec-btn");
+  if (btn) { btn.classList.remove("running"); btn.textContent = "▷ Execute"; }
 }
 
 socket.on("scope_measurement_batch_done", () => {
+  _scopeBatchInFlight = false;
   if (_scopeAutoOn) {
     _scopeAutoTimer = setTimeout(scopeMeasureAll, _scopeAutoInterval);
   }
 });
+
+function scopeToggleExecute() {
+  if (_scopeAutoOn) { _scopeStopAuto(); return; }
+  const sel = document.getElementById("scope-auto-interval");
+  _scopeAutoInterval = sel ? parseInt(sel.value) : 500;
+  _scopeAutoOn = true;
+  const btn = document.getElementById("scope-exec-btn");
+  if (btn) { btn.classList.add("running"); btn.textContent = "■ Stop"; }
+  scopeMeasureAll();
+}
 
 // ── Workbench loading ──────────────────────────────────────────────
 async function loadWorkbenches() {
@@ -1330,8 +1358,10 @@ function scopeAddMeasurement() {
 }
 
 function scopeMeasureAll() {
+  if (_scopeBatchInFlight) return;
   const items = [...document.querySelectorAll(".scope-meas-item")];
-  if (!items.length) { toast("Add a measurement first","warn"); return; }
+  if (!items.length) { toast("Add a measurement first","warn"); _scopeStopAuto(); return; }
+  _scopeBatchInFlight = true;
   // Show spinners on all slots
   items.forEach(item => {
     const $v = document.getElementById(`smv-${item.dataset.id}`);
@@ -1339,6 +1369,7 @@ function scopeMeasureAll() {
   });
   const measurements = items.map(item => ({op:item.dataset.meas, ch:parseInt(item.dataset.ch)}));
   POST("/api/scope/measure_batch", {measurements, delay_ms:50}).catch(e => {
+    _scopeBatchInFlight = false;
     _scopeStopAuto();
     items.forEach(item => {
       const $v = document.getElementById(`smv-${item.dataset.id}`);
@@ -1348,18 +1379,6 @@ function scopeMeasureAll() {
   });
 }
 
-function scopeToggleAuto(btn) {
-  const sel = document.getElementById("scope-auto-interval");
-  _scopeAutoOn = !_scopeAutoOn;
-  if (_scopeAutoOn) {
-    _scopeAutoInterval = sel ? parseInt(sel.value) : 500;
-    btn.classList.add("on");
-    btn.innerHTML=`<span class="tog-dot"></span>Auto`;
-    scopeMeasureAll();
-  } else {
-    _scopeStopAuto();
-  }
-}
 
 function buildScopeCard(instr) {
   const nCh = (() => {
@@ -1420,7 +1439,7 @@ function buildScopeCard(instr) {
                 onclick="scopeAddMeasurement()">+ Add</button>
       </div>
       <div class="scope-meas-controls">
-        <button class="btn btn-primary" onclick="scopeMeasureAll()">▷ Execute</button>
+        <button class="btn btn-primary" id="scope-exec-btn" onclick="scopeToggleExecute()">▷ Execute</button>
         <select class="scope-sel" id="scope-auto-interval" style="flex:0 0 auto;width:auto;"
                 onchange="if(_scopeAutoOn){_scopeAutoInterval=parseInt(this.value);}">
           <option value="200">200 ms</option>
@@ -1429,13 +1448,14 @@ function buildScopeCard(instr) {
           <option value="2000">2 s</option>
           <option value="5000">5 s</option>
         </select>
-        <button class="scope-auto-tog" id="scope-auto-btn" onclick="scopeToggleAuto(this)">
-          <span class="tog-dot"></span>Auto
-        </button>
       </div>
-      <button class="screenshot-btn" id="screenshot-btn" onclick="doScreenshot()">📷 Screenshot</button>
+      <div style="display:flex;gap:6px;">
+        <button class="screenshot-btn" id="screenshot-btn" onclick="doScreenshot()" style="flex:1;">📷 Screenshot</button>
+        <button class="screenshot-btn" id="screenshot-folder-btn" onclick="openScreenshotFolder()" disabled
+                style="flex:0 0 auto;padding:8px 12px;" title="Open screenshot folder">🗂</button>
+      </div>
       <div class="scpi-row">
-        <input class="scpi-inp" type="text" placeholder="SCPI command…"
+        <input class="scpi-inp" type="text" placeholder="Manual SCPI command… (see log for output)"
                onkeydown="if(event.key==='Enter')sendScpi('scope',this)"
                spellcheck="false" autocomplete="off" />
         <button class="btn" style="padding:3px 8px;font-size:10px;flex-shrink:0;"
@@ -1443,6 +1463,12 @@ function buildScopeCard(instr) {
       </div>
     </div>`;
   return div;
+}
+
+function openScreenshotFolder() {
+  const path = _lastScreenshotDir || state.outputPath;
+  if (!path) { toast("No screenshots taken this session","warn"); return; }
+  POST("/api/open-folder", {path}).catch(e => toast(e.message,"error"));
 }
 
 function scopeCmd(cmd) { POST(`/api/scope/${cmd}`).catch(e=>toast(e.message,"error")); }
@@ -1568,7 +1594,7 @@ function buildPSUCard(instr) {
         <button class="btn btn-ghost" style="flex:1;font-size:11px;" onclick="psuReset()">↺ Reset all</button>
       </div>
       <div class="scpi-row">
-        <input class="scpi-inp" type="text" placeholder="SCPI command…"
+        <input class="scpi-inp" type="text" placeholder="Manual SCPI command… (see log for output)"
                onkeydown="if(event.key==='Enter')sendScpi('psu',this)"
                spellcheck="false" autocomplete="off" />
         <button class="btn" style="padding:3px 8px;font-size:10px;flex-shrink:0;"
@@ -1669,7 +1695,7 @@ function buildAWGCard(instr) {
         <button class="btn btn-ghost" onclick="awgReset()">↺</button>
       </div>
       <div class="scpi-row">
-        <input class="scpi-inp" type="text" placeholder="SCPI command…"
+        <input class="scpi-inp" type="text" placeholder="Manual SCPI command… (see log for output)"
                onkeydown="if(event.key==='Enter')sendScpi('awg',this)"
                spellcheck="false" autocomplete="off" />
         <button class="btn" style="padding:3px 8px;font-size:10px;flex-shrink:0;"
@@ -1738,7 +1764,7 @@ function buildDMMCard(instr) {
         <button class="btn btn-ghost" id="dmm-cont-btn" data-on="false" onclick="dmmToggleContinuous(this)">Continuous: OFF</button>
       </div>
       <div class="scpi-row">
-        <input class="scpi-inp" type="text" placeholder="SCPI command…"
+        <input class="scpi-inp" type="text" placeholder="Manual SCPI command… (see log for output)"
                onkeydown="if(event.key==='Enter')sendScpi('dmm',this)"
                spellcheck="false" autocomplete="off" />
         <button class="btn" style="padding:3px 8px;font-size:10px;flex-shrink:0;"
@@ -1805,6 +1831,8 @@ async function refreshAutoTests() {
   } catch(e) { /* no-op */ }
 }
 
+let _autoBuiltForTests = null;   // serialized test IDs of the last buildTestGrid call
+
 function refreshAutoTab() {
   const noWb    = document.getElementById("auto-empty-nowb");
   const noTests = document.getElementById("auto-empty-notests");
@@ -1814,6 +1842,7 @@ function refreshAutoTab() {
     noWb.classList.remove("hidden");
     noTests.classList.add("hidden");
     layout.classList.add("hidden");
+    _autoBuiltForTests = null;
     return;
   }
   noWb.classList.add("hidden");
@@ -1822,12 +1851,20 @@ function refreshAutoTab() {
     if (state.connected) refreshAutoTests();
     noTests.classList.remove("hidden");
     layout.classList.add("hidden");
+    _autoBuiltForTests = null;
     return;
   }
   noTests.classList.add("hidden");
   layout.style.display = "flex";
   layout.classList.remove("hidden");
-  buildTestGrid(state.autoTests);
+
+  const testKey = state.autoTests.map(t => t.id).join(",");
+  if (_autoBuiltForTests !== testKey) {
+    buildTestGrid(state.autoTests);
+    _autoBuiltForTests = testKey;
+  } else {
+    selectTest(state.selectedTestId || state.autoTests[0]?.id);
+  }
 }
 
 function buildTestGrid(tests) {
@@ -2143,6 +2180,9 @@ function openScanModal() {
   document.getElementById("scan-results-list").innerHTML="";
   document.getElementById("scan-start-btn").disabled=false;
   document.getElementById("scan-start-usb-btn").disabled=false;
+  document.getElementById("scan-udev-hint").classList.add("hidden");
+  document.getElementById("scan-udev-result").classList.add("hidden");
+  document.getElementById("scan-udev-result").textContent="";
   document.getElementById("scan-modal").classList.remove("hidden");
 }
 function closeScanModal() { document.getElementById("scan-modal").classList.add("hidden"); }
@@ -2183,6 +2223,9 @@ socket.on("scan_result", ({ instruments, errors, error }) => {
     empty.style.cssText="text-align:center;padding:24px;color:var(--text-faint);font-size:12px;";
     empty.textContent="No VISA instruments responded. Check connections and try again.";
     list.appendChild(empty);
+    document.getElementById("scan-udev-hint").classList.remove("hidden");
+  } else {
+    document.getElementById("scan-udev-hint").classList.add("hidden");
   }
   const filtered=(errors||[]).filter(e=>!e.startsWith("Subnet note"));
   if (filtered.length) {
@@ -2214,6 +2257,31 @@ function buildScanInstrRow(instr,live) {
     </div>
     <span class="instr-type">${escHtml(t||"?")}</span>`;
   return div;
+}
+
+async function fixUdev() {
+  const btn = document.querySelector("#scan-udev-hint button");
+  const out  = document.getElementById("scan-udev-result");
+  btn.disabled = true;
+  btn.textContent = "Fixing…";
+  out.classList.remove("hidden");
+  out.style.color = "var(--text-dim)";
+  out.textContent = "Running…";
+  try {
+    const r = await POST("/api/fix-udev", {});
+    if (r.status === "manual") {
+      out.style.color = "var(--amber)";
+      out.textContent = "Sudo needs a password — run these in your terminal:\n\n" + r.manual_cmds.join("\n");
+    } else {
+      out.style.color = "var(--green)";
+      out.textContent = r.msg || "Done.";
+    }
+  } catch(e) {
+    out.style.color = "var(--red)";
+    out.textContent = "Error: " + e.message;
+  }
+  btn.disabled = false;
+  btn.textContent = "Fix udev permissions";
 }
 
 async function saveScanWorkbench() {
@@ -2400,6 +2468,7 @@ function _dcSwSnapshotMeasItems() {
       return {
         kind:            "action",
         action:          action,
+        filename_prefix: action === "screenshot" ? (el.querySelector(`[data-field="filename_prefix"]`)?.value.trim() ?? "") : "",
         script:          action === "script" ? (el.querySelector(`[data-field="script"]`)?.value  ?? "") : "",
         scpi_instrument: action === "scpi"   ? (el.querySelector(`[data-field="scpi_instrument"]`)?.value ?? "") : "",
         scpi_command:    action === "scpi"   ? (el.querySelector(`[data-field="scpi_command"]`)?.value    ?? "") : "",
@@ -2553,6 +2622,17 @@ function _dcSwBuildMeasItem(item, i) {
             <option value="scpi"${isScpi ? " selected" : ""}>📡 SCPI query</option>
             <option value="script"${isScript ? " selected" : ""}>⚙ External script</option>
           </select>
+        </div>
+
+        <!-- Screenshot row (hidden unless action = screenshot) -->
+        <div class="dcsw-field" style="grid-column:1/-1; display:${!isScript && !isScpi ? "" : "none"};"
+             data-action-row="screenshot">
+          <span class="dcsw-field-label">Prefix</span>
+          <div class="dcsw-field-iw">
+            <input class="dcsw-field-input" data-field="filename_prefix" type="text"
+                   placeholder="sweep" spellcheck="false"
+                   value="${escHtml(item.filename_prefix ?? "")}" />
+          </div>
         </div>
 
         <!-- SCPI rows (hidden unless action = scpi) -->

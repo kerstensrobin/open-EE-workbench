@@ -4,9 +4,10 @@
 # or resets them all to safe defaults with --reset-bench.
 #
 # Usage:
-#   python setWorkbench.py                       # apply workbench_config.json
-#   python setWorkbench.py --set foo.json        # apply a specific config file
-#   python setWorkbench.py --reset-bench         # reset all instruments to safe defaults
+#   python setWorkbench.py                            # apply workbench_config.json
+#   python setWorkbench.py --set foo.json             # apply a specific config file
+#   python setWorkbench.py --reset-bench              # reset all instruments to safe defaults
+#   python setWorkbench.py --reset-bench --usb-only   # reset USB-connected instruments only
 
 import argparse
 import itertools
@@ -556,6 +557,11 @@ def main():
         metavar="NAME",
         help="Read current instrument settings and write them to <NAME>.json.",
     )
+    parser.add_argument(
+        "--usb-only",
+        action="store_true",
+        help="Scan USB devices only; skip LAN/TCPIP hosts (useful with --reset-bench).",
+    )
     args = parser.parse_args()
 
     workflow = None
@@ -564,19 +570,22 @@ def main():
 
     if args.save_current:
         _subtitle = f"saving: {args.save_current}"
-        try:
-            with open(default_config) as f:
-                extra_hosts = json.load(f).get("hosts", [])
-        except Exception:
-            pass
+        if not args.usb_only:
+            try:
+                with open(default_config) as f:
+                    extra_hosts = json.load(f).get("hosts", [])
+            except Exception:
+                pass
     elif args.reset_bench:
         _subtitle = "workbench reset"
-        # Load hosts from default config even in reset mode so LAN instruments are reached.
-        try:
-            with open(default_config) as f:
-                extra_hosts = json.load(f).get("hosts", [])
-        except Exception:
-            pass
+        # Load hosts from default config so LAN instruments are reached,
+        # unless --usb-only was requested.
+        if not args.usb_only:
+            try:
+                with open(default_config) as f:
+                    extra_hosts = json.load(f).get("hosts", [])
+            except Exception:
+                pass
     else:
         config_path = args.set or default_config
         try:
