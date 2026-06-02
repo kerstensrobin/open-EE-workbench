@@ -232,3 +232,4 @@ gui_assets/icon.png
 # Measurement / sweep output data (generated at runtime)
 data/
 *.csv
+*.bmp
