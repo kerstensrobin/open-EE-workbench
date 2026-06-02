@@ -227,7 +227,7 @@ documentation/*.pdf
 # Generated launcher files (contain machine-specific absolute paths)
 # Regenerate with:  python setup_launcher.py
 open-EE-workbench.desktop
-gui_assets/icon.png
+# ui/gui_assets/icon.png is committed directly — no longer generated at install
 
 # Measurement / sweep output data (generated at runtime)
 data/

@@ -2611,12 +2611,12 @@ def ui_static(p):
 
 @flask_app.route("/assets/<path:p>")
 def gui_assets(p):
-    return send_from_directory(ROOT / "gui_assets", p)
+    return send_from_directory(ROOT / "ui" / "gui_assets", p)
 
 @flask_app.route("/favicon.ico")
 @flask_app.route("/favicon.png")
 def favicon():
-    return send_from_directory(ROOT / "gui_assets", "favicon-32.png",
+    return send_from_directory(ROOT / "ui" / "gui_assets", "favicon-32.png",
                                mimetype="image/png")
 
 @flask_app.route("/manifest.json")

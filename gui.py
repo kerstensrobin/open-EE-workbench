@@ -92,7 +92,7 @@ def _fonts():
 FSAN, FMONO = None, None  # filled after Tk root created
 
 # ── Logo rendering ───────────────────────────────────────────────────────────────
-GUI_ASSETS = ROOT / "gui_assets"
+GUI_ASSETS = ROOT / "ui" / "gui_assets"
 
 def _load_logo(size: int = 44, light: bool = True):
     """
