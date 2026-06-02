@@ -102,6 +102,16 @@
         "measure_preshoot": {
           "query": ":MEASure:PREShoot? CHANnel{ch}"
         },
+        "waveform_source": ":WAVeform:SOURce CHANnel{ch}",
+        "waveform_format_ascii": ":WAVeform:FORMat ASCii",
+        "waveform_points_mode": ":WAVeform:POINts:MODE NORMal",
+        "waveform_points": ":WAVeform:POINts {value}",
+        "waveform_preamble": {
+          "query": ":WAVeform:PREamble?"
+        },
+        "waveform_data": {
+          "query": ":WAVeform:DATA?"
+        },
         "screenshot": {
           "raw_query": ":DISPlay:DATA? PNG,COLor"
         }
@@ -196,7 +206,9 @@
         "annotation_off": null,
         "labels_on": null,
         "labels_off": null,
-        "channel_label": null
+        "channel_label": null,
+        "waveform_mode": ":WAVeform:MODE NORMal",
+        "waveform_points_mode": null
       }
     },
     {

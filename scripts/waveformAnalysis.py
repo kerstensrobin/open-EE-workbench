@@ -2,7 +2,7 @@
 # nacho.works — live waveform analysis on the active workbench scope
 #
 # Three-phase analysis matching the original waveformAnalysis workflow,
-# rewritten to use workbench.py + instruments.py so it works with any
+# rewritten to use workbench.py + eewBackbone.py so it works with any
 # supported oscilloscope (Keysight, Rigol, Tektronix, …).
 #
 # Phase 1 — Overview
@@ -43,7 +43,7 @@ ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT / "setup"))
 
 from workbench import load_workbench, open_by_role
-from instruments import classify, get_command
+from eewBackbone import classify, get_command
 
 
 # ── Configuration ─────────────────────────────────────────────────────────────
@@ -287,9 +287,9 @@ def main():
     print()
 
     if fam is None:
-        print("Warning: scope family not recognised in instruments.json.")
+        print("Warning: scope family not recognised in eewBackbone.json.")
         print("         Falling back to Keysight-style SCPI.")
-        from instruments import _resolve_family, _family_index
+        from eewBackbone import _resolve_family, _family_index
         fam = _resolve_family(_family_index()["keysight_infiniivision"])
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")

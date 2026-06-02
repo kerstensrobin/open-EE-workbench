@@ -29,7 +29,7 @@ There are no test suites or build steps.
 
 ### Workbench files
 
-`nachoVisa.py` saves discovered instruments as `../workbenches/<name>.json`. One is symlinked as `../workbenches/active.json`. Each entry records the VISA resource string, connection type, manufacturer/model/serial, `type` (scope/psu/etc.), `role` (scope/generator/psu/dmm), and `family_id` (key into `instruments.json`).
+`nachoVisa.py` saves discovered instruments as `../workbenches/<name>.json`. One is symlinked as `../workbenches/active.json`. Each entry records the VISA resource string, connection type, manufacturer/model/serial, `type` (scope/psu/etc.), `role` (scope/generator/psu/dmm), and `family_id` (key into `eewBackbone.json`).
 
 `workbench.py` provides helpers used by all other scripts:
 - `load_workbench(name=None)` — loads the named or active workbench JSON
@@ -37,9 +37,9 @@ There are no test suites or build steps.
 
 Role-based access means scripts work regardless of which port or IP an instrument is on.
 
-### instruments.json / instruments.py
+### eewBackbone.json / eewBackbone.py
 
-`instruments.json` is the vendor-neutral SCPI command database (68 families, 13 vendors). `instruments.py` loads it and exposes:
+`eewBackbone.json` is the vendor-neutral SCPI command database (68 families, 13 vendors). `eewBackbone.py` loads it and exposes:
 - `classify(idn)` — match IDN string → resolved family dict
 - `get_command(family, operation)` — retrieve SCPI steps for an operation
 - `resolve_command(cmd, **kwargs)` — expand `{ch}`, `{value}`, etc. placeholders
@@ -58,7 +58,7 @@ Role-based access means scripts work regardless of which port or IP an instrumen
 
 ### setWorkbench.py instrument handlers
 
-`setWorkbench.py` has one dedicated handler function per supported instrument model (e.g. `configure_edu36311a`, `configure_scope`). Each handler receives the open PyVISA resource and the relevant block from the workflow JSON. To add support for a new instrument, add its IDN patterns to `instruments.json` and a handler function in `setWorkbench.py`.
+`setWorkbench.py` has one dedicated handler function per supported instrument model (e.g. `configure_edu36311a`, `configure_scope`). Each handler receives the open PyVISA resource and the relevant block from the workflow JSON. To add support for a new instrument, add its IDN patterns to `eewBackbone.json` and a handler function in `setWorkbench.py`.
 
 ### screenshot.py transport differences
 

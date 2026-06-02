@@ -26,14 +26,14 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).parent
-sys.path.insert(0, str(ROOT / "setup"))
+sys.path.insert(0, str(ROOT / "core"))
 WORKBENCH_DIR = ROOT / "workbenches"
 UI_DIR        = ROOT / "ui"
 
 # ── Project helpers ───────────────────────────────────────────────────────────
 try:
     from workbench import active_name, load_workbench
-    from instruments import get_command, _resolve_family, _family_index, classify as _classify
+    from eewBackbone import get_command, _resolve_family, _family_index, classify as _classify
     HELPERS_OK = True
 except ImportError as _e:
     HELPERS_OK = False
@@ -1143,6 +1143,49 @@ def _suggest_tests() -> list:
             "columns":     ["step", "measurement"],   # overridden at runtime by the runner
         })
 
+        has_scope = bool(scope_list)
+        _psu_sel = (
+            [{"id": "psu_resource", "label": "PSU", "unit": "", "type": "select",
+              "default": source_opts[0]["value"],
+              "options": source_opts}]
+            if len(psu_list) > 1 else []
+        )
+        tests.append({
+            "id":          "psu_interrupt",
+            "name":        "PSU Interrupt",
+            "description": "Interrupt a PSU channel for T2 ms and capture the transient response",
+            "requires":    ["psu"],
+            "params": _psu_sel + [
+                {"id": "channel",       "label": "PSU channel",  "unit": "",    "default": 1,     "type": "number"},
+                {"id": "v1",            "label": "V1",           "unit": "V",   "default": 5.0,   "type": "number"},
+                {"id": "t1",            "label": "T1 settle",    "unit": "ms",  "default": 500,   "type": "number"},
+                {"id": "v2_mode",       "label": "Interrupt state", "unit": "",    "default": "off", "type": "select",
+                 "options": [{"value": "off", "label": "PSU channel off"}, {"value": "voltage", "label": "Specific V2 voltage"}]},
+                {"id": "v2",            "label": "V2",           "unit": "V",   "default": 0.0,   "type": "number"},
+                {"id": "v2_sweep",      "label": "Sweep V2",     "unit": "",    "default": "no",  "type": "select",
+                 "options": ["no", "yes"]},
+                {"id": "v2_start",      "label": "V2 start",     "unit": "V",   "default": 0.0,   "type": "number"},
+                {"id": "v2_stop",       "label": "V2 stop",      "unit": "V",   "default": 3.0,   "type": "number"},
+                {"id": "v2_step",       "label": "V2 step",      "unit": "V",   "default": 0.5,   "type": "number"},
+                {"id": "t2",            "label": "T2 duration",  "unit": "ms",  "default": 100,   "type": "number"},
+                {"id": "t2_sweep",      "label": "Sweep T2",     "unit": "",    "default": "no",  "type": "select",
+                 "options": ["no", "yes"]},
+                {"id": "t2_start",      "label": "T2 start",     "unit": "ms",  "default": 10,    "type": "number"},
+                {"id": "t2_stop",       "label": "T2 stop",      "unit": "ms",  "default": 500,   "type": "number"},
+                {"id": "t2_step",       "label": "T2 step",      "unit": "ms",  "default": 10,    "type": "number"},
+                {"id": "v3",            "label": "V3",           "unit": "V",   "default": 5.0,   "type": "number"},
+                {"id": "t3",            "label": "T3 settle",    "unit": "ms",  "default": 500,   "type": "number"},
+                {"id": "current_limit", "label": "I limit",      "unit": "A",   "default": 0.5,   "type": "number"},
+                {"id": "scope_channel", "label": "Scope CH",     "unit": "",    "default": 1,     "type": "number"},
+            ],
+            "columns": ["run", "t2_ms",
+                        "v1_meas_V", "v1_meas_A",
+                        "v2_meas_V", "v2_meas_A",
+                        "v3_meas_V", "v3_meas_A",
+                        "screenshot"],
+            "has_scope": has_scope,
+        })
+
     if "dmm" in types:
         tests.append({
             "id":          "dmm_logger",
@@ -1226,6 +1269,20 @@ def api_pick_folder():
         if path:
             return jsonify({"path": path})
         return jsonify({"path": None})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@flask_app.route("/api/open-url", methods=["POST"])
+def api_open_url():
+    """Open a URL in the system default browser."""
+    url = (request.json or {}).get("url", "").strip()
+    if not url:
+        return jsonify({"error": "url is required"}), 400
+    try:
+        import webbrowser
+        webbrowser.open(url)
+        return jsonify({"status": "ok"})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
@@ -2211,12 +2268,298 @@ def api_automation_run():
 
         _done(rows, cols)
 
+    def _run_psu_interrupt():
+        import math as _math
+
+        ch            = max(1, int(params.get("channel",       1)))
+        v1            = float(params.get("v1",                 5.0))
+        t1_ms         = float(params.get("t1",                 500))
+        v2_mode       = str(params.get("v2_mode",              "off"))
+        v2            = float(params.get("v2",                 0.0)) if v2_mode != "off" else None
+        do_v2_sweep   = v2_mode != "off" and str(params.get("v2_sweep", "no")).lower() == "yes"
+        v2_start_val  = float(params.get("v2_start",           0.0))
+        v2_stop_val   = float(params.get("v2_stop",            3.0))
+        v2_step_val   = max(0.001, float(params.get("v2_step", 0.5)))
+        t2_single     = float(params.get("t2",                 100))
+        do_sweep      = str(params.get("t2_sweep",             "no")).lower() == "yes"
+        t2_start      = float(params.get("t2_start",           10))
+        t2_stop       = float(params.get("t2_stop",            500))
+        t2_step       = max(1.0, float(params.get("t2_step",   10)))
+        v3            = float(params.get("v3", v1))
+        t3_ms_default = float(params.get("t3",                 500))
+        total_time    = float(params.get("total_time",         0))
+        i_limit       = float(params.get("current_limit",      0.5))
+        scope_ch      = max(1, int(params.get("scope_channel", 1)))
+        scope_scale   = float(params.get("scope_scale",        0))
+
+        def _ms_steps(start, stop, step):
+            step = abs(step)
+            n    = round(abs(stop - start) / step)
+            sign = 1 if stop >= start else -1
+            return [round(start + i * sign * step, 6) for i in range(n + 1)]
+
+        t2_list = _ms_steps(t2_start, t2_stop, t2_step) if do_sweep else [t2_single]
+        if do_v2_sweep:
+            v2_list = _ms_steps(v2_start_val, v2_stop_val, v2_step_val)
+        elif v2 is not None:
+            v2_list = [v2]
+        else:
+            v2_list = [None]
+
+        def _t3(t2):
+            if total_time > 0:
+                return max(0.0, total_time - t1_ms - t2)
+            return t3_ms_default
+
+        def _nice_time(s):
+            if s <= 0:
+                return 1e-3
+            exp = _math.floor(_math.log10(s))
+            m   = s / 10 ** exp
+            for step in (1, 2, 5, 10):
+                if m <= step:
+                    return step * 10 ** exp
+            return 10 * 10 ** exp
+
+        psu_rstr = params.get("psu_resource", "")
+        if psu_rstr and psu_rstr in _state["resources"]:
+            psu_res = _state["resources"][psu_rstr]
+            psu_fam = _state["families"].get(psu_rstr)
+        else:
+            psu_res, psu_fam = _find_instrument("psu")
+        if psu_res is None:
+            _done([], [], "PSU not connected"); return
+
+        scope_res, scope_fam = _find_instrument("scope")
+        # scope is optional — proceed without it if not available
+
+        # ── Scope setup ───────────────────────────────────────────────────────
+        scope_win = 0.0   # capture window duration; used later to gate the screenshot
+        if scope_res is not None and scope_fam is not None:
+            v2_val     = min((x for x in v2_list if x is not None), default=0.0)
+            trig_lv    = (v1 + v2_val) / 2.0
+            max_t2     = max(t2_list)
+            max_t3     = _t3(max_t2)
+            total_s    = (t1_ms + max_t2 + max_t3) / 1000.0 * 1.1
+            tpd        = scope_scale if scope_scale > 0 else _nice_time(total_s / 12)
+            scope_win  = tpd * 12
+            # Rigol :TIMebase:MAIN:OFFSet sign convention: positive moves the trigger
+            # LEFT on screen (more post-trigger room on the right). We want T1 of
+            # pre-trigger, so offset = win/2 - T1, which is positive when T1 < win/2.
+            position   = scope_win / 2.0 - t1_ms / 1000.0
+            try:
+                def _sw(op, **kw):
+                    for act, scpi in get_command(scope_fam, op, **kw):
+                        if act == "write":
+                            scope_res.write(scpi)
+                try: _sw("trigger_mode")
+                except KeyError: pass
+                _sw("trigger_source",  ch=scope_ch)
+                _sw("trigger_slope",   slope="NEG")
+                _sw("trigger_level",   value=f"{trig_lv:.4f}")
+                _sw("timebase_scale",  value=f"{tpd:.6e}")
+                _sw("timebase_position", value=f"{position:.6e}")
+                _emit_progress(
+                    f"Scope configured: trig NEG @ {trig_lv:.3f} V, "
+                    f"{tpd * 1000:.3g} ms/div on CH{scope_ch}, "
+                    f"window {scope_win * 1000:.0f} ms, offset {position * 1000:.1f} ms"
+                )
+            except Exception as exc:
+                _emit_progress(f"[warn] Scope setup failed: {exc} — continuing without scope")
+                scope_res = None
+
+        # ── PSU init ──────────────────────────────────────────────────────────
+        try:
+            _run_steps(psu_res, get_command(psu_fam, "reset"))
+            time.sleep(1.0)
+            _run_steps(psu_res, get_command(psu_fam, "set_current_limit", ch=ch, value=f"{i_limit:.4f}"))
+            _run_steps(psu_res, get_command(psu_fam, "set_voltage",       ch=ch, value=f"{v1:.6f}"))
+            _run_steps(psu_res, get_command(psu_fam, "output_on",         ch=ch))
+            time.sleep(0.5)
+        except Exception as exc:
+            _done([], [], f"PSU init failed: {exc}"); return
+
+        total_runs = len(t2_list) * len(v2_list)
+        _emit_progress(
+            f"Starting {total_runs} run(s): "
+            f"V1={v1:.3f} V, interrupt={'off' if v2 is None else 'voltage sweep' if do_v2_sweep else f'{v2:.3f} V'}, "
+            f"V3={v3:.3f} V"
+        )
+
+        cols = ["run", "t2_ms"]
+        if v2_mode == "voltage":
+            cols.append("v2_set_V")
+        cols += ["v1_meas_V", "v1_meas_A",
+                 "v2_meas_V", "v2_meas_A",
+                 "v3_meas_V", "v3_meas_A",
+                 "screenshot"]
+        rows = []
+
+        def _take_screenshot_app(run_num, t2_ms, run_v2=None):
+            """Take a screenshot and save to out_dir; return the file path or ''."""
+            if scope_res is None:
+                return ''
+            try:
+                steps = get_command(scope_fam, "screenshot")
+            except KeyError:
+                return ''
+            raw_idx = next((i for i, (a, _) in enumerate(steps) if a == "raw_query"), None)
+            if raw_idx is None:
+                return ''
+            pre  = [(a, s) for a, s in steps[:raw_idx]     if a == "write"]
+            cmd_ = steps[raw_idx][1]
+            post = [(a, s) for a, s in steps[raw_idx + 1:] if a == "write"]
+
+            with _rlock(scope_res):
+                scope_stopped = False
+                try:
+                    _run_steps(scope_res, get_command(scope_fam, "stop"))
+                    scope_stopped = True
+                    time.sleep(0.1)
+                except Exception:
+                    pass
+                orig_to = scope_res.timeout
+                try:
+                    scope_res.timeout = 35_000
+                    for _, s in pre:
+                        scope_res.write(s)
+                    scope_res.write(cmd_)
+                    time.sleep(0.1)
+                    orig_chunk = getattr(scope_res, 'chunk_size', None)
+                    try:
+                        scope_res.chunk_size = _SCREENSHOT_CHUNK_SIZE
+                        data = scope_res.read_raw()
+                    finally:
+                        if orig_chunk is not None:
+                            try: scope_res.chunk_size = orig_chunk
+                            except Exception: pass
+                    for _, s in post:
+                        try: scope_res.write(s)
+                        except Exception: pass
+                except Exception as exc:
+                    _log(f"[psu_interrupt] screenshot error: {exc}")
+                    return ''
+                finally:
+                    try: scope_res.timeout = orig_to
+                    except Exception: pass
+                    if scope_stopped:
+                        try: _run_steps(scope_res, get_command(scope_fam, "run"))
+                        except Exception: pass
+
+            ext = ''
+            for magic, e in [(b"\x89PNG", ".png"), (b"BM", ".bmp")]:
+                idx = data.find(magic)
+                if idx != -1:
+                    data = data[idx:]; ext = e; break
+
+            ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            v2tag  = f"_v2_{run_v2:.2f}V" if (run_v2 is not None and do_v2_sweep) else ""
+            fname  = f"psu_interrupt_run{run_num:03d}_t2_{t2_ms:.0f}ms{v2tag}_{ts_str}{ext or '.bin'}"
+            try:
+                out_dir.mkdir(parents=True, exist_ok=True)
+                fpath = out_dir / fname
+                fpath.write_bytes(data)
+                return str(fpath)
+            except Exception as exc:
+                _log(f"[psu_interrupt] screenshot save error: {exc}")
+                return ''
+
+        all_runs = list(itertools.product(v2_list, t2_list))
+        try:
+            for run_num, (run_v2, t2_ms) in enumerate(all_runs, start=1):
+                if _auto_stop.is_set():
+                    _emit_progress("Stopped by user"); break
+
+                t3_ms = _t3(t2_ms)
+                ch_off = run_v2 is None
+
+                # Arm scope BEFORE Phase 1 so the pre-trigger buffer fills with T1 ms
+                # of steady V1 — gives a clean baseline and avoids the 150 ms race.
+                scope_arm_t = 0.0
+                if scope_res is not None:
+                    try:
+                        for act, scpi in get_command(scope_fam, "single"):
+                            if act == "write":
+                                scope_res.write(scpi)
+                        scope_arm_t = time.monotonic()
+                    except Exception:
+                        pass
+
+                # Phase 1 — establish V1
+                _run_steps(psu_res, get_command(psu_fam, "set_voltage", ch=ch, value=f"{v1:.6f}"))
+                _run_steps(psu_res, get_command(psu_fam, "output_on",   ch=ch))
+                time.sleep(t1_ms / 1000.0)
+                v1_v = float(_run_steps(psu_res, get_command(psu_fam, "measure_voltage", ch=ch)) or 0)
+                v1_i = float(_run_steps(psu_res, get_command(psu_fam, "measure_current", ch=ch)) or 0)
+
+                # Phase 2 — interrupt (triggers scope)
+                if ch_off:
+                    _run_steps(psu_res, get_command(psu_fam, "output_off", ch=ch))
+                else:
+                    _run_steps(psu_res, get_command(psu_fam, "set_voltage", ch=ch, value=f"{run_v2:.6f}"))
+                time.sleep(t2_ms / 1000.0)
+                v2_v = float(_run_steps(psu_res, get_command(psu_fam, "measure_voltage", ch=ch)) or 0)
+                v2_i = float(_run_steps(psu_res, get_command(psu_fam, "measure_current", ch=ch)) or 0)
+
+                # Phase 3 — restore
+                _run_steps(psu_res, get_command(psu_fam, "set_voltage", ch=ch, value=f"{v3:.6f}"))
+                if ch_off:
+                    _run_steps(psu_res, get_command(psu_fam, "output_on", ch=ch))
+                time.sleep(t3_ms / 1000.0)
+                v3_v = float(_run_steps(psu_res, get_command(psu_fam, "measure_voltage", ch=ch)) or 0)
+                v3_i = float(_run_steps(psu_res, get_command(psu_fam, "measure_current", ch=ch)) or 0)
+
+                # Wait until the scope has captured the full acquisition window.
+                # Deadline = arm_time + scope_win + 1.5 s (generous safety margin).
+                # The scope needs scope_win seconds from arm to finish the acquisition
+                # (T1 pre-trigger buffer + scope_win-T1 post-trigger). Using arm_time
+                # as the reference avoids any ambiguity about instrument command latency.
+                if scope_arm_t > 0 and scope_win > 0:
+                    gap = (scope_arm_t + scope_win + 1.5) - time.monotonic()
+                    if gap > 0:
+                        time.sleep(gap)
+
+                shot = _take_screenshot_app(run_num, t2_ms, run_v2)
+
+                row = [run_num, round(t2_ms, 3)]
+                if v2_mode == "voltage":
+                    row.append(round(run_v2, 6) if run_v2 is not None else None)
+                row += [round(v1_v, 6), round(v1_i, 6),
+                        round(v2_v, 6), round(v2_i, 6),
+                        round(v3_v, 6), round(v3_i, 6),
+                        shot]
+                rows.append(row)
+                sio.emit("automation_row", {
+                    "test_id": test_id, "row": row, "columns": cols,
+                    "progress": run_num / len(all_runs),
+                })
+                _emit_progress(
+                    f"Run {run_num}/{len(all_runs)}  T2={t2_ms:.1f} ms"
+                    + (f"  V2={run_v2:.3f} V" if run_v2 is not None else "")
+                    + f"  V1={v1_v:.4f} V  V3={v3_v:.4f} V"
+                    + (f"  → {os.path.basename(shot)}" if shot else "")
+                )
+
+        except Exception as exc:
+            _log(f"[psu_interrupt] error: {exc}")
+
+        finally:
+            try:
+                _run_steps(psu_res, get_command(psu_fam, "set_voltage", ch=ch, value="0.0"))
+                _run_steps(psu_res, get_command(psu_fam, "output_off",  ch=ch))
+                psu_res.write("SYSTem:LOCal")
+            except Exception:
+                pass
+
+        _done(rows, cols)
+
     runners = {
         "ac_frequency_sweep": _run_ac_sweep,
         "dc_sweep":           _run_dc_sweep,
         "dmm_logger":         _run_dmm_logger,
         "waveform_analysis":  _run_waveform_analysis,
         "harmonic_analysis":  _run_harmonic_analysis,
+        "psu_interrupt":      _run_psu_interrupt,
     }
     runner = runners.get(test_id)
     if runner is None:

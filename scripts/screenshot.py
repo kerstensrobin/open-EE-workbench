@@ -9,13 +9,13 @@ import time
 
 import pyvisa
 
-# Allow running from any directory: add setup/ (where workbench.py / instruments.py live)
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'setup'))
+# Allow running from any directory: add core/ (where workbench.py / eewBackbone.py live)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'core'))
 
 from workbench import load_workbench, open_by_role
 
 try:
-    from instruments import classify, get_command
+    from eewBackbone import classify, get_command
 except ImportError:
     classify = None
     get_command = None

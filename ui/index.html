@@ -415,6 +415,7 @@
     .test-card {
       background:var(--surface);
       transition:border-color .2s;
+      max-width:700px;
     }
     .test-card.running { box-shadow:inset 0 2px 0 var(--accent); }
     .test-card.done    { box-shadow:inset 0 2px 0 var(--green); }
@@ -437,11 +438,15 @@
     .test-params { display:flex; flex-direction:column; gap:7px; }
     .test-param-row { display:flex; align-items:center; gap:8px; }
     .test-param-label { font-size:11px; color:var(--text-dim); width:72px; flex-shrink:0; }
-    .test-param-input-wrap { flex:1; display:flex; align-items:center; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; transition:border-color .15s; }
+    .test-param-input-wrap { flex:1; max-width:220px; display:flex; align-items:center; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; transition:border-color .15s; }
     .test-param-input-wrap:focus-within { border-color:var(--accent); }
     .test-param-input { flex:1; background:none; border:none; color:var(--text); font:inherit; font-family:var(--mono); font-size:12px; padding:5px 8px; outline:none; min-width:0; }
     .test-param-input.sel { cursor:pointer; }
     .test-param-unit  { padding:5px 8px; font-size:10px; font-family:var(--mono); color:var(--text-dim); background:var(--surface3); border-left:1px solid var(--border); white-space:nowrap; }
+
+    /* psu interrupt diagram */
+    .psu-int-diagram { background:var(--surface3); border:1px solid var(--border); border-radius:var(--radius); padding:8px 10px 2px; margin-bottom:10px; }
+    .psu-int-diagram svg { max-height: 200px; }
 
     /* test actions */
     .test-actions { display:flex; gap:6px; }
@@ -634,7 +639,7 @@
 
 <!-- ── Navbar ─────────────────────────────────────────────────────── -->
 <nav id="navbar">
-  <a class="nav-logo" href="https://nacho.works" target="_blank">
+  <a class="nav-logo" href="#" onclick="fetch('/api/open-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:'https://nacho.works'})});return false;">
     <img id="nav-logo-img" src="/assets/nacho_white.svg" alt="nacho.works" />
   </a>
   <div class="nav-divider"></div>
@@ -1897,6 +1902,7 @@ function buildTestGrid(tests) {
       _dcSwRenderChannels();
       _dcSwRenderMeasList();
     }
+    if (test.id === "psu_interrupt") _psuInterruptInit(test.id);
   }
 
   // Auto-select the first test (or reselect the previously active one)
@@ -1980,6 +1986,188 @@ function buildTestCard(test) {
       </div>
     </div>`;
   return div;
+}
+
+function _psuInterruptInit(testId) {
+  const id  = s => document.getElementById(`tp-${testId}-${s}`);
+  const row = s => id(s)?.closest(".test-param-row");
+
+  const v1El      = id("v1");
+  const v3El      = id("v3");
+  const sweepEl   = id("t2_sweep");
+  const sweepRows = ["t2_start", "t2_stop", "t2_step"].map(row);
+  sweepRows.forEach(r => {
+    if (!r) return;
+    r.style.paddingLeft = "18px";
+    r.style.borderLeft  = "2px solid var(--border)";
+    r.style.marginLeft  = "2px";
+  });
+
+  // Mirror V1 → V3 whenever V1 changes
+  v1El?.addEventListener("input", () => { if (v3El) v3El.value = v1El.value; });
+
+  // V2 group — all children of v2_mode=voltage
+  const v2ModeEl       = id("v2_mode");
+  const v2Row          = row("v2");
+  const v2SweepEl      = id("v2_sweep");
+  const v2SweepRow     = row("v2_sweep");
+  const v2SweepSubRows = ["v2_start", "v2_stop", "v2_step"].map(row);
+
+  [v2Row, v2SweepRow].forEach(r => {
+    if (!r) return;
+    r.style.paddingLeft = "18px";
+    r.style.borderLeft  = "2px solid var(--border)";
+    r.style.marginLeft  = "2px";
+  });
+  v2SweepSubRows.forEach(r => {
+    if (!r) return;
+    r.style.paddingLeft = "36px";
+    r.style.borderLeft  = "2px solid var(--border)";
+    r.style.marginLeft  = "2px";
+  });
+
+  function _updateV2SweepVisibility() {
+    const show = v2ModeEl?.value !== "off" && v2SweepEl?.value === "yes";
+    v2SweepSubRows.forEach(r => { if (r) r.style.display = show ? "" : "none"; });
+  }
+  function _updateV2Visibility() {
+    const isVoltage = v2ModeEl?.value !== "off";
+    if (v2Row)      v2Row.style.display      = isVoltage ? "" : "none";
+    if (v2SweepRow) v2SweepRow.style.display = isVoltage ? "" : "none";
+    _updateV2SweepVisibility();
+  }
+  v2ModeEl?.addEventListener("change", _updateV2Visibility);
+  v2SweepEl?.addEventListener("change", _updateV2SweepVisibility);
+  _updateV2Visibility();
+
+  // Show/hide T2 duration vs sweep range
+  const t2Row = row("t2");
+  function _updateSweepVisibility() {
+    const show = sweepEl?.value === "yes";
+    if (t2Row) t2Row.style.display = show ? "none" : "";
+    sweepRows.forEach(r => { if (r) r.style.display = show ? "" : "none"; });
+  }
+  sweepEl?.addEventListener("change", _updateSweepVisibility);
+  _updateSweepVisibility();
+
+  // ── Waveform diagram ──────────────────────────────────────────────────────
+  const diagDiv = document.createElement("div");
+  diagDiv.className = "psu-int-diagram";
+  const paramsEl = document.getElementById(`tparams-${testId}`);
+  paramsEl.parentNode.insertBefore(diagDiv, paramsEl);
+
+  function _updateDiagram() {
+    const v1     = parseFloat(id("v1")?.value)       || 5;
+    const v2mode = id("v2_mode")?.value               || "off";
+    const v2     = v2mode === "off" ? 0 : (parseFloat(id("v2")?.value) || 0);
+    const v3     = parseFloat(v3El?.value)            || v1;
+    const t1     = parseFloat(id("t1")?.value)        || 500;
+    const t2     = parseFloat(id("t2")?.value)        || 100;
+    const t3     = parseFloat(id("t3")?.value)        || 500;
+    const t2Swept = id("t2_sweep")?.value === "yes";
+    const v2Swept = v2mode !== "off" && id("v2_sweep")?.value === "yes";
+    const t2Start = t2Swept ? (parseFloat(id("t2_start")?.value) || t2) : t2;
+    const t2Stop  = t2Swept ? (parseFloat(id("t2_stop")?.value)  || t2) : t2;
+    const v2Start = v2Swept ? (parseFloat(id("v2_start")?.value) ?? v2) : v2;
+    const v2Stop  = v2Swept ? (parseFloat(id("v2_stop")?.value)  ?? v2) : v2;
+    diagDiv.innerHTML = _psuInterruptSVG(v1, v2, v3, t1, t2, t3, t2Swept, v2Swept, t2Start, t2Stop, v2Start, v2Stop);
+  }
+
+  ["v1","v2","v2_mode","v2_sweep","v2_start","v2_stop","v3","t1","t2","t2_start","t2_stop","t3"].forEach(fid => {
+    id(fid)?.addEventListener("input",  _updateDiagram);
+    id(fid)?.addEventListener("change", _updateDiagram);
+  });
+  _updateDiagram();
+}
+
+function _psuInterruptSVG(v1, v2, v3, t1, t2, t3, t2Swept=false, v2Swept=false, t2Start=t2, t2Stop=t2, v2Start=v2, v2Stop=v2) {
+  const W=460, H=124;
+  const LP=36, RP=52, TP=12, BP=40;
+  const wx=LP, wy=TP, ww=W-LP-RP, wh=H-TP-BP;
+
+  // Phase width: use midpoint of T2 range when swept so diagram proportions look reasonable
+  const t2Visual = t2Swept ? (t2Start + t2Stop) / 2 : t2;
+  const raw=[Math.max(t1,0.001), Math.max(t2Visual,0.001), Math.max(t3,0.001)];
+  const tot=raw[0]+raw[1]+raw[2];
+  let fr=raw.map(v=>v/tot);
+  const MIN=0.13;
+  fr=fr.map(f=>Math.max(f,MIN));
+  const fs=fr[0]+fr[1]+fr[2];
+  fr=fr.map(f=>f/fs);
+  const x0=wx, x1=wx+ww*fr[0], x2=x1+ww*fr[1], x3=wx+ww;
+
+  // Waveform path uses the lowest V2 value (first in sweep or the fixed value)
+  const v2Path = v2Swept ? Math.min(v2Start, v2Stop) : v2;
+
+  // Voltage → Y — include full sweep range in scale
+  const vHi=Math.max(v1, v3, v2Path+0.001, v2Swept ? Math.max(v2Start,v2Stop)+0.001 : v2+0.001);
+  const vLo=Math.min(0, v2Path, v2Swept ? Math.min(v2Start,v2Stop) : v2);
+  const span=vHi-vLo || 1;
+  const vTop=vHi+span*0.22, vBot=vLo-span*0.10;
+  const vRange=vTop-vBot;
+  const yv=v=>wy+wh-(v-vBot)/vRange*wh;
+
+  const yV1=yv(v1), yV2=yv(v2Path), yV3=yv(v3), yFloor=wy+wh;
+
+  const fmtT=t=>t>=1000?`${(t/1000).toFixed(1)}s`:`${Math.round(t)}ms`;
+  const fmtV=v=>v<=0.005?'0V':`${parseFloat(v.toFixed(2))}V`;
+
+  const THRESH=wh*0.12;
+  const v3distinct=Math.abs(yV3-yV1)>THRESH;
+  // V2 is distinct if any part of its range is far enough from V1
+  const v2distinct=Math.abs(yV2-yV1)>THRESH || (v2Swept && Math.abs(yv(Math.max(v2Start,v2Stop))-yV1)>THRESH);
+
+  const ref=(y,color,op=0.55)=>
+    `<line x1="${wx-1}" y1="${y}" x2="${x3+2}" y2="${y}" stroke="${color}" stroke-width="0.8" stroke-dasharray="4,5" opacity="${op}"/>`;
+  const lbl=(y,text,color)=>
+    `<text x="${wx-5}" y="${y+3.5}" text-anchor="end" font-size="10" font-family="var(--mono)" font-weight="600" fill="${color}">${text}</text>`;
+  const rval=(y,text,color)=>
+    `<text x="${x3+7}" y="${y+3.5}" text-anchor="start" font-size="9" font-family="var(--mono)" fill="${color}" opacity="0.8">${text}</text>`;
+  const div=(x)=>
+    `<line x1="${x}" y1="${wy-4}" x2="${x}" y2="${yFloor+8}" stroke="var(--border)" stroke-width="0.7" stroke-dasharray="2,4" opacity="0.6"/>`;
+
+  function bracket(xa, xb, label, val) {
+    const mid=(xa+xb)/2, BY=yFloor+16, TH=4;
+    return `<line x1="${xa+1}" y1="${BY}" x2="${xb-1}" y2="${BY}" stroke="var(--text-dim)" stroke-width="1"/>
+      <line x1="${xa+1}" y1="${BY-TH}" x2="${xa+1}" y2="${BY+TH}" stroke="var(--text-dim)" stroke-width="1"/>
+      <line x1="${xb-1}" y1="${BY-TH}" x2="${xb-1}" y2="${BY+TH}" stroke="var(--text-dim)" stroke-width="1"/>
+      <text x="${mid}" y="${BY-6}" text-anchor="middle" font-size="10" font-family="var(--mono)" font-weight="600" fill="var(--text-dim)">${label}</text>
+      <text x="${mid}" y="${BY+13}" text-anchor="middle" font-size="8.5" font-family="var(--mono)" fill="var(--text-faint)">${val}</text>`;
+  }
+
+  // V2 sweep: filled band between the two boundary voltages
+  let v2BandSvg = '';
+  if (v2Swept && v2distinct) {
+    const yA = yv(v2Start), yB = yv(v2Stop);
+    const yTop = Math.min(yA, yB), yH = Math.max(Math.abs(yB - yA), 2);
+    v2BandSvg = `<rect x="${wx}" y="${yTop}" width="${ww}" height="${yH}" fill="var(--red)" opacity="0.08"/>
+    ${ref(yA,"var(--red)",0.35)}${ref(yB,"var(--red)",0.35)}`;
+  }
+
+  const path=`M${x0},${yV1} H${x1} V${yV2} H${x2} V${yV3} H${x3}`;
+  const dot=(cx,cy)=>`<circle cx="${cx}" cy="${cy}" r="2.5" fill="var(--accent)" opacity="0.75"/>`;
+
+  const t2BracketVal = t2Swept ? `${fmtT(t2Start)}–${fmtT(t2Stop)}` : fmtT(t2);
+  const v2RvalText   = v2Path<=0.005 ? 'OFF' : v2Swept ? `${fmtV(Math.min(v2Start,v2Stop))}–${fmtV(Math.max(v2Start,v2Stop))}` : fmtV(v2);
+
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;">
+    ${ref(yV1,"var(--green)")}
+    ${v2distinct && !v2Swept ? ref(yV2,"var(--red)",0.50) : ''}
+    ${v2BandSvg}
+    ${v3distinct ? ref(yV3,"var(--green)",0.42) : ''}
+    ${div(x1)}${div(x2)}
+    <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dot(x1,yV1)}${dot(x1,yV2)}${dot(x2,yV2)}${dot(x2,yV3)}
+    ${lbl(yV1,"V1","var(--green)")}
+    ${v2distinct ? lbl(v2Swept?(yv(v2Start)+yv(v2Stop))/2:yV2,"V2","var(--red)") : ''}
+    ${v3distinct ? lbl(yV3,"V3","var(--green)") : ''}
+    ${rval(yV1,fmtV(v1),"var(--green)")}
+    ${v2distinct ? rval(v2Swept?(yv(v2Start)+yv(v2Stop))/2:yV2, v2RvalText, "var(--red)") : ''}
+    ${v3distinct ? rval(yV3,fmtV(v3),"var(--green)") : ''}
+    ${bracket(x0,x1,"T1",fmtT(t1))}
+    ${bracket(x1,x2,"T2",t2BracketVal)}
+    ${bracket(x2,x3,"T3",fmtT(t3))}
+  </svg>`;
 }
 
 function getTestParams(testId) {
@@ -2427,6 +2615,132 @@ function _dcSwRenderChannels() {
       </div>`;
     container.appendChild(col);
   }
+
+  // Live-update diagram when any voltage input changes
+  for (let n = 0; n < _dcSw.numCh; n++) {
+    for (const sfx of ["vstart","vstep","vstop"]) {
+      document.getElementById(`dcsw-ch${n}-${sfx}`)
+        ?.addEventListener("input", _dcSwUpdateDiagram);
+    }
+  }
+  _dcSwUpdateDiagram();
+}
+
+function _dcSwUpdateDiagram() {
+  const div = document.getElementById("dcsw-diagram");
+  if (!div) return;
+  const channels = Array.from({length: _dcSw.numCh}, (_, i) => ({
+    vStart: parseFloat(document.getElementById(`dcsw-ch${i}-vstart`)?.value) || 0,
+    vStep:  parseFloat(document.getElementById(`dcsw-ch${i}-vstep`)?.value)  || 0.1,
+    vStop:  parseFloat(document.getElementById(`dcsw-ch${i}-vstop`)?.value)  || 5,
+  }));
+  div.innerHTML = _dcSweepSVG(channels, _dcSw.sweepMode);
+}
+
+function _dcSweepSVG(channels, mode) {
+  if (!channels || !channels.length) return '';
+  const W=460, H=124, LP=36, RP=52, TP=12, BP=40;
+  const wx=LP, ww=W-LP-RP, wy=TP, wh=H-TP-BP;
+  const COLORS = ["var(--accent)","var(--green)","var(--amber)","var(--purple)"];
+  const THRESH  = wh * 0.12;
+
+  function stepsFor(ch) {
+    const s = Math.max(Math.abs(ch.vStep), 1e-6);
+    const dir = ch.vStop >= ch.vStart ? 1 : -1;
+    const n   = Math.max(0, Math.round(Math.abs(ch.vStop - ch.vStart) / s));
+    return Array.from({length: n+1}, (_, i) => parseFloat((ch.vStart + i*dir*s).toFixed(6)));
+  }
+
+  const rawSeqs = channels.map(stepsFor);
+
+  let seqs;
+  if (mode === "nested" && channels.length > 1) {
+    const totalN = rawSeqs.reduce((a, s) => a * s.length, 1);
+    const full = rawSeqs.map((_, ci) => {
+      const inner = rawSeqs.slice(0, ci).reduce((a, s) => a * s.length, 1);
+      return Array.from({length: totalN}, (_, i) =>
+        rawSeqs[ci][Math.floor(i / inner) % rawSeqs[ci].length]
+      );
+    });
+    const MAX = 40;
+    if (totalN <= MAX) {
+      seqs = full;
+    } else {
+      const idxs = Array.from({length: MAX}, (_, i) => Math.round(i*(totalN-1)/(MAX-1)));
+      seqs = full.map(s => idxs.map(i => s[i]));
+    }
+  } else {
+    const maxLen = rawSeqs.reduce((a, s) => Math.max(a, s.length), 1);
+    seqs = rawSeqs.map(s =>
+      s.length < maxLen ? [...s, ...Array(maxLen - s.length).fill(s.at(-1) ?? 0)] : s
+    );
+  }
+
+  const nVis = seqs[0]?.length ?? 0;
+  if (nVis === 0) return '';
+
+  const allV = seqs.flat();
+  const vLo = Math.min(...allV), vHi = Math.max(...allV);
+  const span = Math.max(vHi - vLo, 0.001);
+  const vTop = vHi + span*0.22, vBot = vLo - span*0.10;
+  const vR   = vTop - vBot;
+  const yv   = v => wy + wh - (v - vBot) / vR * wh;
+
+  // Staircase path per channel
+  let pathSvg = '';
+  channels.forEach((_, ci) => {
+    const seq = seqs[ci];
+    const col = COLORS[ci] ?? "var(--accent)";
+    let d = '';
+    seq.forEach((v, i) => {
+      const x0 = wx + (i / Math.max(nVis-1, 1)) * ww;
+      const x1 = i < nVis-1 ? wx + ((i+1) / Math.max(nVis-1, 1)) * ww : wx+ww;
+      const y  = yv(v);
+      d += i === 0 ? `M${x0.toFixed(1)},${y.toFixed(1)}` : ` V${y.toFixed(1)}`;
+      d += ` H${x1.toFixed(1)}`;
+    });
+    pathSvg += `<path d="${d}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  });
+
+  // Left labels (channel name at mid-point) + right voltage values
+  const fmtV = v => Math.abs(v) < 0.001 ? '0V' : `${parseFloat(v.toFixed(2))}V`;
+  const usedR = [];
+  const bumpY = (arr, y) => {
+    let yy = Math.max(wy+4, Math.min(wy+wh-4, y));
+    while (arr.some(u => Math.abs(u-yy) < THRESH)) yy += THRESH;
+    arr.push(yy); return yy;
+  };
+  let lsvg = '', rsvg = '';
+  channels.forEach((ch, ci) => {
+    const col  = COLORS[ci] ?? "var(--accent)";
+    const midY = Math.max(wy+8, Math.min(wy+wh, (yv(ch.vStart)+yv(ch.vStop))/2));
+    lsvg += `<text x="${wx-4}" y="${midY+3.5}" text-anchor="end" font-size="9" font-family="var(--mono)" font-weight="700" fill="${col}">${channels.length>1?`CH${ci+1}`:"V"}</text>`;
+    const ryA = bumpY(usedR, yv(ch.vStart));
+    rsvg += `<text x="${wx+ww+6}" y="${ryA+3.5}" text-anchor="start" font-size="8.5" font-family="var(--mono)" fill="${col}" opacity="0.85">${fmtV(ch.vStart)}</text>`;
+    const ryB = bumpY(usedR, yv(ch.vStop));
+    rsvg += `<text x="${wx+ww+6}" y="${ryB+3.5}" text-anchor="start" font-size="8.5" font-family="var(--mono)" fill="${col}" opacity="0.85">${fmtV(ch.vStop)}</text>`;
+  });
+
+  // Bottom annotation
+  const BY = wy+wh+16, TH = 4;
+  let botSvg;
+  if (channels.length === 1) {
+    const n = rawSeqs[0].length;
+    botSvg = `
+      <line x1="${wx+1}" y1="${BY}" x2="${wx+ww-1}" y2="${BY}" stroke="var(--text-dim)" stroke-width="1"/>
+      <line x1="${wx+1}" y1="${BY-TH}" x2="${wx+1}" y2="${BY+TH}" stroke="var(--text-dim)" stroke-width="1"/>
+      <line x1="${wx+ww-1}" y1="${BY-TH}" x2="${wx+ww-1}" y2="${BY+TH}" stroke="var(--text-dim)" stroke-width="1"/>
+      <text x="${wx+ww/2}" y="${BY+13}" text-anchor="middle" font-size="8.5" font-family="var(--mono)" fill="var(--text-faint)">${n} steps</text>`;
+  } else {
+    const counts = rawSeqs.map((s, i) => `CH${i+1}:${s.length}`).join(' · ');
+    const tag    = mode === "nested" ? `nested — ${counts}` : `simultaneous — ${counts}`;
+    botSvg = `<text x="${wx+ww/2}" y="${BY+13}" text-anchor="middle" font-size="8.5" font-family="var(--mono)" fill="var(--text-faint)">${tag}</text>`;
+  }
+
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;">
+  <line x1="${wx}" y1="${wy}" x2="${wx}" y2="${wy+wh}" stroke="var(--border)" stroke-width="0.7" opacity="0.5"/>
+  ${pathSvg}${lsvg}${rsvg}${botSvg}
+</svg>`;
 }
 
 // ── Measurement list helpers ─────────────────────────────────────────
@@ -2804,6 +3118,9 @@ function buildDcSweepCard(test) {
       </div>
     </div>
     <div class="test-card-body">
+
+      <!-- ── Sweep diagram ────────────────────────────────────── -->
+      <div id="dcsw-diagram" class="psu-int-diagram" style="margin-bottom:10px;"></div>
 
       <!-- ── Top controls ─────────────────────────────────────── -->
       <div class="dcsw-top">

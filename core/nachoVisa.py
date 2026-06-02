@@ -189,7 +189,7 @@ except ImportError:
     list_ports = None
 
 try:
-    from instruments import classify as _db_classify
+    from eewBackbone import classify as _db_classify
 except ImportError:
     _db_classify = None
 
@@ -204,7 +204,7 @@ LAN_PROBE_PORTS = (5025, 4880, 111)
 
 WORKBENCH_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "workbenches")
 
-# instruments.json uses "awg" as the type; map it to the conventional role name
+# eewBackbone.json uses "awg" as the type; map it to the conventional role name
 _TYPE_TO_ROLE = {"awg": "generator"}
 
 

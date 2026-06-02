@@ -119,11 +119,11 @@ class Spinner:
 # ---------------------------------------------------------------------------
 
 try:
-    from instruments import classify as _db_classify
+    from eewBackbone import classify as _db_classify
 except ImportError:
     _db_classify = None
 
-# Maps instruments.json family IDs to the handler keys used by APPLY/RESET_HANDLERS.
+# Maps eewBackbone.json family IDs to the handler keys used by APPLY/RESET_HANDLERS.
 # Families not listed here fall back to their generic type (e.g. "scope").
 _FAMILY_TO_HANDLER = {
     "keysight_edu36311a": "edu36311a",
@@ -143,7 +143,7 @@ def classify(idn: str) -> str:
             if ftype in APPLY_HANDLERS:
                 return ftype
             return "unknown"
-    # fallback if instruments.py is unavailable
+    # fallback if eewBackbone.py is unavailable
     u = idn.upper()
     if "EDU36311A" in u:
         return "edu36311a"

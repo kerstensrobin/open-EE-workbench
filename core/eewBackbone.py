@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Shared instrument database for nacho.works VISA scripts.
 
-Loads instruments.json from the same directory and provides:
+Loads eewBackbone.json from the same directory and provides:
   classify(idn)              → resolved family dict or None
   resolve_command(cmd, **kw) → list of (action, string) steps
   get_command(family, op, **kw)
@@ -14,7 +14,7 @@ JSON inheritance model (v2.0):
     - A key not present in the parent is added (vendor-specific extension).
   classify() always returns a fully resolved family (inheritance applied).
 
-Command spec format (from instruments.json):
+Command spec format (from eewBackbone.json):
   "cmd string"           → single write
   ["a", "b", {...}]      → sequential steps
   {"write": "...", "query": "..."}   → settable+readable property
@@ -26,7 +26,7 @@ import json
 import os
 
 _DB = None
-_DB_PATH = os.path.join(os.path.dirname(__file__), "instruments.json")
+_DB_PATH = os.path.join(os.path.dirname(__file__), "eewBackbone.json")
 
 
 def _load() -> dict:
@@ -49,7 +49,7 @@ def _resolve_family(family: dict) -> dict:
     index = _family_index()
     parent_id = family["inherits"]
     if parent_id not in index:
-        raise KeyError(f"Parent family {parent_id!r} not found in instruments.json")
+        raise KeyError(f"Parent family {parent_id!r} not found in eewBackbone.json")
 
     parent = _resolve_family(index[parent_id])
     commands = dict(parent.get("commands", {}))

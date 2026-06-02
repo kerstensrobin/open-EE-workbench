@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-# nacho.works — IV Curve Analysis
+# nacho.works — DC Sweep
 # Sweeps one or both PSU channels over a voltage range and logs the
 # measured voltage and current at each operating point.
 #
 # Reads the active workbench to locate the PSU by role; uses
-# instruments.json for the SCPI command set.
+# eewBackbone.json for the SCPI command set.
 #
 # Usage:
-#   python IVCurveAnalysis.py --ch1-sweep START STOP STEP
-#   python IVCurveAnalysis.py --ch2-sweep START STOP STEP
-#   python IVCurveAnalysis.py --ch1-sweep 0 10 0.1 --ch2-sweep 0 5 1
+#   python dcSweep.py --ch1-sweep START STOP STEP
+#   python dcSweep.py --ch2-sweep START STOP STEP
+#   python dcSweep.py --ch1-sweep 0 10 0.1 --ch2-sweep 0 5 1
 #
 # When both channels are given, a 2-D sweep is performed:
 # CH2 is the outer (bias) loop, CH1 is the inner (swept) loop —
@@ -26,10 +26,10 @@ from datetime import datetime
 
 import pyvisa
 
-# instruments.py and workbench.py live in ../setup/
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'setup'))
+# eewBackbone.py and workbench.py live in ../core/
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'core'))
 from workbench import load_workbench, open_by_role
-from instruments import classify, get_command
+from eewBackbone import classify, get_command
 
 # ─── Defaults ────────────────────────────────────────────────────────────────
 
@@ -41,7 +41,7 @@ DEFAULT_CURRENT_LIMIT = 0.5   # A
 # The Keithley 2231A settles quickly, but your DUT may need longer.
 DEFAULT_SETTLE_TIME   = 0.10  # s
 
-DEFAULT_OUTPUT_CSV    = 'ivCurveAnalysis.csv'
+DEFAULT_OUTPUT_CSV    = 'dcSweep.csv'
 
 # Approximate serial + instrument processing overhead per measurement point.
 # Used only to print a time estimate before the sweep starts.
@@ -67,7 +67,7 @@ def voltage_steps(start: float, stop: float, step: float) -> list[float]:
 # ─── Instrument helpers ───────────────────────────────────────────────────────
 
 def _exec(inst, steps: list) -> float | None:
-    """Execute a list of (action, scpi) tuples from instruments.py.
+    """Execute a list of (action, scpi) tuples from eewBackbone.py.
 
     Writes are sent with inst.write(); queries are sent with inst.query()
     and the returned string is cast to float. The last query value is returned
@@ -87,7 +87,7 @@ def psu_reset(inst, family: dict):
     """Reset the PSU and enter remote control mode.
 
     The Keithley 2231A requires SYSTem:REMote before any other command.
-    This is baked into the 'reset' entry in instruments.json for this family.
+    This is baked into the 'reset' entry in eewBackbone.json for this family.
     """
     _exec(inst, get_command(family, 'reset'))
 
@@ -117,22 +117,22 @@ def psu_measure_i(inst, family: dict, ch: int) -> float:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        prog='IVCurveAnalysis.py',
-        description='Sweep PSU channel(s) and log I-V measurements.',
+        prog='dcSweep.py',
+        description='Sweep PSU channel(s) and log DC V/I measurements.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
   1-D sweep — CH1 from 0 to 10 V in 0.1 V steps:
-    python IVCurveAnalysis.py --ch1-sweep 0 10 0.1
+    python dcSweep.py --ch1-sweep 0 10 0.1
 
   1-D sweep — CH2 from 0 to 5 V in 1 V steps:
-    python IVCurveAnalysis.py --ch2-sweep 0 5 1
+    python dcSweep.py --ch2-sweep 0 5 1
 
   2-D sweep — for each CH2 bias point, sweep the full CH1 range:
-    python IVCurveAnalysis.py --ch1-sweep 0 10 0.1 --ch2-sweep 0 5 1
+    python dcSweep.py --ch1-sweep 0 10 0.1 --ch2-sweep 0 5 1
 
   Tighter current limit, longer settle, custom output file:
-    python IVCurveAnalysis.py --ch1-sweep 0 5 0.05 --ch1-limit 0.1 --settle 0.5 --output diode.csv
+    python dcSweep.py --ch1-sweep 0 5 0.05 --ch1-limit 0.1 --settle 0.5 --output diode.csv
 """)
 
     p.add_argument('--ch1-sweep', nargs=3, type=float,
@@ -211,16 +211,16 @@ def main():
     wb  = load_workbench()
     psu = open_by_role(rm, wb, 'psu')
 
-    # Identify the PSU and resolve its command set from instruments.json
+    # Identify the PSU and resolve its command set from eewBackbone.json
     idn    = psu.query('*IDN?').strip()
     family = classify(idn)
     if family is None:
         print(f'[error] Unrecognised PSU IDN: {idn!r}')
-        print('[error] Check instruments.json has a matching pattern for this model.')
+        print('[error] Check eewBackbone.json has a matching pattern for this model.')
         psu.close(); rm.close(); sys.exit(1)
 
     # ── Summary ────────────────────────────────────────────────────────────────
-    print('IV Curve Analysis')
+    print('DC Sweep')
     print('---')
     print(f'[info] PSU     : {idn}')
     print(f'[info] Family  : {family["id"]}')

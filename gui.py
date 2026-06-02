@@ -34,18 +34,18 @@ from tkinter import filedialog, messagebox, ttk
 
 # ── Path setup ──────────────────────────────────────────────────────────────────
 ROOT = Path(__file__).parent
-sys.path.insert(0, str(ROOT / "setup"))
+sys.path.insert(0, str(ROOT / "core"))
 
 WORKBENCH_DIR = ROOT / "workbenches"
 
 try:
     from workbench import active_name, load_workbench, set_active
-    from instruments import classify, get_command, resolve_command, _resolve_family, _family_index
+    from eewBackbone import classify, get_command, resolve_command, _resolve_family, _family_index
     HELPERS_OK = True
 except ImportError as _e:
     HELPERS_OK = False
     print(f"[gui] workbench helpers unavailable: {_e}")
-    # Provide safe no-op stubs so the GUI can open without the setup/ helpers
+    # Provide safe no-op stubs so the GUI can open without the core/ helpers
     def active_name():        return None
     def load_workbench(n=None): raise RuntimeError("workbench helpers not available")
     def get_command(*a, **k):  raise KeyError("instruments helpers not available")
@@ -1544,7 +1544,7 @@ class WorkbenchGUI(tk.Tk):
 
         if not self.wb:
             _label(self._scroll_frame,
-                   text="No workbench loaded.\nRun  python setup/nachoVisa.py  to scan your bench.",
+                   text="No workbench loaded.\nRun  python core/nachoVisa.py  to scan your bench.",
                    fg=FG_DIM, bg=BG, font=(FSAN, 12),
                    justify=tk.CENTER).pack(expand=True, pady=60)
             return
