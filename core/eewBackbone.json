@@ -56,6 +56,7 @@
           "write": ":TIMebase:POSition {value}",
           "query": ":TIMebase:POSition?"
         },
+        "trigger_mode": ":TRIGger:MODE EDGE",
         "trigger_source": ":TRIGger:EDGE:SOURce CHANnel{ch}",
         "trigger_level": {
           "write": ":TRIGger:EDGE:LEVel {value}",
@@ -95,6 +96,22 @@
         "measure_dutycycle": {
           "query": ":MEASure:DUTYcycle? CHANnel{ch}"
         },
+        "measure_overshoot": {
+          "query": ":MEASure:OVERShoot? CHANnel{ch}"
+        },
+        "measure_preshoot": {
+          "query": ":MEASure:PREShoot? CHANnel{ch}"
+        },
+        "waveform_source": ":WAVeform:SOURce CHANnel{ch}",
+        "waveform_format_ascii": ":WAVeform:FORMat ASCii",
+        "waveform_points_mode": ":WAVeform:POINts:MODE NORMal",
+        "waveform_points": ":WAVeform:POINts {value}",
+        "waveform_preamble": {
+          "query": ":WAVeform:PREamble?"
+        },
+        "waveform_data": {
+          "query": ":WAVeform:DATA?"
+        },
         "screenshot": {
           "raw_query": ":DISPlay:DATA? PNG,COLor"
         }
@@ -114,6 +131,7 @@
       ],
       "overrides": {
         "reset": "*RST",
+        "trigger_mode": null,
         "timebase_scale": {
           "write": ":TIMebase:MAIN:SCALe {value}",
           "query": ":TIMebase:MAIN:SCALe?"
@@ -132,43 +150,65 @@
           "query": ":TRIGger:EDGe:SLOPe?"
         },
         "measure_vpp": {
+          "write": ":MEASure:ITEM VPP,CHANnel{ch}",
           "query": ":MEASure:ITEM? VPP,CHANnel{ch}"
         },
         "measure_freq": {
+          "write": ":MEASure:ITEM FREQuency,CHANnel{ch}",
           "query": ":MEASure:ITEM? FREQuency,CHANnel{ch}"
         },
         "measure_period": {
+          "write": ":MEASure:ITEM PERIOD,CHANnel{ch}",
           "query": ":MEASure:ITEM? PERIOD,CHANnel{ch}"
         },
         "measure_vavg": {
+          "write": ":MEASure:ITEM VAVG,CHANnel{ch}",
           "query": ":MEASure:ITEM? VAVG,CHANnel{ch}"
         },
         "measure_vrms": {
+          "write": ":MEASure:ITEM VRMS,CHANnel{ch}",
           "query": ":MEASure:ITEM? VRMS,CHANnel{ch}"
         },
         "measure_vmax": {
+          "write": ":MEASure:ITEM VMAX,CHANnel{ch}",
           "query": ":MEASure:ITEM? VMAX,CHANnel{ch}"
         },
         "measure_vmin": {
+          "write": ":MEASure:ITEM VMIN,CHANnel{ch}",
           "query": ":MEASure:ITEM? VMIN,CHANnel{ch}"
         },
         "measure_risetime": {
+          "write": ":MEASure:ITEM RTIM,CHANnel{ch}",
           "query": ":MEASure:ITEM? RTIM,CHANnel{ch}"
         },
         "measure_falltime": {
+          "write": ":MEASure:ITEM FTIM,CHANnel{ch}",
           "query": ":MEASure:ITEM? FTIM,CHANnel{ch}"
         },
         "measure_dutycycle": {
+          "write": ":MEASure:ITEM DUTY,CHANnel{ch}",
           "query": ":MEASure:ITEM? DUTY,CHANnel{ch}"
+        },
+        "measure_overshoot": {
+          "write": ":MEASure:ITEM OVERshoot,CHANnel{ch}",
+          "query": ":MEASure:ITEM? OVERshoot,CHANnel{ch}"
+        },
+        "measure_preshoot": {
+          "write": ":MEASure:ITEM PREShoot,CHANnel{ch}",
+          "query": ":MEASure:ITEM? PREShoot,CHANnel{ch}"
         },
         "screenshot": {
           "raw_query": ":DISPlay:DATA?"
         },
+        "measure_clear_all": ":MEASure:CLEar ALL",
         "annotation_text": null,
         "annotation_on": null,
         "annotation_off": null,
         "labels_on": null,
-        "labels_off": null
+        "labels_off": null,
+        "channel_label": null,
+        "waveform_mode": ":WAVeform:MODE NORMal",
+        "waveform_points_mode": null
       }
     },
     {

@@ -1,0 +1,3204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>open-EE-workbench</title>
+  <link rel="icon"     type="image/png" sizes="32x32" href="/assets/favicon-32.png" />
+  <link rel="icon"     type="image/png" sizes="16x16" href="/assets/favicon-16.png" />
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#231040" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & Base ────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:          #bfc3ca;
+      --surface:     #cdd1d7;
+      --surface2:    #d8dbe1;
+      --surface3:    #c5c9d0;
+      --surface4:    #b8bcc4;
+      --border:      #969ca9;
+      --border2:     #7e8494;
+      --text:        #1a1d25;
+      --text-dim:    #48526a;
+      --text-faint:  #78849a;
+      --accent:      #1a56c4;
+      --accent-h:    #1344a0;
+      --accent-glow: rgba(26,86,196,0.12);
+      --green:       #15803d;
+      --green-dim:   rgba(21,128,61,0.15);
+      --red:         #b91c1c;
+      --red-dim:     rgba(185,28,28,0.12);
+      --amber:       #b45309;
+      --amber-dim:   rgba(180,83,9,0.12);
+      --purple:      #6d28d9;
+      --sidebar-w:   300px;
+      --navbar-h:    56px;
+      --tabbar-h:    38px;
+      --radius:      6px;
+      --radius-lg:   8px;
+      --font: 'Inter', system-ui, -apple-system, sans-serif;
+      --mono: 'JetBrains Mono', 'Fira Code', monospace;
+    }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: var(--font);
+      font-size: 13px;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Scrollbar ───────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+    /* ── Navbar ──────────────────────────────────────────────────── */
+    #navbar {
+      height: var(--navbar-h);
+      min-height: var(--navbar-h);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+      z-index: 100;
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+    #navbar * { -webkit-app-region: no-drag; }
+    .nav-logo { display:flex; align-items:center; gap:9px; text-decoration:none; flex-shrink:0; }
+    .nav-logo img { height: 22px; filter: brightness(0) opacity(0.65); }
+    .nav-divider { width:1px; height:20px; background:var(--border2); flex-shrink:0; }
+    .nav-title {
+      font-size: 13px; font-weight: 600; color: var(--text);
+      letter-spacing: 0.01em; white-space: nowrap; flex-shrink: 0;
+    }
+    .nav-spacer { flex: 1; }
+
+    /* workbench selector */
+    .wb-select-wrap { position: relative; }
+    .wb-select-wrap::after {
+      content: ''; position: absolute; right: 10px; top: 50%;
+      transform: translateY(-50%); border: 4px solid transparent;
+      border-top-color: var(--text-dim); pointer-events: none;
+    }
+    #wb-select {
+      appearance: none; background: var(--surface3); color: var(--text);
+      border: 1px solid var(--border2); border-radius: var(--radius);
+      padding: 6px 28px 6px 10px; font: inherit; font-size: 12px;
+      cursor: pointer; outline: none; min-width: 160px; transition: border-color .15s;
+    }
+    #wb-select:focus { border-color: var(--accent); }
+    #wb-select option { background: var(--surface2); }
+
+    /* status indicator */
+    .status-badge {
+      display: flex; align-items: center; gap: 6px; padding: 5px 10px;
+      border-radius: 20px; font-size: 11px; font-weight: 500; letter-spacing: 0.03em;
+      background: var(--surface3); border: 1px solid var(--border);
+      white-space: nowrap; transition: all .3s;
+    }
+    .status-dot { width:7px; height:7px; border-radius:50%; background:var(--text-dim); transition:background .3s,box-shadow .3s; }
+    .status-badge.connecting .status-dot { background:var(--amber); animation:pulse 1s ease-in-out infinite; }
+    .status-badge.connected  .status-dot { background:var(--green); }
+    .status-badge.error      .status-dot { background:var(--red); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    #status-text { color:var(--text-dim); font-size:11px; }
+    .status-badge.connected  #status-text { color:var(--green); }
+    .status-badge.connecting #status-text { color:var(--amber); }
+    .status-badge.error      #status-text { color:var(--red); }
+
+    /* nav buttons */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 6px; border: none; border-radius: var(--radius); padding: 6px 14px;
+      font: inherit; font-size: 12px; font-weight: 500; cursor: pointer;
+      transition: all .15s; white-space: nowrap; letter-spacing: 0.02em;
+    }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary { background:var(--accent); color:#fff; }
+    .btn-primary:hover:not(:disabled) { background:var(--accent-h); }
+    .btn-danger  { background:var(--red-dim);  color:var(--red);  border:1px solid rgba(185,28,28,.35); }
+    .btn-danger:hover:not(:disabled)  { background:rgba(185,28,28,.2); }
+    .btn-ghost   { background:transparent; color:var(--text-dim); border:1px solid var(--border); }
+    .btn-ghost:hover:not(:disabled)   { background:var(--surface3); color:var(--text); border-color:var(--border2); }
+    .btn-green   { background:var(--green-dim); color:var(--green); border:1px solid rgba(21,128,61,.3); }
+    .btn-green:hover:not(:disabled)   { background:rgba(21,128,61,.22); }
+    .btn-amber   { background:var(--amber-dim); color:var(--amber); border:1px solid rgba(180,83,9,.3); }
+    .btn-amber:hover:not(:disabled)   { background:rgba(180,83,9,.2); }
+
+    /* ── Tab bar ─────────────────────────────────────────────────── */
+    #tabbar {
+      height: var(--tabbar-h); min-height: var(--tabbar-h);
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      display: flex; align-items: flex-end; padding: 0 16px; gap: 4px;
+      z-index: 90;
+    }
+    .tab {
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 14px; border-radius: var(--radius) var(--radius) 0 0;
+      font-size: 12px; font-weight: 500; color: var(--text-dim);
+      cursor: pointer; border: 1px solid transparent; border-bottom: none;
+      background: transparent; transition: color .15s, background .15s;
+      position: relative; user-select: none;
+    }
+    .tab:hover { color: var(--text); background: var(--surface3); }
+    .tab.active {
+      color: var(--text); background: var(--bg);
+      border-color: var(--border);
+      border-bottom-color: var(--bg);
+    }
+    .tab.active::after {
+      content: ''; position: absolute; bottom: -1px; left: 0; right: 0;
+      height: 2px; background: var(--accent);
+      border-radius: 1px 1px 0 0;
+    }
+    .tab svg { flex-shrink: 0; }
+
+    /* ── Main Layout ─────────────────────────────────────────────── */
+    #layout { flex:1; display:flex; overflow:hidden; }
+
+    /* ── Content area ────────────────────────────────────────────── */
+    #content { flex:1; overflow-y:auto; padding:20px; }
+
+    /* ── Empty / connecting states ───────────────────────────────── */
+    .empty-state {
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:12px; min-height:260px; color:var(--text-faint);
+    }
+    .empty-state svg { opacity: 0.3; }
+    .empty-state p { font-size:13px; color:var(--text-dim); }
+    .empty-state small { font-size:11px; }
+
+    /* ── Instrument grid ─────────────────────────────────────────── */
+    #instrument-grid {
+      display:grid; grid-template-columns:repeat(auto-fill, minmax(340px,1fr)); gap:16px; align-items:start;
+    }
+
+    /* ── Cards ───────────────────────────────────────────────────── */
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; transition:border-color .2s; }
+    .card:hover { border-color:var(--border2); }
+    .card-header { display:flex; align-items:center; gap:10px; padding:12px 16px; background:var(--surface2); border-bottom:1px solid var(--border); }
+    .card-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
+    .card-icon.scope { background:rgba(26,86,196,.14); color:var(--accent); }
+    .card-icon.psu   { background:rgba(21,128,61,.14); color:var(--green); }
+    .card-icon.awg   { background:rgba(109,40,217,.14); color:var(--purple); }
+    .card-icon.dmm   { background:rgba(180,83,9,.14); color:var(--amber); }
+    .card-title-wrap { flex:1; min-width:0; }
+    .card-title    { font-weight:600; font-size:13px; color:var(--text); }
+    .card-subtitle { font-size:11px; color:var(--text-dim); margin-top:1px; font-family:var(--mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .card-status-dot { width:7px; height:7px; border-radius:50%; background:var(--text-faint); flex-shrink:0; transition:all .3s; }
+    .card.pending   .card-status-dot { background:var(--amber); animation:pulse 2s ease-in-out infinite; }
+    .card.connected .card-status-dot { background:var(--green); animation:none; }
+    .card.error     .card-status-dot { background:var(--red);   animation:none; }
+    .card.pending   { border-color:rgba(180,83,9,.45); }
+    .card.connected { border-color:rgba(26,86,196,.4); }
+    .card.error     { border-color:rgba(185,28,28,.45); }
+    .card-body { padding:16px; }
+    .section-label { font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--text-faint); margin-bottom:8px; }
+
+    /* ── Button row ──────────────────────────────────────────────── */
+    .btn-row { display:flex; gap:6px; flex-wrap:wrap; }
+    .btn-row .btn { flex:1; min-width:0; font-size:11px; padding:6px 8px; }
+
+    /* ── Scope Card ──────────────────────────────────────────────── */
+    .scope-controls { display:flex; flex-direction:column; gap:12px; }
+    .transport-row { display:flex; gap:6px; }
+    .transport-row .btn { flex:1; font-size:11px; padding:8px 4px; background:var(--surface3); color:var(--text); border:1px solid var(--border); }
+    .transport-row .btn:hover:not(:disabled) { background:var(--surface4); border-color:var(--border2); }
+    .transport-row .btn.run  { color:var(--green); border-color:rgba(21,128,61,.3); }
+    .transport-row .btn.stop { color:var(--red);   border-color:rgba(185,28,28,.3); }
+    .screenshot-btn { display:flex; align-items:center; gap:6px; background:var(--surface3); color:var(--text-dim); border:1px solid var(--border); font-size:11px; padding:8px 14px; border-radius:var(--radius); cursor:pointer; transition:all .15s; width:100%; justify-content:center; }
+    .screenshot-btn:hover:not(:disabled) { background:var(--surface4); color:var(--text); border-color:var(--border2); }
+    .screenshot-btn:disabled { opacity:.4; cursor:not-allowed; }
+
+    /* ── Scope measurement panel ─────────────────────────────────── */
+    .meas-panel { display:flex; flex-direction:column; gap:8px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:10px 12px; }
+    .meas-row { display:flex; align-items:center; gap:8px; }
+    .meas-select-wrap { flex:1; position:relative; }
+    .meas-select-wrap::after { content:''; position:absolute; right:9px; top:50%; transform:translateY(-50%); border:4px solid transparent; border-top-color:var(--text-dim); pointer-events:none; }
+    .meas-select { width:100%; appearance:none; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:var(--radius); padding:6px 26px 6px 10px; font:inherit; font-size:11px; cursor:pointer; outline:none; transition:border-color .15s; }
+    .meas-select:focus { border-color:var(--accent); }
+    .meas-select option { background:var(--surface2); }
+    .meas-display { text-align:center; padding:10px 8px 6px; }
+    .meas-value { font-family:var(--mono); font-size:26px; font-weight:500; color:var(--accent); letter-spacing:-.02em; line-height:1; min-height:30px; display:flex; align-items:center; justify-content:center; gap:5px; }
+    .meas-value.dim { color:var(--text-faint); font-size:16px; }
+    .meas-value-unit { font-size:12px; font-weight:400; color:var(--text-dim); align-self:flex-end; padding-bottom:2px; }
+    .meas-meta { font-size:9px; color:var(--text-faint); letter-spacing:.06em; text-transform:uppercase; margin-top:3px; }
+
+    /* ── PSU Card ────────────────────────────────────────────────── */
+    .psu-channels { display:flex; flex-direction:column; gap:14px; }
+    .psu-channel { background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+    .psu-ch-header { display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--surface3); border-bottom:1px solid var(--border); }
+    .psu-ch-label { font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text-dim); }
+    .ch-num { font-weight:700; font-family:var(--mono); font-size:12px; color:var(--text); }
+    .psu-ch-spacer { flex:1; }
+    .output-toggle { display:flex; align-items:center; gap:6px; cursor:pointer; padding:3px 8px; border-radius:12px; font-size:10px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; background:var(--red-dim); color:var(--red); border:1px solid rgba(185,28,28,.3); transition:all .2s; }
+    .output-toggle.on { background:var(--green-dim); color:var(--green); border-color:rgba(21,128,61,.35); }
+    .output-toggle .tog-dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
+    .psu-ch-body { padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
+    .psu-set-row { display:flex; gap:8px; align-items:center; }
+    .psu-input-wrap { flex:1; display:flex; align-items:center; gap:0; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; transition:border-color .15s; }
+    .psu-input-wrap:focus-within { border-color:var(--accent); }
+    .psu-input-unit { padding:5px 7px; font-size:10px; font-family:var(--mono); color:var(--text-dim); background:var(--surface2); border-right:1px solid var(--border); white-space:nowrap; }
+    .psu-input { flex:1; background:none; border:none; color:var(--text); font:inherit; font-family:var(--mono); font-size:12px; padding:5px 8px; outline:none; min-width:0; }
+    .psu-set-btn { background:var(--accent); color:#fff; border:none; border-radius:var(--radius); padding:5px 10px; font:inherit; font-size:11px; font-weight:600; cursor:pointer; transition:background .15s; flex-shrink:0; }
+    .psu-set-btn:hover { background:var(--accent-h); }
+    .psu-readings { display:flex; gap:10px; }
+    .psu-reading { flex:1; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:6px 8px; text-align:center; }
+    .psu-reading-label { font-size:9px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--text-faint); margin-bottom:3px; }
+    .psu-reading-val { font-family:var(--mono); font-size:13px; font-weight:500; color:var(--text-dim); transition:color .3s; }
+    .psu-reading-val.live { color:var(--text); }
+    .psu-footer { margin-top:4px; }
+
+    /* ── AWG Card ────────────────────────────────────────────────── */
+    .awg-body { display:flex; flex-direction:column; gap:14px; }
+    .ch-tabs { display:flex; gap:4px; }
+    .ch-tab { padding:4px 12px; border-radius:var(--radius); font-size:11px; font-weight:600; cursor:pointer; background:var(--surface3); color:var(--text-dim); border:1px solid var(--border); transition:all .15s; }
+    .ch-tab.active { background:var(--accent-glow); color:var(--accent); border-color:rgba(26,86,196,.4); }
+    .func-pills { display:flex; flex-wrap:wrap; gap:5px; }
+    .func-pill { padding:4px 10px; border-radius:20px; font-size:10px; font-weight:600; letter-spacing:.04em; cursor:pointer; background:var(--surface3); color:var(--text-dim); border:1px solid var(--border); transition:all .15s; }
+    .func-pill:hover { background:var(--surface4); color:var(--text); }
+    .func-pill.active { background:rgba(109,40,217,.12); color:var(--purple); border-color:rgba(109,40,217,.35); }
+    .param-rows { display:flex; flex-direction:column; gap:8px; }
+    .param-row { display:flex; align-items:center; gap:8px; }
+    .param-label { font-size:11px; color:var(--text-dim); width:52px; flex-shrink:0; }
+    .param-input-wrap { flex:1; display:flex; align-items:center; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; transition:border-color .15s; }
+    .param-input-wrap:focus-within { border-color:var(--accent); }
+    .param-input { flex:1; background:none; border:none; color:var(--text); font:inherit; font-family:var(--mono); font-size:12px; padding:6px 10px; outline:none; min-width:0; }
+    .param-unit { padding:6px 8px; font-size:10px; font-family:var(--mono); color:var(--text-dim); background:var(--surface3); border-left:1px solid var(--border); }
+    .awg-actions { display:flex; gap:8px; }
+    .awg-actions .btn { flex:1; }
+
+    /* ── DMM Card ────────────────────────────────────────────────── */
+    .dmm-body { display:flex; flex-direction:column; gap:14px; }
+    .dmm-modes { display:flex; flex-wrap:wrap; gap:5px; }
+    .dmm-mode { padding:5px 10px; border-radius:6px; font-size:10px; font-weight:600; letter-spacing:.04em; cursor:pointer; background:var(--surface3); color:var(--text-dim); border:1px solid var(--border); transition:all .15s; }
+    .dmm-mode:hover { background:var(--surface4); color:var(--text); }
+    .dmm-mode.active { background:var(--amber-dim); color:var(--amber); border-color:rgba(180,83,9,.4); }
+    .dmm-display { background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:16px; text-align:center; }
+    .dmm-value { font-family:var(--mono); font-size:32px; font-weight:500; color:var(--amber); letter-spacing:-.02em; line-height:1; min-height:38px; display:flex; align-items:center; justify-content:center; gap:6px; }
+    .dmm-value.dim { color:var(--text-faint); font-size:18px; }
+    .dmm-unit { font-size:14px; font-weight:400; color:var(--text-dim); align-self:flex-end; padding-bottom:3px; }
+    .dmm-actions { display:flex; gap:8px; }
+    .dmm-actions .btn { flex:1; }
+
+    /* ── Log panel ───────────────────────────────────────────────── */
+    #log-panel { width:var(--sidebar-w); min-width:var(--sidebar-w); background:var(--surface); border-left:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
+    .log-header { padding:10px 14px; display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--border); background:var(--surface2); }
+    .log-header-title { font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--text-dim); flex:1; }
+    .log-clear-btn { background:none; border:none; color:var(--text-faint); cursor:pointer; font-size:11px; padding:2px 4px; border-radius:4px; transition:color .15s; }
+    .log-clear-btn:hover { color:var(--text-dim); }
+    #log-body { flex:1; overflow-y:auto; padding:8px 0; font-family:var(--mono); font-size:11px; }
+    .log-entry { padding:3px 14px; line-height:1.5; color:var(--text-dim); white-space:pre-wrap; word-break:break-all; }
+    .log-entry.info  { color:var(--text-dim); }
+    .log-entry.ok    { color:var(--green); }
+    .log-entry.error { color:var(--red); }
+    .log-entry.warn  { color:var(--amber); }
+    .log-entry.scpi  { color:#4338ca; }
+    .log-time { color:var(--text-faint); font-size:9.5px; margin-right:6px; }
+
+    /* ── Toast ───────────────────────────────────────────────────── */
+    #toast-container { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; gap:8px; z-index:9999; pointer-events:none; }
+    .toast { background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:10px 16px; font-size:12px; color:var(--text); box-shadow:0 4px 16px rgba(0,0,0,.18); animation:toast-in .2s ease; pointer-events:all; max-width:360px; display:flex; align-items:center; gap:8px; }
+    .toast.ok    { border-color:rgba(21,128,61,.4); }
+    .toast.error { border-color:rgba(185,28,28,.4); }
+    @keyframes toast-in { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+    /* ── Spinner ─────────────────────────────────────────────────── */
+    .spinner { width:12px; height:12px; border:2px solid rgba(255,255,255,.2); border-top-color:currentColor; border-radius:50%; animation:spin .7s linear infinite; flex-shrink:0; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+
+    /* ── Scan modal ──────────────────────────────────────────────── */
+    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.65); backdrop-filter:blur(4px); z-index:500; display:flex; align-items:center; justify-content:center; animation:fade-in .15s ease; }
+    @keyframes fade-in { from{opacity:0} to{opacity:1} }
+    .modal { background:var(--surface2); border:1px solid var(--border2); border-radius:var(--radius-lg); width:min(680px,95vw); max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,.22); animation:slide-up .15s ease; }
+    @keyframes slide-up { from{transform:translateY(12px);opacity:0} to{transform:translateY(0);opacity:1} }
+    .modal-header { display:flex; align-items:center; gap:10px; padding:16px 20px; border-bottom:1px solid var(--border); flex-shrink:0; }
+    .modal-title { font-size:14px; font-weight:600; flex:1; }
+    .modal-body { flex:1; overflow-y:auto; padding:16px 20px; display:flex; flex-direction:column; gap:12px; }
+    .modal-footer { padding:12px 20px; border-top:1px solid var(--border); display:flex; gap:8px; align-items:center; flex-shrink:0; }
+    .scan-phase { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-dim); padding:6px 10px; background:var(--surface3); border-radius:var(--radius); }
+    .scan-phase .phase-text { flex:1; }
+    .scan-results { display:flex; flex-direction:column; gap:6px; }
+    .scan-instr { background:var(--surface3); border:1px solid var(--border); border-radius:var(--radius); padding:10px 12px; display:flex; align-items:center; gap:10px; }
+    .scan-instr.ok { border-color:rgba(21,128,61,.35); }
+    .scan-instr .instr-icon { width:28px; height:28px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
+    .scan-instr .instr-info { flex:1; min-width:0; }
+    .scan-instr .instr-model { font-size:12px; font-weight:600; color:var(--text); }
+    .scan-instr .instr-detail { font-size:10px; color:var(--text-dim); font-family:var(--mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .scan-instr .instr-type { font-size:9px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; padding:2px 7px; border-radius:10px; background:var(--surface4); color:var(--text-dim); flex-shrink:0; }
+    .scan-instr.ok .instr-type { background:var(--green-dim); color:var(--green); }
+    .save-form { display:flex; gap:8px; align-items:center; padding:10px 12px; background:var(--surface3); border-radius:var(--radius); border:1px solid var(--border); }
+    .save-form input { flex:1; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font:inherit; font-size:12px; padding:6px 10px; outline:none; }
+    .save-form input:focus { border-color:var(--accent); }
+
+    /* ── Automation tab ──────────────────────────────────────────── */
+    #auto-tab { display:none; flex-direction:column; gap:16px; }
+    #auto-tab.visible { display:flex; }
+    /* ── Global output path (navbar) ─────────────────────────────── */
+    #nav-outpath {
+      display:flex; align-items:center; gap:5px; flex:1; min-width:0; max-width:380px;
+    }
+    #nav-outpath-icon { font-size:14px; flex-shrink:0; opacity:.7; }
+    #outpath-input {
+      flex:1; min-width:60px; background:var(--surface3); border:1px solid var(--border2);
+      border-radius:var(--radius); color:var(--text); font:inherit; font-family:var(--mono);
+      font-size:11px; padding:4px 8px; outline:none; transition:border-color .15s;
+    }
+    #outpath-input:focus { border-color:var(--accent); }
+    #outpath-input::placeholder { color:var(--text-faint); }
+    #outpath-browse { padding:4px 8px; font-size:11px; white-space:nowrap; flex-shrink:0; }
+
+    /* ── SCPI console (per-card) ─────────────────────────────────── */
+    .scpi-row {
+      display:flex; gap:5px; margin-top:8px; padding-top:8px;
+      border-top:1px solid var(--border);
+    }
+    .scpi-inp {
+      flex:1; background:var(--surface2); border:1px solid var(--border);
+      border-radius:var(--radius); color:var(--text); font:inherit;
+      font-family:var(--mono); font-size:10px; padding:3px 8px;
+      outline:none; transition:border-color .15s;
+    }
+    .scpi-inp:focus { border-color:var(--accent); }
+    .scpi-inp::placeholder { color:var(--text-faint); }
+
+    .auto-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; min-height:200px; color:var(--text-faint); }
+    .auto-empty p { font-size:13px; color:var(--text-dim); }
+
+    /* per-test tab strip */
+    #auto-test-tabs {
+      display:flex; align-items:flex-end; gap:0;
+      border-bottom:1px solid var(--border);
+      background:var(--surface);
+      border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+      padding:0 4px; overflow-x:auto;
+    }
+    .auto-test-tab {
+      display:flex; align-items:center; gap:7px;
+      padding:9px 16px; cursor:pointer; white-space:nowrap;
+      font-size:12px; font-weight:500; color:var(--text-dim);
+      border:1px solid transparent; border-bottom:none;
+      border-radius:var(--radius) var(--radius) 0 0;
+      background:transparent; position:relative;
+      transition:color .12s, background .12s;
+      user-select:none;
+    }
+    .auto-test-tab:hover { color:var(--text); background:var(--surface2); }
+    .auto-test-tab.active {
+      color:var(--text); background:var(--bg);
+      border-color:var(--border);
+    }
+    .auto-test-tab.active::after {
+      content:''; position:absolute; bottom:-1px; left:0; right:0;
+      height:2px; background:var(--accent); border-radius:1px 1px 0 0;
+    }
+    .auto-test-tab-icon { font-size:13px; }
+
+    /* test cards — full width, no gap between tab strip and card */
+    #test-grid {
+      display:flex; flex-direction:column; gap:0;
+      border:1px solid var(--border); border-top:none;
+      border-radius:0 0 var(--radius-lg) var(--radius-lg);
+      overflow:hidden;
+    }
+
+    /* test card — borderless; container (#test-grid) provides the frame */
+    .test-card {
+      background:var(--surface);
+      transition:border-color .2s;
+      max-width:700px;
+    }
+    .test-card.running { box-shadow:inset 0 2px 0 var(--accent); }
+    .test-card.done    { box-shadow:inset 0 2px 0 var(--green); }
+
+    .test-card-header {
+      display:flex; align-items:center; gap:10px;
+      padding:12px 16px; background:var(--surface2); border-bottom:1px solid var(--border);
+    }
+    .test-card-icon {
+      width:32px; height:32px; border-radius:8px;
+      display:flex; align-items:center; justify-content:center;
+      font-size:14px; flex-shrink:0;
+      background:rgba(26,86,196,.12); color:var(--accent);
+    }
+    .test-card-title { font-weight:600; font-size:13px; color:var(--text); }
+    .test-card-desc  { font-size:11px; color:var(--text-dim); margin-top:1px; }
+    .test-card-body  { padding:14px 16px; display:flex; flex-direction:column; gap:10px; }
+
+    /* test parameters */
+    .test-params { display:flex; flex-direction:column; gap:7px; }
+    .test-param-row { display:flex; align-items:center; gap:8px; }
+    .test-param-label { font-size:11px; color:var(--text-dim); width:72px; flex-shrink:0; }
+    .test-param-input-wrap { flex:1; max-width:220px; display:flex; align-items:center; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; transition:border-color .15s; }
+    .test-param-input-wrap:focus-within { border-color:var(--accent); }
+    .test-param-input { flex:1; background:none; border:none; color:var(--text); font:inherit; font-family:var(--mono); font-size:12px; padding:5px 8px; outline:none; min-width:0; }
+    .test-param-input.sel { cursor:pointer; }
+    .test-param-unit  { padding:5px 8px; font-size:10px; font-family:var(--mono); color:var(--text-dim); background:var(--surface3); border-left:1px solid var(--border); white-space:nowrap; }
+
+    /* psu interrupt diagram */
+    .psu-int-diagram { background:var(--surface3); border:1px solid var(--border); border-radius:var(--radius); padding:8px 10px 2px; margin-bottom:10px; }
+    .psu-int-diagram svg { max-height: 200px; }
+
+    /* test actions */
+    .test-actions { display:flex; gap:6px; }
+    .test-actions .btn { flex:1; font-size:11px; }
+
+    /* progress bar */
+    .test-progress { display:none; flex-direction:column; gap:5px; }
+    .test-progress.visible { display:flex; }
+    .progress-track { height:4px; background:var(--surface3); border-radius:2px; overflow:hidden; }
+    .progress-fill  { height:100%; background:var(--accent); border-radius:2px; transition:width .3s; width:0%; }
+    .progress-label { font-size:10px; color:var(--text-dim); }
+
+    /* ── Results panel ───────────────────────────────────────────── */
+    #results-panel {
+      background:var(--surface);
+      border:1px solid var(--border); border-top:none;
+      border-radius:0 0 var(--radius-lg) var(--radius-lg);
+      overflow:hidden; display:none;
+    }
+    #results-panel.visible { display:block; }
+    .results-header {
+      display:flex; align-items:center; gap:10px;
+      padding:10px 16px; background:var(--surface2); border-bottom:1px solid var(--border);
+    }
+    .results-title { font-size:12px; font-weight:600; color:var(--text); flex:1; }
+    .results-count { font-size:11px; color:var(--text-dim); }
+
+    /* results table */
+    .results-table-wrap { overflow:auto; max-height:360px; }
+    table.results-tbl {
+      width:100%; border-collapse:collapse;
+      font-family:var(--mono); font-size:11px;
+    }
+    .results-tbl th {
+      padding:7px 12px; text-align:right; font-weight:600;
+      font-size:9.5px; letter-spacing:.06em; text-transform:uppercase;
+      color:var(--text-faint); background:var(--surface2);
+      border-bottom:1px solid var(--border); position:sticky; top:0;
+    }
+    .results-tbl th:first-child { text-align:left; }
+    .results-tbl td {
+      padding:5px 12px; text-align:right;
+      color:var(--text-dim); border-bottom:1px solid var(--border);
+      white-space:nowrap;
+    }
+    .results-tbl td:first-child { text-align:left; color:var(--text); }
+    .results-tbl tr:last-child td { border-bottom:none; }
+    .results-tbl tr:hover td { background:var(--surface2); }
+    .results-tbl tr.new-row td { animation:row-flash .5s ease; }
+    @keyframes row-flash { from{background:rgba(26,86,196,.15)} to{background:transparent} }
+
+    .results-footer {
+      padding:10px 16px; border-top:1px solid var(--border);
+      display:flex; align-items:center; gap:8px;
+      background:var(--surface2);
+    }
+    .results-msg { font-size:11px; color:var(--text-dim); flex:1; }
+
+    /* ── DC Sweep custom card ────────────────────────────────────── */
+    .dcsw-top { display:flex; align-items:flex-end; gap:20px; flex-wrap:wrap; }
+    .dcsw-seg { display:flex; border-radius:var(--radius); overflow:hidden; border:1px solid var(--border); }
+    .dcsw-seg-btn { padding:5px 14px; font:inherit; font-size:11px; font-weight:600; background:var(--surface3); color:var(--text-dim); border:none; border-right:1px solid var(--border); cursor:pointer; transition:all .12s; }
+    .dcsw-seg-btn:last-child { border-right:none; }
+    .dcsw-seg-btn.active { background:var(--accent-glow); color:var(--accent); }
+    .dcsw-seg-btn:hover:not(.active) { background:var(--surface4); color:var(--text); }
+    .dcsw-channels { display:flex; gap:10px; overflow-x:auto; padding-bottom:2px; }
+    .dcsw-ch { flex:1; min-width:148px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:10px 12px; display:flex; flex-direction:column; gap:6px; }
+    .dcsw-ch-hdr { font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); margin-bottom:2px; white-space:nowrap; }
+    .dcsw-field { display:flex; align-items:center; gap:6px; }
+    .dcsw-field-label { font-size:10px; color:var(--text-dim); width:52px; flex-shrink:0; }
+    .dcsw-field-iw { flex:1; display:flex; align-items:center; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; transition:border-color .15s; min-width:0; }
+    .dcsw-field-iw:focus-within { border-color:var(--accent); }
+    .dcsw-field-input { flex:1; background:none; border:none; color:var(--text); font:inherit; font-family:var(--mono); font-size:11px; padding:4px 7px; outline:none; min-width:0; width:0; }
+    .dcsw-field-unit { padding:4px 6px; font-size:9px; font-family:var(--mono); color:var(--text-dim); background:var(--surface3); border-left:1px solid var(--border); white-space:nowrap; flex-shrink:0; }
+    .dcsw-select { width:100%; appearance:none; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:var(--radius); padding:4px 8px; font:inherit; font-size:11px; cursor:pointer; outline:none; transition:border-color .15s; }
+    .dcsw-select:focus { border-color:var(--accent); }
+    .dcsw-select option { background:var(--surface2); }
+    .dcsw-meas { background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:10px 14px; display:flex; flex-direction:column; gap:9px; }
+    .dcsw-meas-hdr { font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--green); margin-bottom:2px; }
+    /* Measurement item list */
+    .dcsw-meas-list { display:flex; flex-direction:column; gap:8px; }
+    .dcsw-mi { background:var(--surface3); border:1px solid var(--border); border-radius:var(--radius); padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
+    .dcsw-mi-hdr { display:flex; align-items:center; gap:8px; }
+    .dcsw-mi-tag { font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; padding:2px 6px; border-radius:3px; }
+    .dcsw-mi-tag.meas   { color:var(--green);  background:rgba(21,128,61,.12); border:1px solid rgba(21,128,61,.3); }
+    .dcsw-mi-tag.action { color:var(--accent);  background:rgba(26,86,196,.1); border:1px solid rgba(26,86,196,.3); }
+    .dcsw-mi-remove { margin-left:auto; background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:16px; line-height:1; padding:0 2px; transition:color .15s; }
+    .dcsw-mi-remove:hover { color:var(--red); }
+    .dcsw-mi-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; }
+    /* Add-item buttons */
+    .dcsw-meas-add-row { display:flex; gap:8px; margin-top:2px; }
+    .dcsw-meas-add-btn { flex:1; padding:6px 0; font-size:11px; background:var(--surface2); border:1px dashed var(--border); border-radius:var(--radius); color:var(--text-dim); cursor:pointer; transition:border-color .15s, color .15s; text-align:center; }
+    .dcsw-meas-add-btn:hover { border-color:var(--accent); color:var(--text); }
+
+    /* ── Utilities ───────────────────────────────────────────────── */
+    .hidden { display:none !important; }
+    .mt4 { margin-top:4px; }
+    .mt8 { margin-top:8px; }
+    .flex { display:flex; }
+    .items-center { align-items:center; }
+
+    /* ── Scope channel controls ──────────────────────────────────── */
+    .scope-ch-grid { display:flex; flex-direction:column; gap:5px; margin-bottom:4px; }
+    .scope-ch-row  { display:flex; align-items:center; gap:6px; flex-wrap:nowrap; }
+    .scope-ch-badge {
+      display:inline-flex; align-items:center; justify-content:center;
+      width:28px; height:20px; border-radius:4px; font-size:10px;
+      font-weight:700; letter-spacing:.5px; flex-shrink:0; color:#000;
+    }
+    .scope-ch-badge.ch1 { background:#f59e0b; }
+    .scope-ch-badge.ch2 { background:#22d3ee; }
+    .scope-ch-badge.ch3 { background:#e879f9; }
+    .scope-ch-badge.ch4 { background:#4ade80; }
+    .scope-ch-tog {
+      display:inline-flex; align-items:center; gap:4px;
+      padding:2px 8px; border-radius:4px; font-size:10px; font-weight:600;
+      border:1px solid var(--border); background:var(--surface2);
+      color:var(--text-muted); cursor:pointer; transition:background .15s,color .15s;
+      white-space:nowrap; flex-shrink:0;
+    }
+    .scope-ch-tog.on { background:#16a34a22; border-color:#4ade80; color:#4ade80; }
+    .scope-ch-tog .tog-dot {
+      width:7px; height:7px; border-radius:50%; background:currentColor;
+      transition:background .15s;
+    }
+    .scope-sel {
+      flex:1; min-width:0; padding:3px 5px; border-radius:4px;
+      border:1px solid var(--border); background:var(--surface2);
+      color:var(--text); font-size:10px; cursor:pointer;
+    }
+    .scope-sel:hover { border-color:var(--accent); }
+    .scope-sel option { background:var(--surface2); }
+    .scope-tb-row {
+      display:flex; align-items:center; gap:6px; margin-bottom:4px;
+    }
+    .scope-tb-label {
+      font-size:10px; font-weight:600; color:var(--text-muted);
+      white-space:nowrap; flex-shrink:0; width:52px;
+    }
+    .section-label-row {
+      display:flex; align-items:center; gap:8px; margin-bottom:6px;
+    }
+    .section-label-row .section-label { margin-bottom:0; flex:1; }
+    /* ── Scope multi-measurement list ─── */
+    .scope-meas-list { display:flex; flex-direction:column; gap:4px; margin-bottom:5px; min-height:0; }
+    .scope-meas-item {
+      display:flex; align-items:center; gap:6px;
+      background:var(--surface2); border:1px solid var(--border);
+      border-radius:4px; padding:4px 6px;
+    }
+    .scope-meas-label { flex:1; font-size:11px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .scope-meas-val {
+      font-family:var(--mono); font-size:12px; font-weight:600; color:var(--accent);
+      white-space:nowrap; min-width:70px; text-align:right;
+    }
+    .scope-meas-val.dim { color:var(--text-faint); }
+    .scope-meas-remove {
+      background:none; border:none; color:var(--text-faint); cursor:pointer;
+      font-size:14px; line-height:1; padding:0 2px; flex-shrink:0;
+    }
+    .scope-meas-remove:hover { color:var(--error,#f87171); }
+    .scope-meas-add-row { display:flex; align-items:center; gap:5px; margin-bottom:5px; }
+    .scope-ch-label-inp {
+      flex:1; min-width:0; padding:2px 5px; border-radius:4px;
+      border:1px solid var(--border); background:var(--surface2);
+      color:var(--text); font-size:10px; font-family:var(--mono);
+    }
+    .scope-ch-label-inp::placeholder { color:var(--text-faint); font-family:inherit; }
+    .scope-ch-label-inp:focus { outline:none; border-color:var(--accent); }
+    .scope-meas-controls {
+      display:flex; align-items:center; gap:5px; margin-bottom:8px; flex-wrap:wrap;
+    }
+    .scope-meas-controls .btn { padding:4px 12px; font-size:10px; flex-shrink:0; }
+    .btn.btn-primary.running { background:#7f1d1d; border-color:#ef4444; color:#fca5a5; }
+    .scope-auto-tog {
+      display:inline-flex; align-items:center; gap:4px; padding:4px 10px;
+      border-radius:4px; font-size:10px; font-weight:600; border:1px solid var(--border);
+      background:var(--surface2); color:var(--text-muted); cursor:pointer;
+      transition:background .15s,color .15s; white-space:nowrap; flex-shrink:0;
+    }
+    .scope-auto-tog.on { background:#1e3a5f; border-color:#60a5fa; color:#93c5fd; }
+    .scope-auto-tog .tog-dot { width:7px;height:7px;border-radius:50%;background:currentColor; }
+
+    /* ── Responsive ──────────────────────────────────────────────── */
+    @media (max-width:900px) { #log-panel{display:none;} #instrument-grid{grid-template-columns:1fr;} }
+    @media (max-width:600px) { #content{padding:12px;} .nav-title{display:none;} }
+  </style>
+</head>
+<body>
+
+<!-- ── Navbar ─────────────────────────────────────────────────────── -->
+<nav id="navbar">
+  <a class="nav-logo" href="#" onclick="fetch('/api/open-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:'https://nacho.works'})});return false;">
+    <img id="nav-logo-img" src="/assets/nacho_white.svg" alt="nacho.works" />
+  </a>
+  <div class="nav-divider"></div>
+  <span class="nav-title">open-EE-workbench</span>
+  <div class="nav-divider"></div>
+
+  <!-- ── Global output path ────────────────────────────────────── -->
+  <div id="nav-outpath">
+    <span id="nav-outpath-icon">📁</span>
+    <input id="outpath-input" type="text"
+           placeholder="output path (leave blank for working directory)"
+           spellcheck="false" autocomplete="off"
+           oninput="state.outputPath=this.value.trim()" />
+    <button class="btn btn-ghost" id="outpath-browse" onclick="browseOutputFolder()" title="Browse…">Browse</button>
+  </div>
+
+  <div class="nav-spacer"></div>
+
+  <div class="wb-select-wrap">
+    <select id="wb-select"><option value="">— select workbench —</option></select>
+  </div>
+
+  <button class="btn btn-ghost" id="scan-btn" onclick="openScanModal()" style="gap:5px;font-size:12px;">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+    Scan
+  </button>
+
+  <div class="status-badge" id="status-badge">
+    <div class="status-dot"></div>
+    <span id="status-text">Disconnected</span>
+  </div>
+
+  <button class="btn btn-primary" id="connect-btn" disabled>Connect</button>
+</nav>
+
+<!-- ── Tab bar ────────────────────────────────────────────────────── -->
+<div id="tabbar">
+  <button class="tab active" id="tab-workbench" onclick="switchTab('workbench')">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+      <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+    </svg>
+    Workbench
+  </button>
+  <button class="tab" id="tab-automation" onclick="switchTab('automation')">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polygon points="5 3 19 12 5 21 5 3"/>
+    </svg>
+    Automation
+  </button>
+</div>
+
+<!-- ── Main layout ─────────────────────────────────────────────────── -->
+<div id="layout">
+
+  <!-- ── Instrument content ─────────────────────────────────────── -->
+  <div id="content">
+
+    <!-- ── Workbench tab ──────────────────────────────────────────── -->
+    <div id="workbench-tab">
+      <div class="empty-state" id="empty-nowb">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="7" width="20" height="14" rx="2"/>
+          <path d="M16 3H8M12 3v4"/>
+          <circle cx="12" cy="14" r="2"/>
+        </svg>
+        <p>No workbench selected</p>
+        <small>Choose a workbench from the dropdown above</small>
+      </div>
+      <div id="instrument-grid" class="hidden"></div>
+    </div>
+
+    <!-- ── Automation tab ─────────────────────────────────────────── -->
+    <div id="auto-tab">
+
+      <!-- no workbench (full-width placeholder) -->
+      <div class="auto-empty" id="auto-empty-nowb">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>
+        <p>Load a workbench first</p>
+      </div>
+
+      <!-- no tests available (full-width placeholder) -->
+      <div class="auto-empty hidden" id="auto-empty-notests">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <p>No tests available for this workbench</p>
+        <small>Connect instruments with compatible types (scope+AWG, PSU, or DMM)</small>
+      </div>
+
+      <!-- ── Test tab strip + content ─────────────────────────────── -->
+      <div id="auto-layout" class="hidden" style="display:none; flex-direction:column; gap:0;">
+
+        <!-- tab strip -->
+        <div id="auto-test-tabs"></div>
+
+        <!-- test cards (only selected one is visible) -->
+        <div id="test-grid"></div>
+
+        <!-- results panel, flush below the card -->
+        <div id="results-panel">
+          <div class="results-header">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            <span class="results-title" id="results-title">Results</span>
+            <span class="results-count" id="results-count"></span>
+          </div>
+          <div class="results-table-wrap">
+            <table class="results-tbl" id="results-tbl">
+              <thead id="results-thead"></thead>
+              <tbody id="results-tbody"></tbody>
+            </table>
+          </div>
+          <div class="results-footer">
+            <span class="results-msg" id="results-msg"></span>
+            <button class="btn btn-ghost" style="font-size:11px;" onclick="exportCSV()" id="export-btn">
+              ⬇ Export CSV
+            </button>
+          </div>
+        </div>
+
+      </div><!-- /auto-layout -->
+
+    </div>
+  </div>
+
+  <!-- ── Log panel ──────────────────────────────────────────────── -->
+  <aside id="log-panel">
+    <div class="log-header">
+      <span class="log-header-title">Log</span>
+      <button class="log-clear-btn" id="log-clear-btn" title="Clear log">✕</button>
+    </div>
+    <div id="log-body"></div>
+  </aside>
+</div>
+
+<div id="toast-container"></div>
+
+<!-- ── Scan modal ─────────────────────────────────────────────────── -->
+<div id="scan-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <span class="modal-title">Instrument Scan</span>
+      <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;" onclick="closeScanModal()">✕</button>
+    </div>
+    <div class="modal-body" id="scan-modal-body">
+      <div id="scan-idle">
+        <p style="color:var(--text-dim);font-size:13px;line-height:1.6;">
+          Scans for VISA instruments over <strong style="color:var(--text)">USB</strong>
+          and <strong style="color:var(--text)">LAN</strong> using PyVISA.
+          Found instruments can be saved as a new workbench.
+        </p>
+        <p style="color:var(--text-faint);font-size:11px;margin-top:6px;">
+          LAN scan probes your local /24 subnet — takes ~10 seconds.
+        </p>
+      </div>
+      <div id="scan-running" class="hidden">
+        <div class="scan-phase" id="scan-phase-row">
+          <span class="spinner" style="flex-shrink:0;"></span>
+          <span class="phase-text" id="scan-phase-text">Starting…</span>
+        </div>
+        <div id="scan-found-list" class="scan-results" style="margin-top:4px;"></div>
+      </div>
+      <div id="scan-done" class="hidden">
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;" id="scan-summary"></div>
+        <div id="scan-results-list" class="scan-results"></div>
+        <div id="scan-errors-wrap" class="hidden" style="margin-top:8px;">
+          <details>
+            <summary style="font-size:10px;color:var(--text-faint);cursor:pointer;">Warnings / errors</summary>
+            <div id="scan-errors-list"
+                 style="font-family:var(--mono);font-size:10px;color:var(--red);margin-top:6px;line-height:1.6;white-space:pre-wrap;"></div>
+          </details>
+        </div>
+        <div id="scan-udev-hint" class="hidden" style="margin-top:10px;padding:9px 12px;background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+          <span style="font-size:12px;color:var(--text-dim);flex:1;min-width:160px;">USB device not found?</span>
+          <button class="btn btn-ghost" style="font-size:11px;padding:3px 10px;flex-shrink:0;" onclick="fixUdev()">Fix udev permissions</button>
+          <div id="scan-udev-result" class="hidden" style="width:100%;font-family:var(--mono);font-size:10px;color:var(--text-dim);white-space:pre-wrap;line-height:1.6;margin-top:2px;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" id="scan-footer">
+      <div id="scan-footer-idle" style="display:flex;gap:8px;width:100%;align-items:center;">
+        <button class="btn btn-ghost" onclick="closeScanModal()">Cancel</button>
+        <div style="flex:1"></div>
+        <button class="btn btn-ghost" id="scan-start-usb-btn" onclick="startScan(true)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M12 2v8M8 6l4-4 4 4M5 10h14l-1 9H6L5 10z"/>
+          </svg>
+          Scan USB
+        </button>
+        <button class="btn btn-primary" id="scan-start-btn" onclick="startScan(false)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          Scan LAN + USB
+        </button>
+      </div>
+      <div id="scan-footer-done" class="hidden save-form" style="width:100%;">
+        <input id="scan-save-name" type="text" placeholder="workbench name…"
+               onkeydown="if(event.key==='Enter') saveScanWorkbench()" />
+        <button class="btn btn-primary" onclick="saveScanWorkbench()">Save workbench</button>
+        <button class="btn btn-ghost"   onclick="closeScanModal()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Scripts ────────────────────────────────────────────────────── -->
+<script src="/ui/socket.io.min.js"></script>
+<script>
+"use strict";
+
+// ── DOM refs ────────────────────────────────────────────────────────
+const $wbSelect    = document.getElementById("wb-select");
+const $connectBtn  = document.getElementById("connect-btn");
+const $statusBadge = document.getElementById("status-badge");
+const $statusText  = document.getElementById("status-text");
+const $grid        = document.getElementById("instrument-grid");
+const $emptyNowb   = document.getElementById("empty-nowb");
+const $logBody     = document.getElementById("log-body");
+
+// ── State ───────────────────────────────────────────────────────────
+let state = {
+  workbench:   null,
+  connected:   false,
+  connecting:  false,
+  instruments: [],
+  activeTab:   "workbench",
+  outputPath:  "",
+  autoTests:      [],
+  autoRunning:    false,
+  autoRows:       [],
+  autoCols:       [],
+  autoTestId:     null,
+  selectedTestId: null,
+};
+
+// ── Tab switching ──────────────────────────────────────────────────
+function switchTab(name) {
+  state.activeTab = name;
+  document.getElementById("tab-workbench").classList.toggle("active", name === "workbench");
+  document.getElementById("tab-automation").classList.toggle("active", name === "automation");
+  document.getElementById("workbench-tab").style.display = name === "workbench" ? "" : "none";
+  const autoEl = document.getElementById("auto-tab");
+  autoEl.classList.toggle("visible", name === "automation");
+  if (name === "automation") refreshAutoTab();
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────
+function inferPSUChannels(model) {
+  const m = (model || "").toUpperCase();
+  if (/EDU36311A|36311A|36312A|36313A|E3631A/.test(m)) return 3;
+  if (/E3646A|E3647A|E3648A|E3649A/.test(m)) return 2;
+  if (/E3640A|E3641A|E3642A|E3643A|E3644A|E3645A|E3632A|E3633A|E3634A/.test(m)) return 1;
+  const mx = m.match(/(\d)(?:11A|12A|13A)$/);
+  if (mx) { const n = parseInt(mx[1]); if (n >= 1 && n <= 4) return n; }
+  return 3;
+}
+function inferAWGChannels(model) {
+  const m = (model || "").toUpperCase();
+  if (/EDU33212A|33612A|33522B|33622A|4163|4165/.test(m)) return 2;
+  if (/33211A|33512B|4161|4162/.test(m)) return 1;
+  const mx = m.match(/(\d)(?:11A|12A|2A)$/);
+  if (mx) { const n = parseInt(mx[1]); if (n >= 1 && n <= 2) return n; }
+  return 2;
+}
+function fmtV(v)  { return typeof v === "number" ? v.toFixed(3) + " V" : "—"; }
+function fmtI(v)  { return typeof v === "number" ? v.toFixed(4) + " A" : "—"; }
+function fmtW(v)  { return typeof v === "number" ? v.toFixed(3) + " W" : "—"; }
+
+// ── Log ────────────────────────────────────────────────────────────
+function logMsg(msg, cls) {
+  const ts = new Date().toTimeString().slice(0,8);
+  const entry = document.createElement("div");
+  let type = "info";
+  if (msg.startsWith("✓") || msg.startsWith("[system]")) type = "ok";
+  else if (msg.startsWith("✗") || msg.toLowerCase().includes("error")) type = "error";
+  else if (msg.startsWith("⚠")) type = "warn";
+  else if (msg.startsWith("→")) type = "scpi";
+  entry.className = `log-entry ${cls || type}`;
+  entry.innerHTML = `<span class="log-time">${ts}</span>${escHtml(msg)}`;
+  $logBody.appendChild(entry);
+  $logBody.scrollTop = $logBody.scrollHeight;
+}
+document.getElementById("log-clear-btn").onclick = () => { $logBody.innerHTML = ""; };
+
+function escHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+// ── Toast ──────────────────────────────────────────────────────────
+function toast(msg, type="ok", duration=3500) {
+  const el = document.createElement("div");
+  el.className = `toast ${type}`;
+  const icon = type==="ok" ? "✓" : type==="error" ? "✗" : "ℹ";
+  el.innerHTML = `<span>${icon}</span><span>${escHtml(msg)}</span>`;
+  document.getElementById("toast-container").appendChild(el);
+  setTimeout(() => { el.style.opacity="0"; el.style.transition="opacity .3s"; setTimeout(()=>el.remove(),300); }, duration);
+}
+
+// ── Status ─────────────────────────────────────────────────────────
+function setStatus(s, label) {
+  $statusBadge.className = `status-badge ${s}`;
+  $statusText.textContent = label;
+}
+
+// ── API ────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: {"Content-Type":"application/json"} };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  if (!r.ok) { const j = await r.json().catch(()=>({error:r.statusText})); throw new Error(j.error||r.statusText); }
+  return r.json();
+}
+const GET  = (p)    => api("GET",  p);
+const POST = (p, b) => api("POST", p, b);
+
+// ── Socket.IO ──────────────────────────────────────────────────────
+const socket = io({ transports: ["websocket","polling"] });
+socket.on("connect",    () => logMsg("[socket] connected"));
+socket.on("disconnect", () => logMsg("[socket] disconnected","warn"));
+socket.on("log", ({ msg }) => logMsg(msg));
+
+socket.on("connection_result", ({ connected, instruments }) => {
+  state.connecting  = false;
+  state.connected   = connected;
+  state.instruments = instruments || [];
+  if (connected) {
+    setStatus("connected","Connected");
+    $connectBtn.textContent = "Disconnect";
+    $connectBtn.className   = "btn btn-danger";
+    $connectBtn.disabled    = false;
+    logMsg(`✓ Connected (${instruments.filter(i=>i.ok).length}/${instruments.length} instruments)`,"ok");
+    applyConnectionStatus(instruments);
+    refreshAutoTests();
+    // Auto-sync scope controls to show real instrument state
+    if (instruments.some(i => i.ok && i.type === "scope")) doScopeSync();
+  } else {
+    setStatus("error","Failed");
+    $connectBtn.textContent = "Connect";
+    $connectBtn.className   = "btn btn-primary";
+    $connectBtn.disabled    = false;
+    logMsg("✗ Connection failed","error");
+  }
+});
+
+socket.on("disconnected", () => {
+  state.connected  = false;
+  state.connecting = false;
+  setStatus("","Disconnected");
+  $connectBtn.textContent = "Connect";
+  $connectBtn.className   = "btn btn-primary";
+  $connectBtn.disabled    = !state.workbench;
+  resetCardStatus();
+  _scopeStopAuto();
+  logMsg("Disconnected","warn");
+});
+
+socket.on("psu_reading", ({ ch, v, i, p }) => {
+  const vEl = document.getElementById(`psu-v-${ch}`);
+  const iEl = document.getElementById(`psu-i-${ch}`);
+  const pEl = document.getElementById(`psu-p-${ch}`);
+  if (vEl) { vEl.textContent=fmtV(v); vEl.classList.add("live"); }
+  if (iEl) { iEl.textContent=fmtI(i); iEl.classList.add("live"); }
+  if (pEl) { pEl.textContent=fmtW(p); pEl.classList.add("live"); }
+});
+
+socket.on("dmm_reading", ({ value, mode }) => {
+  const $val = document.getElementById("dmm-value");
+  if (!$val) return;
+  const units = { vdc:"V",vac:"V",idc:"A",iac:"A",r:"Ω",r4w:"Ω",freq:"Hz",cont:"Ω",diode:"V",cap:"F" };
+  if (isNaN(value)||!isFinite(value)) { $val.innerHTML=`<span class="dmm-value dim">OL</span>`; return; }
+  const mag=Math.abs(value); let disp, unit=units[mode]||"";
+  if (mag>=1e6)                      { disp=(value/1e6).toPrecision(5); unit="M"+unit; }
+  else if (mag>=1e3)                 { disp=(value/1e3).toPrecision(5); unit="k"+unit; }
+  else if (mag<1e-3&&value!==0)      { disp=(value*1e6).toPrecision(5); unit="µ"+unit; }
+  else                               { disp=value.toPrecision(6).replace(/\.?0+$/,""); }
+  $val.innerHTML=`${escHtml(disp)} <span class="dmm-unit">${escHtml(unit)}</span>`;
+  $val.classList.remove("dim");
+});
+
+let _lastScreenshotDir = null;
+
+socket.on("screenshot_done", ({ path, filename, error }) => {
+  if (error) { toast("Screenshot failed: "+error,"error"); logMsg("✗ Screenshot: "+error,"error"); }
+  else {
+    toast(`Screenshot saved: ${filename}`,"ok",5000);
+    logMsg(`✓ Screenshot → ${filename}`,"ok");
+    if (path) {
+      _lastScreenshotDir = path.substring(0, Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"))) || path;
+      const fb = document.getElementById("screenshot-folder-btn");
+      if (fb) fb.disabled = false;
+    }
+  }
+  const btn = document.getElementById("screenshot-btn");
+  if (btn) { btn.disabled=false; btn.innerHTML="📷 Screenshot"; }
+});
+
+// ── Scope measurement ──────────────────────────────────────────────
+function _fmtMeasVal(value, unit) {
+  if (value===null||value===undefined||isNaN(value)||!isFinite(value)||Math.abs(value)>1e37) return "—";
+  const mag=Math.abs(value); let disp, dispUnit=unit;
+  if (unit==="%") { disp=value.toPrecision(4).replace(/\.?0+$/,""); }
+  else if (mag>=1e6)               { disp=(value/1e6).toPrecision(4); dispUnit="M"+unit; }
+  else if (mag>=1e3)               { disp=(value/1e3).toPrecision(4); dispUnit="k"+unit; }
+  else if (mag<1e-6&&mag>0)        { disp=(value*1e9).toPrecision(4); dispUnit="n"+unit; }
+  else if (mag<1e-3&&mag>0)        { disp=(value*1e6).toPrecision(4); dispUnit="µ"+unit; }
+  else if (mag<1&&unit==="s")      { disp=(value*1e3).toPrecision(4); dispUnit="ms"; }
+  else                             { disp=value.toPrecision(5).replace(/\.?0+$/,""); }
+  return `${disp} ${dispUnit}`;
+}
+
+socket.on("scope_measurement", ({ value, label, unit, ch, measurement, error }) => {
+  // Update every matching slot in the measurement list
+  document.querySelectorAll(`.scope-meas-item[data-ch="${ch}"][data-meas="${measurement}"]`).forEach(item => {
+    const $v = item.querySelector(".scope-meas-val");
+    if (!$v) return;
+    if (error) { $v.textContent="ERR"; $v.classList.add("dim"); toast(error,"error"); return; }
+    const txt = _fmtMeasVal(value, unit);
+    $v.textContent = txt;
+    $v.classList.toggle("dim", txt==="—");
+  });
+});
+
+// ── Scope auto-refresh ─────────────────────────────────────────────
+let _scopeAutoOn        = false;
+let _scopeAutoTimer     = null;
+let _scopeAutoInterval  = 500;   // ms
+let _scopeBatchInFlight = false;
+
+function _scopeStopAuto() {
+  _scopeAutoOn = false;
+  if (_scopeAutoTimer) { clearTimeout(_scopeAutoTimer); _scopeAutoTimer = null; }
+  const btn = document.getElementById("scope-exec-btn");
+  if (btn) { btn.classList.remove("running"); btn.textContent = "▷ Execute"; }
+}
+
+socket.on("scope_measurement_batch_done", () => {
+  _scopeBatchInFlight = false;
+  if (_scopeAutoOn) {
+    _scopeAutoTimer = setTimeout(scopeMeasureAll, _scopeAutoInterval);
+  }
+});
+
+function scopeToggleExecute() {
+  if (_scopeAutoOn) { _scopeStopAuto(); return; }
+  const sel = document.getElementById("scope-auto-interval");
+  _scopeAutoInterval = sel ? parseInt(sel.value) : 500;
+  _scopeAutoOn = true;
+  const btn = document.getElementById("scope-exec-btn");
+  if (btn) { btn.classList.add("running"); btn.textContent = "■ Stop"; }
+  scopeMeasureAll();
+}
+
+// ── Workbench loading ──────────────────────────────────────────────
+async function loadWorkbenches() {
+  try {
+    const { workbenches, active } = await GET("/api/workbenches");
+    $wbSelect.innerHTML = '<option value="">— select workbench —</option>';
+    for (const wb of workbenches) {
+      const opt = document.createElement("option");
+      opt.value = wb; opt.textContent = wb;
+      $wbSelect.appendChild(opt);
+    }
+    const params = new URLSearchParams(location.search);
+    const wbParam = params.get("wb") || active || workbenches[0] || "";
+    if (wbParam) { $wbSelect.value = wbParam; await onWorkbenchSelect(wbParam); }
+  } catch(e) { logMsg("✗ Failed to load workbenches: "+e.message,"error"); }
+}
+
+$wbSelect.addEventListener("change", async () => {
+  const name = $wbSelect.value;
+  if (name) await onWorkbenchSelect(name);
+  else {
+    state.workbench=null; $grid.classList.add("hidden");
+    $emptyNowb.classList.remove("hidden"); $connectBtn.disabled=true;
+    refreshAutoTab();
+  }
+});
+
+async function onWorkbenchSelect(name) {
+  try {
+    const wb = await GET(`/api/workbench/${name}`);
+    if (wb.error) { toast(wb.error,"error"); return; }
+    state.workbench = wb;
+    buildInstrumentGrid(wb._unique||[]);
+    $emptyNowb.classList.add("hidden");
+    $grid.classList.remove("hidden");
+    $connectBtn.disabled = false;
+    logMsg(`Workbench loaded: ${name} (${(wb._unique||[]).length} instrument(s))`);
+    refreshAutoTab();
+  } catch(e) { toast("Failed to load workbench: "+e.message,"error"); }
+}
+
+// ── Connect / Disconnect ───────────────────────────────────────────
+$connectBtn.addEventListener("click", async () => {
+  if (state.connected) {
+    try { $connectBtn.disabled=true; await POST("/api/disconnect"); }
+    catch(e) { logMsg("✗ Disconnect error: "+e.message,"error"); }
+    return;
+  }
+  if (!state.workbench) return;
+  state.connecting=true;
+  setStatus("connecting","Connecting…");
+  $connectBtn.innerHTML=`<span class="spinner"></span> Connecting`;
+  $connectBtn.disabled=true;
+  try { await POST("/api/connect"); }
+  catch(e) {
+    state.connecting=false;
+    setStatus("error","Error");
+    $connectBtn.textContent="Connect"; $connectBtn.className="btn btn-primary"; $connectBtn.disabled=false;
+    toast(e.message,"error");
+  }
+});
+
+// ── Instrument grid ────────────────────────────────────────────────
+function buildInstrumentGrid(instruments) {
+  $grid.innerHTML = "";
+  const types = {};
+  for (const instr of instruments) {
+    const t = instr.type||"unknown";
+    if (!types[t]) types[t]=[];
+    types[t].push(instr);
+  }
+  if (types.scope) $grid.appendChild(buildScopeCard(types.scope[0]));
+  if (types.psu)   $grid.appendChild(buildPSUCard(types.psu[0]));
+  if (types.awg)   $grid.appendChild(buildAWGCard(types.awg[0]));
+  if (types.dmm)   $grid.appendChild(buildDMMCard(types.dmm[0]));
+  for (const [t,instrs] of Object.entries(types)) {
+    if (!["scope","psu","awg","dmm"].includes(t)) {
+      for (const instr of instrs) $grid.appendChild(buildGenericCard(instr));
+    }
+  }
+  // Cards are loaded but not yet connected — show amber pending dot
+  $grid.querySelectorAll(".card").forEach(c => c.classList.add("pending"));
+}
+
+function applyConnectionStatus(instruments) {
+  for (const instr of instruments) {
+    const card = document.querySelector(`.card[data-type="${instr.type}"]`);
+    if (!card) continue;
+    card.classList.remove("pending");
+    const sub = card.querySelector(".card-subtitle");
+    if (instr.ok) { card.classList.add("connected"); if (sub) sub.textContent=instr.idn||instr.model; }
+    else          { card.classList.add("error");     if (sub) sub.textContent=instr.error||"Connection failed"; }
+  }
+}
+
+function resetCardStatus() {
+  document.querySelectorAll(".card").forEach(c => {
+    c.classList.remove("connected","error");
+    // If a workbench is still selected, go back to amber "pending" state
+    if (state.workbench) c.classList.add("pending");
+    const sub = c.querySelector(".card-subtitle");
+    if (sub) sub.textContent = c.dataset.model||"";
+  });
+  document.querySelectorAll(".psu-reading-val").forEach(el => { el.textContent="—"; el.classList.remove("live"); });
+}
+
+// ── Scope card ─────────────────────────────────────────────────────
+const SCOPE_MEASURES = [
+  {op:"measure_vpp",      label:"V p-p",  unit:"V",  group:"Voltage"},
+  {op:"measure_vmax",     label:"Vmax",   unit:"V",  group:"Voltage"},
+  {op:"measure_vmin",     label:"Vmin",   unit:"V",  group:"Voltage"},
+  {op:"measure_vavg",     label:"V avg",  unit:"V",  group:"Voltage"},
+  {op:"measure_vrms",     label:"V rms",  unit:"V",  group:"Voltage"},
+  {op:"measure_freq",     label:"Freq",   unit:"Hz", group:"Time"},
+  {op:"measure_period",   label:"Period", unit:"s",  group:"Time"},
+  {op:"measure_risetime", label:"Rise",   unit:"s",  group:"Time"},
+  {op:"measure_falltime", label:"Fall",   unit:"s",  group:"Time"},
+  {op:"measure_dutycycle",label:"Duty",   unit:"%",  group:"Time"},
+];
+
+// V/div values: 1-2-5 sequence 1 mV → 100 V (Rigol DS1000Z max = 100 V/div with 10× probe)
+const SCOPE_VDIV_VALS = [
+  1e-3,2e-3,5e-3,
+  0.01,0.02,0.05,
+  0.1,0.2,0.5,
+  1,2,5,10,20,50,100
+];
+// Time/div values: 1-2-5 sequence from 1 ns to 50 s
+const SCOPE_TDIV_VALS = [
+  1e-9,2e-9,5e-9,
+  1e-8,2e-8,5e-8,
+  1e-7,2e-7,5e-7,
+  1e-6,2e-6,5e-6,
+  1e-5,2e-5,5e-5,
+  1e-4,2e-4,5e-4,
+  1e-3,2e-3,5e-3,
+  0.01,0.02,0.05,
+  0.1,0.2,0.5,
+  1,2,5,10,20,50
+];
+
+function fmtDiv(v) {
+  if (v < 1e-6) return (v*1e9).toPrecision(3).replace(/\.?0+$/,"")+" ns";
+  if (v < 1e-3) return (v*1e6).toPrecision(3).replace(/\.?0+$/,"")+" µs";
+  if (v < 1)    return (v*1e3).toPrecision(3).replace(/\.?0+$/,"")+" ms";
+  return v.toPrecision(3).replace(/\.?0+$/,"")+" s";
+}
+function fmtVDiv(v) {
+  if (v < 1) return (v*1e3).toPrecision(3).replace(/\.?0+$/,"")+" mV";
+  return v.toPrecision(3).replace(/\.?0+$/,"")+" V";
+}
+function scopeOptHTML(vals, fmtFn, selected) {
+  return vals.map(v=>{
+    const label=fmtFn(v);
+    const sel=(Math.abs(v-selected)<v*0.01)?' selected':''
+    return `<option value="${v}"${sel}>${label}</option>`;
+  }).join("");
+}
+function scopeSet(op, params) {
+  POST("/api/scope/set", {op, ...params}).catch(e=>toast(e.message,"error"));
+}
+function scopeToggleCh(btn, ch) {
+  const isOn = btn.classList.toggle("on");
+  scopeSet(isOn ? "channel_on" : "channel_off", {ch});
+  btn.innerHTML = `<span class="tog-dot"></span>${isOn?"ON":"OFF"}`;
+}
+
+// All probe ratios supported by Rigol DS1000Z (confirmed by driver source)
+const SCOPE_PROBE_RATIOS = [0.01,0.02,0.05,0.1,0.2,0.5,1,2,5,10,20,50,100,200,500,1000];
+
+function _probeOptHTML(selected=1) {
+  return SCOPE_PROBE_RATIOS.map(r => {
+    const sel = r===selected?' selected':'';
+    const label = r < 1 ? `${r}×` : `${r}×`;
+    return `<option value="${r}"${sel}>${label}</option>`;
+  }).join("");
+}
+
+// Families known to NOT support :CHANnel<n>:LABel (command is null in instruments.json)
+const SCOPE_NO_LABEL_FAMILIES = new Set([
+  'rigol_ds1000z','rigol_ds1000z_plus','rigol_ds6000z','rigol_mso5000',
+]);
+
+function _scopeChRowsHTML(nCh, hasLabel=false) {
+  const chColors = ["ch1","ch2","ch3","ch4","ch5","ch6","ch7","ch8"];
+  let html = "";
+  for (let i=1;i<=nCh;i++) {
+    const cc = chColors[i-1]||"";
+    const labelInp = hasLabel
+      ? `<input class="scope-ch-label-inp" type="text" maxlength="4" placeholder="label"
+               title="Channel label (shown on scope display; max 4 chars)"
+               onkeydown="if(event.key==='Enter')scopeSetLabel(this,${i})"
+               onblur="scopeSetLabel(this,${i})"/>`
+      : '';
+    html += `<div class="scope-ch-row">
+      <span class="scope-ch-badge ${cc}">CH${i}</span>
+      <button class="scope-ch-tog on" id="scope-ch-tog-${i}" onclick="scopeToggleCh(this,${i})">
+        <span class="tog-dot"></span>ON
+      </button>
+      ${labelInp}
+      <select class="scope-sel" id="scope-ch-vdiv-${i}" title="V/div" onchange="scopeSet('channel_scale',{ch:${i},value:this.value})">
+        ${scopeOptHTML(SCOPE_VDIV_VALS, fmtVDiv, 1)}
+      </select>
+      <select class="scope-sel" id="scope-ch-coup-${i}" title="Coupling" onchange="scopeSet('channel_coupling',{ch:${i},coupling:this.value})">
+        <option value="DC">DC</option><option value="AC">AC</option><option value="GND">GND</option>
+      </select>
+      <select class="scope-sel" id="scope-ch-probe-${i}" title="Probe ×" onchange="scopeSet('channel_probe',{ch:${i},attenuation:this.value})">
+        ${_probeOptHTML(1)}
+      </select>
+    </div>`;
+  }
+  return html;
+}
+
+function scopeSetLabel(inp, ch) {
+  const lbl = inp.value.trim().slice(0, 4);  // DS1000Z max label length is 4 chars
+  inp.value = lbl;
+  scopeSet('channel_label', {ch, label: lbl});
+}
+
+function _scopeChSelOpts(nCh) {
+  return Array.from({length:nCh},(_,i)=>`<option value="${i+1}">CH${i+1}</option>`).join("");
+}
+
+function scopeSetChannelCount(sel) {
+  const n = parseInt(sel.value);
+  const grid = document.getElementById("scope-ch-grid");
+  const hasLabel = grid ? grid.dataset.hasLabel === "1" : false;
+  if (grid) grid.innerHTML = _scopeChRowsHTML(n, hasLabel);
+  // update channel selector in the add-measurement row
+  const addCh = document.getElementById("scope-add-ch-sel");
+  if (addCh) addCh.innerHTML = _scopeChSelOpts(n);
+}
+
+let _scopeMeasCounter = 0;
+function scopeAddMeasurement() {
+  const chSel  = document.getElementById("scope-add-ch-sel");
+  const measSel = document.getElementById("scope-add-meas-sel");
+  if (!chSel || !measSel) return;
+  const ch  = parseInt(chSel.value);
+  const op  = measSel.value;
+  const meas = SCOPE_MEASURES.find(m=>m.op===op);
+  if (!meas) return;
+  const id = ++_scopeMeasCounter;
+  const chColors = ["ch1","ch2","ch3","ch4","ch5","ch6","ch7","ch8"];
+  const cc = chColors[ch-1]||"ch1";
+  const item = document.createElement("div");
+  item.className = "scope-meas-item";
+  item.dataset.ch   = ch;
+  item.dataset.meas = op;
+  item.dataset.id   = id;
+  item.innerHTML = `
+    <span class="scope-ch-badge ${cc}">CH${ch}</span>
+    <span class="scope-meas-label">${escHtml(meas.label)}</span>
+    <span class="scope-meas-val dim" id="smv-${id}">—</span>
+    <button class="scope-meas-remove" onclick="this.closest('.scope-meas-item').remove()" title="Remove">×</button>`;
+  const list = document.getElementById("scope-meas-list");
+  if (list) list.appendChild(item);
+}
+
+function scopeMeasureAll() {
+  if (_scopeBatchInFlight) return;
+  const items = [...document.querySelectorAll(".scope-meas-item")];
+  if (!items.length) { toast("Add a measurement first","warn"); _scopeStopAuto(); return; }
+  _scopeBatchInFlight = true;
+  // Show spinners on all slots
+  items.forEach(item => {
+    const $v = document.getElementById(`smv-${item.dataset.id}`);
+    if ($v) { $v.innerHTML=`<span class="spinner" style="width:10px;height:10px;border-width:2px;"></span>`; $v.classList.remove("dim"); }
+  });
+  const measurements = items.map(item => ({op:item.dataset.meas, ch:parseInt(item.dataset.ch)}));
+  POST("/api/scope/measure_batch", {measurements, delay_ms:50}).catch(e => {
+    _scopeBatchInFlight = false;
+    _scopeStopAuto();
+    items.forEach(item => {
+      const $v = document.getElementById(`smv-${item.dataset.id}`);
+      if ($v) { $v.textContent="ERR"; $v.classList.add("dim"); }
+    });
+    toast(e.message,"error");
+  });
+}
+
+
+function buildScopeCard(instr) {
+  const nCh = (() => {
+    const m=(instr.model||"").toUpperCase();
+    // Rigol DS1000Z: DS1[2-digit BW][channels]Z  e.g. DS1054Z→4ch, DS1104Z→4ch
+    const mx = m.match(/DS1\d\d(\d)/);
+    if (mx) { const n=parseInt(mx[1]); if(n>=1&&n<=8) return n; }
+    return 4;
+  })();
+
+  // Channel labels are NOT supported on DS1000Z (no :CHANnel<n>:LABel command)
+  const hasLabel = !SCOPE_NO_LABEL_FAMILIES.has(instr.family_id||"");
+
+  const chCountOpts = [1,2,4,8].map(n=>
+    `<option value="${n}"${n===nCh?" selected":""}>${n} ch</option>`).join("");
+  const measOpts = SCOPE_MEASURES.map(m=>`<option value="${m.op}">${m.label}</option>`).join("");
+
+  const div = document.createElement("div");
+  div.className="card"; div.dataset.type="scope"; div.dataset.model=instr.model||"";
+  div.innerHTML=`
+    <div class="card-header">
+      <div class="card-icon scope">⚡</div>
+      <div class="card-title-wrap">
+        <div class="card-title">Oscilloscope</div>
+        <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
+      </div>
+      <div class="card-status-dot"></div>
+    </div>
+    <div class="card-body scope-controls">
+      <div class="section-label-row">
+        <span class="section-label">Channels</span>
+        <select class="scope-sel" style="flex:0 0 auto;width:auto;" title="Number of channels"
+                onchange="scopeSetChannelCount(this)">${chCountOpts}</select>
+        <button class="btn btn-ghost" style="padding:3px 8px;font-size:10px;flex-shrink:0;"
+                onclick="doScopeSync()" title="Read current settings from scope">↻ Sync</button>
+      </div>
+      <div class="scope-ch-grid" id="scope-ch-grid" data-has-label="${hasLabel?'1':'0'}">${_scopeChRowsHTML(nCh, hasLabel)}</div>
+      <div class="section-label mt4">Timebase</div>
+      <div class="scope-tb-row">
+        <span class="scope-tb-label">s/div</span>
+        <select class="scope-sel" id="scope-tb-sel" title="Time/div" onchange="scopeSet('timebase_scale',{value:this.value})">
+          ${scopeOptHTML(SCOPE_TDIV_VALS, fmtDiv, 1e-3)}
+        </select>
+      </div>
+      <div class="section-label mt4">Transport</div>
+      <div class="transport-row">
+        <button class="btn run"    onclick="scopeCmd('run')">▶ Run</button>
+        <button class="btn stop"   onclick="scopeCmd('stop')">■ Stop</button>
+        <button class="btn single" onclick="scopeCmd('single')">↓ Single</button>
+        <button class="btn auto"   onclick="scopeCmd('autoscale')">⟳ Auto</button>
+      </div>
+      <div class="section-label mt4">Measurements</div>
+      <div id="scope-meas-list" class="scope-meas-list"></div>
+      <div class="scope-meas-add-row">
+        <select class="scope-sel" id="scope-add-ch-sel" style="flex:0 0 56px;">${_scopeChSelOpts(nCh)}</select>
+        <select class="scope-sel" id="scope-add-meas-sel">${measOpts}</select>
+        <button class="btn" style="padding:3px 10px;font-size:10px;flex-shrink:0;"
+                onclick="scopeAddMeasurement()">+ Add</button>
+      </div>
+      <div class="scope-meas-controls">
+        <button class="btn btn-primary" id="scope-exec-btn" onclick="scopeToggleExecute()">▷ Execute</button>
+        <select class="scope-sel" id="scope-auto-interval" style="flex:0 0 auto;width:auto;"
+                onchange="if(_scopeAutoOn){_scopeAutoInterval=parseInt(this.value);}">
+          <option value="200">200 ms</option>
+          <option value="500" selected>500 ms</option>
+          <option value="1000">1 s</option>
+          <option value="2000">2 s</option>
+          <option value="5000">5 s</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="screenshot-btn" id="screenshot-btn" onclick="doScreenshot()" style="flex:1;">📷 Screenshot</button>
+        <button class="screenshot-btn" id="screenshot-folder-btn" onclick="openScreenshotFolder()" disabled
+                style="flex:0 0 auto;padding:8px 12px;" title="Open screenshot folder">🗂</button>
+      </div>
+      <div class="scpi-row">
+        <input class="scpi-inp" type="text" placeholder="Manual SCPI command… (see log for output)"
+               onkeydown="if(event.key==='Enter')sendScpi('scope',this)"
+               spellcheck="false" autocomplete="off" />
+        <button class="btn" style="padding:3px 8px;font-size:10px;flex-shrink:0;"
+                onclick="sendScpi('scope',this.previousElementSibling)">Send</button>
+      </div>
+    </div>`;
+  return div;
+}
+
+function openScreenshotFolder() {
+  const path = _lastScreenshotDir || state.outputPath;
+  if (!path) { toast("No screenshots taken this session","warn"); return; }
+  POST("/api/open-folder", {path}).catch(e => toast(e.message,"error"));
+}
+
+function scopeCmd(cmd) { POST(`/api/scope/${cmd}`).catch(e=>toast(e.message,"error")); }
+function doScreenshot() {
+  const btn=document.getElementById("screenshot-btn");
+  if (btn){btn.disabled=true;btn.innerHTML=`<span class="spinner"></span> Capturing…`;}
+  const ts=new Date().toISOString().replace(/[:.]/g,"-").slice(0,-5);
+  POST("/api/scope/screenshot",{filename:`scope_${ts}`, output_path: state.outputPath}).catch(e=>{
+    toast(e.message,"error");
+    if (btn){btn.disabled=false;btn.innerHTML="📷 Screenshot";}
+  });
+}
+
+// ── Scope sync ─────────────────────────────────────────────────────
+function doScopeSync() {
+  POST("/api/scope/sync").catch(e => toast("Sync failed: "+e.message,"error"));
+}
+
+function _setSelectNearest(sel, value, vals) {
+  if (!sel || value == null) return;
+  let best=0, bestDist=Infinity;
+  vals.forEach((v,i) => { const d=Math.abs(v-value)/(Math.abs(value)||1); if(d<bestDist){bestDist=d;best=i;} });
+  sel.selectedIndex = best;
+}
+
+function applyScopeState(s) {
+  // Timebase
+  const tbSel = document.getElementById("scope-tb-sel");
+  if (tbSel && s.timebase_scale != null) _setSelectNearest(tbSel, s.timebase_scale, SCOPE_TDIV_VALS);
+
+  // Per-channel
+  (s.channels || []).forEach(({ch, display, scale, coupling, probe}) => {
+    // Toggle button
+    const tog = document.getElementById(`scope-ch-tog-${ch}`);
+    if (tog && display != null) {
+      tog.className = "scope-ch-tog" + (display ? " on" : "");
+      tog.innerHTML = `<span class="tog-dot"></span>${display?"ON":"OFF"}`;
+    }
+    // V/div
+    const vdivSel = document.getElementById(`scope-ch-vdiv-${ch}`);
+    if (vdivSel && scale != null) _setSelectNearest(vdivSel, scale, SCOPE_VDIV_VALS);
+    // Coupling
+    const coupSel = document.getElementById(`scope-ch-coup-${ch}`);
+    if (coupSel && coupling != null) {
+      for (const opt of coupSel.options) { if (opt.value === coupling) { opt.selected=true; break; } }
+    }
+    // Probe
+    const probeSel = document.getElementById(`scope-ch-probe-${ch}`);
+    if (probeSel && probe != null) _setSelectNearest(probeSel, probe, SCOPE_PROBE_RATIOS);
+  });
+}
+
+socket.on("scope_state", applyScopeState);
+
+// ── Per-card SCPI console ──────────────────────────────────────────
+function sendScpi(role, inp) {
+  const cmd = (typeof inp === "string" ? inp : inp.value).trim();
+  if (!cmd) return;
+  if (typeof inp !== "string") inp.value = "";
+  POST("/api/scpi", {role, cmd}).catch(e => toast(e.message,"error"));
+}
+
+socket.on("scpi_result", ({role, cmd, result, error}) => {
+  if (error) { logMsg(`[SCPI/${role}] ✗ ${cmd}: ${error}`, "error"); toast(`SCPI error: ${error}`,"error"); }
+  else if (result != null) { logMsg(`[SCPI/${role}] ${cmd}  →  ${result}`, "ok"); }
+  else { logMsg(`[SCPI/${role}] ${cmd}`, "ok"); }
+});
+
+// ── PSU card ───────────────────────────────────────────────────────
+function buildPSUCard(instr) {
+  const nCh=inferPSUChannels(instr.model);
+  let channelHTML="";
+  for (let ch=1;ch<=nCh;ch++) {
+    channelHTML+=`
+      <div class="psu-channel" id="psu-ch-${ch}">
+        <div class="psu-ch-header">
+          <span class="psu-ch-label">CH</span><span class="ch-num">${ch}</span>
+          <div class="psu-ch-spacer"></div>
+          <button class="output-toggle" id="psu-out-${ch}" data-ch="${ch}" data-on="false"
+                  onclick="psuToggleOutput(this)">
+            <span class="tog-dot"></span>OFF
+          </button>
+        </div>
+        <div class="psu-ch-body">
+          <div class="psu-set-row">
+            <div class="psu-input-wrap">
+              <span class="psu-input-unit">V</span>
+              <input class="psu-input" id="psu-vset-${ch}" type="number" step="0.001" min="0" placeholder="0.000" />
+            </div>
+            <div class="psu-input-wrap">
+              <span class="psu-input-unit">A</span>
+              <input class="psu-input" id="psu-iset-${ch}" type="number" step="0.0001" min="0" placeholder="0.0000" />
+            </div>
+            <button class="psu-set-btn" onclick="psuSet(${ch})">Set</button>
+          </div>
+          <div class="psu-readings">
+            <div class="psu-reading"><div class="psu-reading-label">Voltage</div><div class="psu-reading-val" id="psu-v-${ch}">—</div></div>
+            <div class="psu-reading"><div class="psu-reading-label">Current</div><div class="psu-reading-val" id="psu-i-${ch}">—</div></div>
+            <div class="psu-reading"><div class="psu-reading-label">Power</div><div class="psu-reading-val" id="psu-p-${ch}">—</div></div>
+          </div>
+        </div>
+      </div>`;
+  }
+  const div=document.createElement("div");
+  div.className="card"; div.dataset.type="psu"; div.dataset.model=instr.model||"";
+  div.innerHTML=`
+    <div class="card-header">
+      <div class="card-icon psu">⚙</div>
+      <div class="card-title-wrap">
+        <div class="card-title">Power Supply</div>
+        <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
+      </div>
+      <div class="card-status-dot"></div>
+    </div>
+    <div class="card-body">
+      <div class="psu-channels">${channelHTML}</div>
+      <div class="psu-footer mt8" style="display:flex;gap:6px;">
+        <button class="output-toggle" id="psu-out-all"
+                style="flex:1;justify-content:center;border-radius:var(--radius);padding:6px 12px;font-size:11px;"
+                data-on="false" onclick="psuToggleAll(this)">
+          <span class="tog-dot"></span>All OFF
+        </button>
+        <button class="btn btn-ghost" style="flex:1;font-size:11px;" onclick="psuReset()">↺ Reset all</button>
+      </div>
+      <div class="scpi-row">
+        <input class="scpi-inp" type="text" placeholder="Manual SCPI command… (see log for output)"
+               onkeydown="if(event.key==='Enter')sendScpi('psu',this)"
+               spellcheck="false" autocomplete="off" />
+        <button class="btn" style="padding:3px 8px;font-size:10px;flex-shrink:0;"
+                onclick="sendScpi('psu',this.previousElementSibling)">Send</button>
+      </div>
+    </div>`;
+  return div;
+}
+function psuSet(ch) {
+  const v=document.getElementById(`psu-vset-${ch}`)?.value;
+  const i=document.getElementById(`psu-iset-${ch}`)?.value;
+  const body={ch};
+  if (v!==""&&v!==undefined) body.voltage=parseFloat(v);
+  if (i!==""&&i!==undefined) body.current=parseFloat(i);
+  POST("/api/psu/set",body).catch(e=>toast(e.message,"error"));
+}
+function _psuRefreshAllBtn() {
+  const allBtn = document.getElementById("psu-out-all");
+  if (!allBtn) return;
+  const chBtns = [...document.querySelectorAll(".output-toggle[data-ch]")];
+  const allOn = chBtns.length > 0 && chBtns.every(b => b.dataset.on === "true");
+  allBtn.dataset.on = String(allOn);
+  allBtn.className = "output-toggle" + (allOn ? " on" : "");
+  allBtn.style.cssText = "flex:1;justify-content:center;border-radius:var(--radius);padding:6px 12px;font-size:11px;";
+  allBtn.innerHTML = `<span class="tog-dot"></span>${allOn ? "All ON" : "All OFF"}`;
+}
+function psuToggleOutput(btn) {
+  const ch=parseInt(btn.dataset.ch), on=btn.dataset.on!=="true";
+  btn.dataset.on=on; btn.className="output-toggle"+(on?" on":"");
+  btn.innerHTML=`<span class="tog-dot"></span>${on?"ON":"OFF"}`;
+  POST("/api/psu/output",{ch,state:on}).catch(e=>toast(e.message,"error"));
+  _psuRefreshAllBtn();
+}
+function psuToggleAll(btn) {
+  const chBtns = [...document.querySelectorAll(".output-toggle[data-ch]")];
+  const targetOn = !chBtns.every(b => b.dataset.on === "true");
+  chBtns.forEach(b => {
+    const ch = parseInt(b.dataset.ch);
+    b.dataset.on = String(targetOn);
+    b.className = "output-toggle" + (targetOn ? " on" : "");
+    b.innerHTML = `<span class="tog-dot"></span>${targetOn ? "ON" : "OFF"}`;
+    POST("/api/psu/output", {ch, state: targetOn}).catch(e => toast(e.message, "error"));
+  });
+  _psuRefreshAllBtn();
+}
+function psuReset() {
+  document.querySelectorAll(".output-toggle[data-ch]").forEach(btn=>{
+    btn.dataset.on="false"; btn.className="output-toggle"; btn.innerHTML=`<span class="tog-dot"></span>OFF`;
+  });
+  _psuRefreshAllBtn();
+  POST("/api/psu/reset").catch(e=>toast(e.message,"error"));
+}
+
+// ── AWG card ───────────────────────────────────────────────────────
+function buildAWGCard(instr) {
+  const nCh=inferAWGChannels(instr.model);
+  const chTabs=Array.from({length:nCh},(_,i)=>
+    `<button class="ch-tab${i===0?" active":""}" data-ch="${i+1}" onclick="awgSelectCh(this)">${i+1}</button>`
+  ).join("");
+  const funcs=["SINE","SQU","TRI","RAMP","PULS","NOIS","DC"];
+  const funcPills=funcs.map((f,i)=>
+    `<button class="func-pill${i===0?" active":""}" data-func="${f}" onclick="awgSelectFunc(this)">${f}</button>`
+  ).join("");
+  const div=document.createElement("div");
+  div.className="card"; div.dataset.type="awg"; div.dataset.model=instr.model||"";
+  div.innerHTML=`
+    <div class="card-header">
+      <div class="card-icon awg">〜</div>
+      <div class="card-title-wrap">
+        <div class="card-title">Waveform Generator</div>
+        <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
+      </div>
+      <div class="card-status-dot"></div>
+    </div>
+    <div class="card-body awg-body">
+      ${nCh>1?`<div><div class="section-label">Channel</div><div class="ch-tabs" id="awg-ch-tabs">${chTabs}</div></div>`:""}
+      <div><div class="section-label">Waveform</div><div class="func-pills" id="awg-func-pills">${funcPills}</div></div>
+      <div>
+        <div class="section-label">Parameters</div>
+        <div class="param-rows">
+          <div class="param-row">
+            <span class="param-label">Frequency</span>
+            <div class="param-input-wrap"><input class="param-input" id="awg-freq" type="number" step="any" placeholder="1000" /><span class="param-unit">Hz</span></div>
+          </div>
+          <div class="param-row">
+            <span class="param-label">Amplitude</span>
+            <div class="param-input-wrap"><input class="param-input" id="awg-amp" type="number" step="any" placeholder="1.000" /><span class="param-unit">Vpp</span></div>
+          </div>
+          <div class="param-row">
+            <span class="param-label">Offset</span>
+            <div class="param-input-wrap"><input class="param-input" id="awg-offs" type="number" step="any" placeholder="0.000" /><span class="param-unit">V</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="awg-actions">
+        <button class="btn btn-primary" onclick="awgApply()">Apply</button>
+        <button class="btn btn-ghost" id="awg-out-btn" data-on="false" onclick="awgToggleOutput(this)">Output: OFF</button>
+        <button class="btn btn-ghost" onclick="awgReset()">↺</button>
+      </div>
+      <div class="scpi-row">
+        <input class="scpi-inp" type="text" placeholder="Manual SCPI command… (see log for output)"
+               onkeydown="if(event.key==='Enter')sendScpi('awg',this)"
+               spellcheck="false" autocomplete="off" />
+        <button class="btn" style="padding:3px 8px;font-size:10px;flex-shrink:0;"
+                onclick="sendScpi('awg',this.previousElementSibling)">Send</button>
+      </div>
+    </div>`;
+  return div;
+}
+let _awgCh=1, _awgFunc="SINE";
+function awgSelectCh(btn) {
+  document.querySelectorAll("#awg-ch-tabs .ch-tab").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active"); _awgCh=parseInt(btn.dataset.ch);
+}
+function awgSelectFunc(btn) {
+  document.querySelectorAll("#awg-func-pills .func-pill").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active"); _awgFunc=btn.dataset.func;
+}
+function awgApply() {
+  const body={ch:_awgCh,function:_awgFunc};
+  const freq=document.getElementById("awg-freq")?.value;
+  const amp =document.getElementById("awg-amp")?.value;
+  const offs=document.getElementById("awg-offs")?.value;
+  if (freq) body.frequency=parseFloat(freq);
+  if (amp)  body.amplitude=parseFloat(amp);
+  if (offs) body.offset=parseFloat(offs);
+  POST("/api/awg/apply",body).catch(e=>toast(e.message,"error"));
+}
+function awgToggleOutput(btn) {
+  const on=btn.dataset.on!=="true";
+  btn.dataset.on=on; btn.textContent=`Output: ${on?"ON":"OFF"}`;
+  btn.className=`btn ${on?"btn-green":"btn-ghost"}`;
+  POST("/api/awg/output",{ch:_awgCh,state:on}).catch(e=>toast(e.message,"error"));
+}
+function awgReset() {
+  const b=document.getElementById("awg-out-btn");
+  if (b){b.dataset.on="false";b.textContent="Output: OFF";b.className="btn btn-ghost";}
+  POST("/api/awg/reset").catch(e=>toast(e.message,"error"));
+}
+
+// ── DMM card ───────────────────────────────────────────────────────
+function buildDMMCard(instr) {
+  const modes=[
+    {id:"vdc",label:"DC V"},{id:"vac",label:"AC V"},{id:"idc",label:"DC I"},{id:"iac",label:"AC I"},
+    {id:"r",label:"Ω"},{id:"r4w",label:"4W Ω"},{id:"freq",label:"Hz"},{id:"cont",label:"Cont"},
+    {id:"diode",label:"Diode"},{id:"cap",label:"Cap"},
+  ];
+  const modePills=modes.map((m,i)=>
+    `<button class="dmm-mode${i===0?" active":""}" data-mode="${m.id}" onclick="dmmSelectMode(this)">${m.label}</button>`
+  ).join("");
+  const div=document.createElement("div");
+  div.className="card"; div.dataset.type="dmm"; div.dataset.model=instr.model||"";
+  div.innerHTML=`
+    <div class="card-header">
+      <div class="card-icon dmm">Ω</div>
+      <div class="card-title-wrap">
+        <div class="card-title">Multimeter</div>
+        <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
+      </div>
+      <div class="card-status-dot"></div>
+    </div>
+    <div class="card-body dmm-body">
+      <div><div class="section-label">Measurement</div><div class="dmm-modes">${modePills}</div></div>
+      <div class="dmm-display"><div class="dmm-value dim" id="dmm-value">—</div></div>
+      <div class="dmm-actions">
+        <button class="btn btn-primary" onclick="dmmMeasure()">Measure</button>
+        <button class="btn btn-ghost" id="dmm-cont-btn" data-on="false" onclick="dmmToggleContinuous(this)">Continuous: OFF</button>
+      </div>
+      <div class="scpi-row">
+        <input class="scpi-inp" type="text" placeholder="Manual SCPI command… (see log for output)"
+               onkeydown="if(event.key==='Enter')sendScpi('dmm',this)"
+               spellcheck="false" autocomplete="off" />
+        <button class="btn" style="padding:3px 8px;font-size:10px;flex-shrink:0;"
+                onclick="sendScpi('dmm',this.previousElementSibling)">Send</button>
+      </div>
+    </div>`;
+  return div;
+}
+let _dmmMode="vdc", _dmmContID=null;
+function dmmSelectMode(btn) {
+  document.querySelectorAll(".dmm-mode").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active"); _dmmMode=btn.dataset.mode;
+  const v=document.getElementById("dmm-value");
+  if (v){v.innerHTML="—";v.classList.add("dim");}
+}
+function dmmMeasure() { POST("/api/dmm/measure",{mode:_dmmMode}).catch(e=>toast(e.message,"error")); }
+function dmmToggleContinuous(btn) {
+  const on=btn.dataset.on!=="true";
+  btn.dataset.on=on; btn.textContent=`Continuous: ${on?"ON":"OFF"}`;
+  btn.className=`btn ${on?"btn-green":"btn-ghost"}`;
+  if (on) { _dmmContID=setInterval(()=>POST("/api/dmm/measure",{mode:_dmmMode}).catch(()=>{}),1000); }
+  else    { clearInterval(_dmmContID); _dmmContID=null; }
+}
+
+// ── Generic card ───────────────────────────────────────────────────
+function buildGenericCard(instr) {
+  const div=document.createElement("div");
+  div.className="card"; div.dataset.type=instr.type||"unknown"; div.dataset.model=instr.model||"";
+  div.innerHTML=`
+    <div class="card-header">
+      <div class="card-icon scope" style="background:var(--surface4)">?</div>
+      <div class="card-title-wrap">
+        <div class="card-title">${escHtml(instr.type||"Unknown")}</div>
+        <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
+      </div>
+      <div class="card-status-dot"></div>
+    </div>
+    <div class="card-body">
+      <p style="color:var(--text-dim);font-size:12px;">No control panel for type <code>${escHtml(instr.type||"")}</code>.</p>
+    </div>`;
+  return div;
+}
+
+// ── Keyboard shortcuts ─────────────────────────────────────────────
+document.addEventListener("keydown", e => {
+  if ((e.ctrlKey||e.metaKey)&&e.key==="k") { e.preventDefault(); $wbSelect.focus(); }
+  if (e.key==="Escape") document.activeElement?.blur();
+  if (e.key==="Enter"&&e.target.matches(".psu-input")) {
+    const ch=e.target.id.match(/psu-[vi]set-(\d)/)?.[1];
+    if (ch) psuSet(parseInt(ch));
+  }
+  if (e.key==="Enter"&&e.target.matches(".param-input")) awgApply();
+});
+
+// ════════════════════════════════════════════════════════════════════
+// ── Automation tab ─────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════
+
+async function refreshAutoTests() {
+  try {
+    const { tests } = await GET("/api/automation/tests");
+    state.autoTests = tests || [];
+    if (state.activeTab === "automation") refreshAutoTab();
+  } catch(e) { /* no-op */ }
+}
+
+let _autoBuiltForTests = null;   // serialized test IDs of the last buildTestGrid call
+
+function refreshAutoTab() {
+  const noWb    = document.getElementById("auto-empty-nowb");
+  const noTests = document.getElementById("auto-empty-notests");
+  const layout  = document.getElementById("auto-layout");
+
+  if (!state.workbench) {
+    noWb.classList.remove("hidden");
+    noTests.classList.add("hidden");
+    layout.classList.add("hidden");
+    _autoBuiltForTests = null;
+    return;
+  }
+  noWb.classList.add("hidden");
+
+  if (!state.autoTests.length) {
+    if (state.connected) refreshAutoTests();
+    noTests.classList.remove("hidden");
+    layout.classList.add("hidden");
+    _autoBuiltForTests = null;
+    return;
+  }
+  noTests.classList.add("hidden");
+  layout.style.display = "flex";
+  layout.classList.remove("hidden");
+
+  const testKey = state.autoTests.map(t => t.id).join(",");
+  if (_autoBuiltForTests !== testKey) {
+    buildTestGrid(state.autoTests);
+    _autoBuiltForTests = testKey;
+  } else {
+    selectTest(state.selectedTestId || state.autoTests[0]?.id);
+  }
+}
+
+function buildTestGrid(tests) {
+  const icons = { ac_frequency_sweep:"〼", dc_sweep:"⚡", dmm_logger:"Ω",
+                  waveform_analysis:"∿",  harmonic_analysis:"≋" };
+
+  // ── Build tab strip ──────────────────────────────────────────────────
+  const tabStrip = document.getElementById("auto-test-tabs");
+  tabStrip.innerHTML = "";
+  for (const test of tests) {
+    const tab = document.createElement("button");
+    tab.className      = "auto-test-tab";
+    tab.dataset.testId = test.id;
+    tab.onclick        = () => selectTest(test.id);
+    tab.innerHTML      = `<span class="auto-test-tab-icon">${icons[test.id] || "▶"}</span>${escHtml(test.name)}`;
+    tabStrip.appendChild(tab);
+  }
+
+  // ── Build test cards (all hidden; selected one revealed by selectTest) ──
+  const grid = document.getElementById("test-grid");
+  grid.innerHTML = "";
+  for (const test of tests) {
+    const card = test.custom_ui ? buildDcSweepCard(test) : buildTestCard(test);
+    card.classList.add("hidden");
+    grid.appendChild(card);
+    if (test.custom_ui) {
+      _dcSw.measItems = [
+        { kind:"measurement", instrument:"psu", measure:"voltage", instr_ch:1, samples:1, settle:0.1, label:"" },
+      ];
+      _dcSwRenderChannels();
+      _dcSwRenderMeasList();
+    }
+    if (test.id === "psu_interrupt") _psuInterruptInit(test.id);
+  }
+
+  // Auto-select the first test (or reselect the previously active one)
+  const current = state.selectedTestId && tests.find(t => t.id === state.selectedTestId);
+  selectTest(current ? current.id : tests[0].id);
+}
+
+function selectTest(testId) {
+  state.selectedTestId = testId;
+
+  // Show the selected card, hide all others
+  document.querySelectorAll("#test-grid .test-card").forEach(card => {
+    card.classList.toggle("hidden", card.id !== `test-card-${testId}`);
+  });
+
+  // Update tab active state
+  document.querySelectorAll(".auto-test-tab").forEach(tab => {
+    tab.classList.toggle("active", tab.dataset.testId === testId);
+  });
+}
+
+function buildTestCard(test) {
+  const div = document.createElement("div");
+  div.className = "test-card";
+  div.id = `test-card-${test.id}`;
+
+  // Parameter inputs
+  const paramRows = test.params.map(p => {
+    if (p.type === "select") {
+      // Options can be plain strings or {value, label} objects
+      const opts = p.options.map(o => {
+        const val = (o && typeof o === "object") ? o.value : o;
+        const lbl = (o && typeof o === "object") ? o.label : o;
+        const sel = (val === p.default || lbl === p.default) ? " selected" : "";
+        return `<option value="${escHtml(String(val))}"${sel}>${escHtml(String(lbl))}</option>`;
+      }).join("");
+      return `
+        <div class="test-param-row">
+          <span class="test-param-label">${escHtml(p.label)}</span>
+          <div class="test-param-input-wrap">
+            <select class="test-param-input sel" id="tp-${test.id}-${p.id}">${opts}</select>
+          </div>
+        </div>`;
+    }
+    return `
+      <div class="test-param-row">
+        <span class="test-param-label">${escHtml(p.label)}</span>
+        <div class="test-param-input-wrap">
+          <input class="test-param-input" type="number" step="any"
+                 id="tp-${test.id}-${p.id}" value="${p.default}" />
+          ${p.unit ? `<span class="test-param-unit">${escHtml(p.unit)}</span>` : ""}
+        </div>
+      </div>`;
+  }).join("");
+
+  const _testIcons = { ac_frequency_sweep:"〜", dc_sweep:"⚡", dmm_logger:"Ω",
+                       waveform_analysis:"∿",  harmonic_analysis:"≋" };
+  const icon = _testIcons[test.id] || "▶";
+
+  div.innerHTML = `
+    <div class="test-card-header">
+      <div class="test-card-icon">${icon}</div>
+      <div>
+        <div class="test-card-title">${escHtml(test.name)}</div>
+        <div class="test-card-desc">${escHtml(test.description)}</div>
+      </div>
+    </div>
+    <div class="test-card-body">
+      <div class="test-params" id="tparams-${test.id}">${paramRows}</div>
+      <div class="test-progress" id="tprog-${test.id}">
+        <div class="progress-track"><div class="progress-fill" id="tprog-fill-${test.id}"></div></div>
+        <div class="progress-label" id="tprog-label-${test.id}">Running…</div>
+      </div>
+      <div class="test-actions">
+        <button class="btn btn-primary" id="trun-${test.id}" onclick="runTest('${test.id}')">
+          ▶ Run
+        </button>
+        <button class="btn btn-danger hidden" id="tstop-${test.id}" onclick="stopTest()">
+          ■ Stop
+        </button>
+      </div>
+    </div>`;
+  return div;
+}
+
+function _psuInterruptInit(testId) {
+  const id  = s => document.getElementById(`tp-${testId}-${s}`);
+  const row = s => id(s)?.closest(".test-param-row");
+
+  const v1El      = id("v1");
+  const v3El      = id("v3");
+  const sweepEl   = id("t2_sweep");
+  const sweepRows = ["t2_start", "t2_stop", "t2_step"].map(row);
+  sweepRows.forEach(r => {
+    if (!r) return;
+    r.style.paddingLeft = "18px";
+    r.style.borderLeft  = "2px solid var(--border)";
+    r.style.marginLeft  = "2px";
+  });
+
+  // Mirror V1 → V3 whenever V1 changes
+  v1El?.addEventListener("input", () => { if (v3El) v3El.value = v1El.value; });
+
+  // V2 group — all children of v2_mode=voltage
+  const v2ModeEl       = id("v2_mode");
+  const v2Row          = row("v2");
+  const v2SweepEl      = id("v2_sweep");
+  const v2SweepRow     = row("v2_sweep");
+  const v2SweepSubRows = ["v2_start", "v2_stop", "v2_step"].map(row);
+
+  [v2Row, v2SweepRow].forEach(r => {
+    if (!r) return;
+    r.style.paddingLeft = "18px";
+    r.style.borderLeft  = "2px solid var(--border)";
+    r.style.marginLeft  = "2px";
+  });
+  v2SweepSubRows.forEach(r => {
+    if (!r) return;
+    r.style.paddingLeft = "36px";
+    r.style.borderLeft  = "2px solid var(--border)";
+    r.style.marginLeft  = "2px";
+  });
+
+  function _updateV2SweepVisibility() {
+    const show = v2ModeEl?.value !== "off" && v2SweepEl?.value === "yes";
+    v2SweepSubRows.forEach(r => { if (r) r.style.display = show ? "" : "none"; });
+  }
+  function _updateV2Visibility() {
+    const isVoltage = v2ModeEl?.value !== "off";
+    if (v2Row)      v2Row.style.display      = isVoltage ? "" : "none";
+    if (v2SweepRow) v2SweepRow.style.display = isVoltage ? "" : "none";
+    _updateV2SweepVisibility();
+  }
+  v2ModeEl?.addEventListener("change", _updateV2Visibility);
+  v2SweepEl?.addEventListener("change", _updateV2SweepVisibility);
+  _updateV2Visibility();
+
+  // Show/hide T2 duration vs sweep range
+  const t2Row = row("t2");
+  function _updateSweepVisibility() {
+    const show = sweepEl?.value === "yes";
+    if (t2Row) t2Row.style.display = show ? "none" : "";
+    sweepRows.forEach(r => { if (r) r.style.display = show ? "" : "none"; });
+  }
+  sweepEl?.addEventListener("change", _updateSweepVisibility);
+  _updateSweepVisibility();
+
+  // ── Waveform diagram ──────────────────────────────────────────────────────
+  const diagDiv = document.createElement("div");
+  diagDiv.className = "psu-int-diagram";
+  const paramsEl = document.getElementById(`tparams-${testId}`);
+  paramsEl.parentNode.insertBefore(diagDiv, paramsEl);
+
+  function _updateDiagram() {
+    const v1     = parseFloat(id("v1")?.value)       || 5;
+    const v2mode = id("v2_mode")?.value               || "off";
+    const v2     = v2mode === "off" ? 0 : (parseFloat(id("v2")?.value) || 0);
+    const v3     = parseFloat(v3El?.value)            || v1;
+    const t1     = parseFloat(id("t1")?.value)        || 500;
+    const t2     = parseFloat(id("t2")?.value)        || 100;
+    const t3     = parseFloat(id("t3")?.value)        || 500;
+    const t2Swept = id("t2_sweep")?.value === "yes";
+    const v2Swept = v2mode !== "off" && id("v2_sweep")?.value === "yes";
+    const t2Start = t2Swept ? (parseFloat(id("t2_start")?.value) || t2) : t2;
+    const t2Stop  = t2Swept ? (parseFloat(id("t2_stop")?.value)  || t2) : t2;
+    const v2Start = v2Swept ? (parseFloat(id("v2_start")?.value) ?? v2) : v2;
+    const v2Stop  = v2Swept ? (parseFloat(id("v2_stop")?.value)  ?? v2) : v2;
+    diagDiv.innerHTML = _psuInterruptSVG(v1, v2, v3, t1, t2, t3, t2Swept, v2Swept, t2Start, t2Stop, v2Start, v2Stop);
+  }
+
+  ["v1","v2","v2_mode","v2_sweep","v2_start","v2_stop","v3","t1","t2","t2_start","t2_stop","t3"].forEach(fid => {
+    id(fid)?.addEventListener("input",  _updateDiagram);
+    id(fid)?.addEventListener("change", _updateDiagram);
+  });
+  _updateDiagram();
+}
+
+function _psuInterruptSVG(v1, v2, v3, t1, t2, t3, t2Swept=false, v2Swept=false, t2Start=t2, t2Stop=t2, v2Start=v2, v2Stop=v2) {
+  const W=460, H=124;
+  const LP=36, RP=52, TP=12, BP=40;
+  const wx=LP, wy=TP, ww=W-LP-RP, wh=H-TP-BP;
+
+  // Phase width: use midpoint of T2 range when swept so diagram proportions look reasonable
+  const t2Visual = t2Swept ? (t2Start + t2Stop) / 2 : t2;
+  const raw=[Math.max(t1,0.001), Math.max(t2Visual,0.001), Math.max(t3,0.001)];
+  const tot=raw[0]+raw[1]+raw[2];
+  let fr=raw.map(v=>v/tot);
+  const MIN=0.13;
+  fr=fr.map(f=>Math.max(f,MIN));
+  const fs=fr[0]+fr[1]+fr[2];
+  fr=fr.map(f=>f/fs);
+  const x0=wx, x1=wx+ww*fr[0], x2=x1+ww*fr[1], x3=wx+ww;
+
+  // Waveform path uses the lowest V2 value (first in sweep or the fixed value)
+  const v2Path = v2Swept ? Math.min(v2Start, v2Stop) : v2;
+
+  // Voltage → Y — include full sweep range in scale
+  const vHi=Math.max(v1, v3, v2Path+0.001, v2Swept ? Math.max(v2Start,v2Stop)+0.001 : v2+0.001);
+  const vLo=Math.min(0, v2Path, v2Swept ? Math.min(v2Start,v2Stop) : v2);
+  const span=vHi-vLo || 1;
+  const vTop=vHi+span*0.22, vBot=vLo-span*0.10;
+  const vRange=vTop-vBot;
+  const yv=v=>wy+wh-(v-vBot)/vRange*wh;
+
+  const yV1=yv(v1), yV2=yv(v2Path), yV3=yv(v3), yFloor=wy+wh;
+
+  const fmtT=t=>t>=1000?`${(t/1000).toFixed(1)}s`:`${Math.round(t)}ms`;
+  const fmtV=v=>v<=0.005?'0V':`${parseFloat(v.toFixed(2))}V`;
+
+  const THRESH=wh*0.12;
+  const v3distinct=Math.abs(yV3-yV1)>THRESH;
+  // V2 is distinct if any part of its range is far enough from V1
+  const v2distinct=Math.abs(yV2-yV1)>THRESH || (v2Swept && Math.abs(yv(Math.max(v2Start,v2Stop))-yV1)>THRESH);
+
+  const ref=(y,color,op=0.55)=>
+    `<line x1="${wx-1}" y1="${y}" x2="${x3+2}" y2="${y}" stroke="${color}" stroke-width="0.8" stroke-dasharray="4,5" opacity="${op}"/>`;
+  const lbl=(y,text,color)=>
+    `<text x="${wx-5}" y="${y+3.5}" text-anchor="end" font-size="10" font-family="var(--mono)" font-weight="600" fill="${color}">${text}</text>`;
+  const rval=(y,text,color)=>
+    `<text x="${x3+7}" y="${y+3.5}" text-anchor="start" font-size="9" font-family="var(--mono)" fill="${color}" opacity="0.8">${text}</text>`;
+  const div=(x)=>
+    `<line x1="${x}" y1="${wy-4}" x2="${x}" y2="${yFloor+8}" stroke="var(--border)" stroke-width="0.7" stroke-dasharray="2,4" opacity="0.6"/>`;
+
+  function bracket(xa, xb, label, val) {
+    const mid=(xa+xb)/2, BY=yFloor+16, TH=4;
+    return `<line x1="${xa+1}" y1="${BY}" x2="${xb-1}" y2="${BY}" stroke="var(--text-dim)" stroke-width="1"/>
+      <line x1="${xa+1}" y1="${BY-TH}" x2="${xa+1}" y2="${BY+TH}" stroke="var(--text-dim)" stroke-width="1"/>
+      <line x1="${xb-1}" y1="${BY-TH}" x2="${xb-1}" y2="${BY+TH}" stroke="var(--text-dim)" stroke-width="1"/>
+      <text x="${mid}" y="${BY-6}" text-anchor="middle" font-size="10" font-family="var(--mono)" font-weight="600" fill="var(--text-dim)">${label}</text>
+      <text x="${mid}" y="${BY+13}" text-anchor="middle" font-size="8.5" font-family="var(--mono)" fill="var(--text-faint)">${val}</text>`;
+  }
+
+  // V2 sweep: filled band between the two boundary voltages
+  let v2BandSvg = '';
+  if (v2Swept && v2distinct) {
+    const yA = yv(v2Start), yB = yv(v2Stop);
+    const yTop = Math.min(yA, yB), yH = Math.max(Math.abs(yB - yA), 2);
+    v2BandSvg = `<rect x="${wx}" y="${yTop}" width="${ww}" height="${yH}" fill="var(--red)" opacity="0.08"/>
+    ${ref(yA,"var(--red)",0.35)}${ref(yB,"var(--red)",0.35)}`;
+  }
+
+  const path=`M${x0},${yV1} H${x1} V${yV2} H${x2} V${yV3} H${x3}`;
+  const dot=(cx,cy)=>`<circle cx="${cx}" cy="${cy}" r="2.5" fill="var(--accent)" opacity="0.75"/>`;
+
+  const t2BracketVal = t2Swept ? `${fmtT(t2Start)}–${fmtT(t2Stop)}` : fmtT(t2);
+  const v2RvalText   = v2Path<=0.005 ? 'OFF' : v2Swept ? `${fmtV(Math.min(v2Start,v2Stop))}–${fmtV(Math.max(v2Start,v2Stop))}` : fmtV(v2);
+
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;">
+    ${ref(yV1,"var(--green)")}
+    ${v2distinct && !v2Swept ? ref(yV2,"var(--red)",0.50) : ''}
+    ${v2BandSvg}
+    ${v3distinct ? ref(yV3,"var(--green)",0.42) : ''}
+    ${div(x1)}${div(x2)}
+    <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dot(x1,yV1)}${dot(x1,yV2)}${dot(x2,yV2)}${dot(x2,yV3)}
+    ${lbl(yV1,"V1","var(--green)")}
+    ${v2distinct ? lbl(v2Swept?(yv(v2Start)+yv(v2Stop))/2:yV2,"V2","var(--red)") : ''}
+    ${v3distinct ? lbl(yV3,"V3","var(--green)") : ''}
+    ${rval(yV1,fmtV(v1),"var(--green)")}
+    ${v2distinct ? rval(v2Swept?(yv(v2Start)+yv(v2Stop))/2:yV2, v2RvalText, "var(--red)") : ''}
+    ${v3distinct ? rval(yV3,fmtV(v3),"var(--green)") : ''}
+    ${bracket(x0,x1,"T1",fmtT(t1))}
+    ${bracket(x1,x2,"T2",t2BracketVal)}
+    ${bracket(x2,x3,"T3",fmtT(t3))}
+  </svg>`;
+}
+
+function getTestParams(testId) {
+  const test = state.autoTests.find(t=>t.id===testId);
+  if (!test) return {};
+  const params = {};
+  for (const p of test.params) {
+    const el = document.getElementById(`tp-${testId}-${p.id}`);
+    if (el) params[p.id] = p.type==="number" ? parseFloat(el.value) : el.value;
+  }
+  return params;
+}
+
+async function browseOutputFolder() {
+  const input   = document.getElementById("outpath-input");
+  const initial = input.value.trim() || "";
+  const btn     = document.getElementById("outpath-browse");
+  btn.disabled  = true;
+  try {
+    const res = await POST("/api/pick-folder", { initial });
+    if (res.path) { input.value = res.path; state.outputPath = res.path; }
+  } catch(e) {
+    toast("Folder picker failed: " + e.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function runTest(testId) {
+  if (state.autoRunning) { toast("A test is already running","error"); return; }
+  if (!state.connected)  { toast("Not connected to instruments","error"); return; }
+
+  const params      = testId === "dc_sweep" ? getDcSweepParams() : getTestParams(testId);
+  const output_path = state.outputPath || "";
+  state.autoRunning = true;
+  state.autoTestId  = testId;
+  state.autoRows    = [];
+  state.autoCols    = state.autoTests.find(t=>t.id===testId)?.columns || [];
+
+  // Update UI
+  const card = document.getElementById(`test-card-${testId}`);
+  if (card) card.classList.add("running");
+  document.getElementById(`trun-${testId}`).classList.add("hidden");
+  document.getElementById(`tstop-${testId}`).classList.remove("hidden");
+  const prog = document.getElementById(`tprog-${testId}`);
+  if (prog) { prog.classList.add("visible"); }
+  document.getElementById(`tprog-fill-${testId}`).style.width="0%";
+  document.getElementById(`tprog-label-${testId}`).textContent="Starting…";
+
+  // Init results panel
+  initResultsPanel(testId, state.autoCols);
+
+  try {
+    await POST("/api/automation/run",{test_id:testId, params, output_path});
+  } catch(e) {
+    toast("Failed to start test: "+e.message,"error");
+    testFinished(testId, null);
+  }
+}
+
+async function stopTest() {
+  try { await POST("/api/automation/stop"); }
+  catch(e) { /* best-effort */ }
+}
+
+socket.on("automation_progress", ({ test_id, msg }) => {
+  logMsg(`[auto/${test_id}] ${msg}`);
+  const label = document.getElementById(`tprog-label-${test_id}`);
+  if (label) label.textContent = msg;
+});
+
+socket.on("automation_row", ({ test_id, row, columns, progress }) => {
+  if (!document.getElementById(`test-card-${test_id}`)) return;
+  // On the first row, update columns if the runner determined a different schema
+  // (e.g. dc_sweep changes columns based on sweep_mode at runtime)
+  if (state.autoRows.length === 0 && columns &&
+      columns.join("\0") !== state.autoCols.join("\0")) {
+    state.autoCols = columns;
+    initResultsPanel(test_id, columns);
+  }
+  state.autoRows.push(row);
+  // progress bar
+  const fill = document.getElementById(`tprog-fill-${test_id}`);
+  if (fill) fill.style.width = (progress*100).toFixed(1)+"%";
+  const label = document.getElementById(`tprog-label-${test_id}`);
+  if (label) label.textContent = `${state.autoRows.length} rows…`;
+  // append row to results table
+  appendResultRow(row, columns);
+});
+
+socket.on("automation_done", ({ test_id, columns, rows, error, csv_path }) => {
+  state.autoRunning = false;
+  if (error) {
+    toast("Test failed: "+error,"error");
+    logMsg(`✗ [auto/${test_id}] ${error}`,"error");
+  } else {
+    toast(`Test complete — ${(rows||[]).length} rows`,"ok");
+    logMsg(`✓ [auto/${test_id}] done (${(rows||[]).length} rows)${csv_path ? " → "+csv_path : ""}`,"ok");
+  }
+  testFinished(test_id, error, csv_path);
+});
+
+function testFinished(testId, error, csv_path) {
+  state.autoRunning = false;
+  const card = document.getElementById(`test-card-${testId}`);
+  if (card) {
+    card.classList.remove("running");
+    if (!error) card.classList.add("done");
+  }
+  const run  = document.getElementById(`trun-${testId}`);
+  const stop = document.getElementById(`tstop-${testId}`);
+  if (run)  run.classList.remove("hidden");
+  if (stop) stop.classList.add("hidden");
+  const prog = document.getElementById(`tprog-${testId}`);
+  if (prog) prog.classList.remove("visible");
+
+  const fill = document.getElementById(`tprog-fill-${testId}`);
+  if (fill && !error) fill.style.width = "100%";
+
+  const msg = document.getElementById("results-msg");
+  if (msg) {
+    if (error) {
+      msg.textContent = `Error: ${error}`;
+    } else if (csv_path) {
+      msg.innerHTML = `${state.autoRows.length} rows &nbsp;·&nbsp; <span style="font-family:var(--mono);font-size:10px;color:var(--green);">💾 ${escHtml(csv_path)}</span>`;
+    } else {
+      msg.textContent = `${state.autoRows.length} rows collected`;
+    }
+  }
+
+  const cnt = document.getElementById("results-count");
+  if (cnt) cnt.textContent = `${state.autoRows.length} rows`;
+}
+
+// ── Results table ──────────────────────────────────────────────────
+function initResultsPanel(testId, columns) {
+  const panel = document.getElementById("results-panel");
+  panel.classList.add("visible");
+
+  const test = state.autoTests.find(t=>t.id===testId);
+  document.getElementById("results-title").textContent = test ? test.name : testId;
+  document.getElementById("results-count").textContent = "0 rows";
+  document.getElementById("results-msg").textContent   = "Running…";
+
+  // Header
+  const thead = document.getElementById("results-thead");
+  thead.innerHTML = `<tr>${columns.map((c,i)=>`<th>${escHtml(c)}</th>`).join("")}</tr>`;
+
+  // Clear body
+  document.getElementById("results-tbody").innerHTML = "";
+}
+
+function appendResultRow(row, columns) {
+  const tbody = document.getElementById("results-tbody");
+  const tr = document.createElement("tr");
+  tr.className = "new-row";
+  tr.innerHTML = row.map((v,i) => {
+    if (v === null || v === undefined) return `<td>—</td>`;
+    const s = typeof v === "number" ? v.toPrecision(6).replace(/\.?0+$/,"") : String(v);
+    return `<td>${escHtml(s)}</td>`;
+  }).join("");
+  tbody.appendChild(tr);
+  tbody.parentElement.scrollTop = tbody.parentElement.scrollHeight;
+
+  document.getElementById("results-count").textContent = `${tbody.rows.length} rows`;
+}
+
+function exportCSV() {
+  if (!state.autoRows.length) { toast("No data to export","error"); return; }
+  const cols = state.autoCols;
+  const lines = [cols.join(",")];
+  for (const row of state.autoRows) {
+    lines.push(row.map(v => v===null||v===undefined ? "" : v).join(","));
+  }
+  const blob = new Blob([lines.join("\n")], {type:"text/csv"});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url;
+  a.download = `${state.autoTestId||"results"}_${new Date().toISOString().slice(0,19).replace(/:/g,"-")}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast("CSV exported","ok");
+}
+
+// ════════════════════════════════════════════════════════════════════
+// ── Scan modal ─────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════
+let _scanResults = [];
+
+function openScanModal() {
+  _scanResults = [];
+  document.getElementById("scan-idle").classList.remove("hidden");
+  document.getElementById("scan-running").classList.add("hidden");
+  document.getElementById("scan-done").classList.add("hidden");
+  document.getElementById("scan-footer-idle").style.display="flex";
+  document.getElementById("scan-footer-done").classList.add("hidden");
+  document.getElementById("scan-found-list").innerHTML="";
+  document.getElementById("scan-results-list").innerHTML="";
+  document.getElementById("scan-start-btn").disabled=false;
+  document.getElementById("scan-start-usb-btn").disabled=false;
+  document.getElementById("scan-udev-hint").classList.add("hidden");
+  document.getElementById("scan-udev-result").classList.add("hidden");
+  document.getElementById("scan-udev-result").textContent="";
+  document.getElementById("scan-modal").classList.remove("hidden");
+}
+function closeScanModal() { document.getElementById("scan-modal").classList.add("hidden"); }
+document.getElementById("scan-modal").addEventListener("click", e => {
+  if (e.target===document.getElementById("scan-modal")) closeScanModal();
+});
+
+function startScan(usbOnly=false) {
+  document.getElementById("scan-start-btn").disabled=true;
+  document.getElementById("scan-start-usb-btn").disabled=true;
+  document.getElementById("scan-idle").classList.add("hidden");
+  document.getElementById("scan-running").classList.remove("hidden");
+  document.getElementById("scan-phase-text").textContent="Starting…";
+  POST("/api/scan",{usb_only:usbOnly}).catch(e=>{toast(e.message,"error");closeScanModal();});
+}
+
+socket.on("scan_progress", ({ msg, instrument }) => {
+  const phase=document.getElementById("scan-phase-text");
+  if (phase) phase.textContent=msg;
+  if (instrument) document.getElementById("scan-found-list").appendChild(buildScanInstrRow(instrument,true));
+});
+
+socket.on("scan_result", ({ instruments, errors, error }) => {
+  if (error) { toast("Scan failed: "+error,"error"); closeScanModal(); return; }
+  _scanResults=instruments||[];
+  document.getElementById("scan-running").classList.add("hidden");
+  document.getElementById("scan-done").classList.remove("hidden");
+  document.getElementById("scan-footer-idle").style.display="none";
+  document.getElementById("scan-footer-done").classList.remove("hidden");
+  document.getElementById("scan-summary").textContent = _scanResults.length
+    ? `Found ${_scanResults.length} instrument${_scanResults.length>1?"s":""}.`
+    : "No instruments found.";
+  const list=document.getElementById("scan-results-list");
+  list.innerHTML="";
+  for (const instr of _scanResults) list.appendChild(buildScanInstrRow(instr,false));
+  if (!_scanResults.length) {
+    const empty=document.createElement("div");
+    empty.style.cssText="text-align:center;padding:24px;color:var(--text-faint);font-size:12px;";
+    empty.textContent="No VISA instruments responded. Check connections and try again.";
+    list.appendChild(empty);
+    document.getElementById("scan-udev-hint").classList.remove("hidden");
+  } else {
+    document.getElementById("scan-udev-hint").classList.add("hidden");
+  }
+  const filtered=(errors||[]).filter(e=>!e.startsWith("Subnet note"));
+  if (filtered.length) {
+    document.getElementById("scan-errors-wrap").classList.remove("hidden");
+    document.getElementById("scan-errors-list").textContent=filtered.join("\n");
+  }
+  const d=new Date();
+  const sug=`bench_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`;
+  document.getElementById("scan-save-name").value=sug;
+  if (_scanResults.length) document.getElementById("scan-save-name").focus();
+});
+
+function buildScanInstrRow(instr,live) {
+  const icons={scope:"⚡",psu:"⚙",awg:"〜",dmm:"Ω"};
+  const colors={
+    scope:"background:rgba(26,86,196,.14);color:var(--accent)",
+    psu:  "background:rgba(21,128,61,.14);color:var(--green)",
+    awg:  "background:rgba(109,40,217,.14);color:var(--purple)",
+    dmm:  "background:rgba(180,83,9,.14);color:var(--amber)",
+  };
+  const t=instr.type||"";
+  const div=document.createElement("div");
+  div.className="scan-instr ok";
+  div.innerHTML=`
+    <div class="instr-icon" style="${colors[t]||"background:var(--surface4);color:var(--text-dim)"}">${icons[t]||"?"}</div>
+    <div class="instr-info">
+      <div class="instr-model">${escHtml(instr.model||"Unknown")}</div>
+      <div class="instr-detail">${escHtml(instr.resource||"")}${instr.serial?"  ·  S/N "+instr.serial:""}</div>
+    </div>
+    <span class="instr-type">${escHtml(t||"?")}</span>`;
+  return div;
+}
+
+async function fixUdev() {
+  const btn = document.querySelector("#scan-udev-hint button");
+  const out  = document.getElementById("scan-udev-result");
+  btn.disabled = true;
+  btn.textContent = "Fixing…";
+  out.classList.remove("hidden");
+  out.style.color = "var(--text-dim)";
+  out.textContent = "Running…";
+  try {
+    const r = await POST("/api/fix-udev", {});
+    if (r.status === "manual") {
+      out.style.color = "var(--amber)";
+      out.textContent = "Sudo needs a password — run these in your terminal:\n\n" + r.manual_cmds.join("\n");
+    } else {
+      out.style.color = "var(--green)";
+      out.textContent = r.msg || "Done.";
+    }
+  } catch(e) {
+    out.style.color = "var(--red)";
+    out.textContent = "Error: " + e.message;
+  }
+  btn.disabled = false;
+  btn.textContent = "Fix udev permissions";
+}
+
+async function saveScanWorkbench() {
+  const name=document.getElementById("scan-save-name").value.trim();
+  if (!name){toast("Enter a workbench name","error");return;}
+  if (!_scanResults.length){toast("Nothing to save","error");return;}
+  try {
+    const r=await POST("/api/scan/save",{name,instruments:_scanResults});
+    toast(`Workbench "${r.name}" saved`,"ok");
+    await loadWorkbenches();
+    document.getElementById("wb-select").value=name;
+    await onWorkbenchSelect(name);
+    closeScanModal();
+  } catch(e) { toast("Save failed: "+e.message,"error"); }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// ── DC Sweep custom card ────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════
+
+const _dcSw = {
+  numCh:     1,
+  sweepMode: "simultaneous",
+  test:      null,
+  // Per-slot saved values — preserved when the user changes channel count
+  saved: Array.from({length: 4}, (_, n) => ({
+    resource: null,                          // null = "never set by user"
+    ch:       String(Math.min(n + 1, 4)),
+    v_start:  "0",
+    v_step:   n === 0 ? "0.1" : "1",
+    v_stop:   n === 0 ? "5"   : "3",
+    i_limit:  "0.5",
+    settle:   "0.1",
+  })),
+  // Measurement / action items
+  measItems: [
+    { kind:"measurement", instrument:"psu", measure:"voltage", instr_ch:1, samples:1, settle:0.1, label:"" },
+  ],
+};
+
+// ── Snapshot current DOM values into _dcSw.saved ────────────────────
+function _dcSwSnapshot() {
+  for (let n = 0; n < 4; n++) {
+    const s = _dcSw.saved[n];
+    const rEl = document.getElementById(`dcsw-ch${n}-instr`);
+    if (rEl) s.resource = rEl.value;
+    const map = {ch:"ch", vstart:"v_start", vstep:"v_step",
+                 vstop:"v_stop", ilim:"i_limit", settle:"settle"};
+    for (const [sfx, key] of Object.entries(map)) {
+      const el = document.getElementById(`dcsw-ch${n}-${sfx}`);
+      if (el) s[key] = el.value;
+    }
+  }
+}
+
+// ── Re-render channel columns ────────────────────────────────────────
+function _dcSwRenderChannels() {
+  const test = _dcSw.test;
+  const container = document.getElementById("dcsw-channels");
+  if (!container || !test) return;
+
+  _dcSwSnapshot();   // save current DOM values before wiping
+
+  container.innerHTML = "";
+
+  for (let n = 0; n < _dcSw.numCh; n++) {
+    const s = _dcSw.saved[n];
+
+    // Inherit instrument from CH0 when this slot has never been set
+    const defRes = s.resource !== null
+      ? s.resource
+      : (n > 0 ? (_dcSw.saved[0].resource ?? test.sources[0]?.value ?? "")
+               : (test.sources[0]?.value ?? ""));
+
+    // Column header
+    let hdr = `CH ${n + 1}`;
+    if (_dcSw.sweepMode === "nested") {
+      const num = _dcSw.numCh;
+      if      (n === 0)        hdr += " · Inner";
+      else if (n === num - 1)  hdr += " · Outer";
+      else if (num === 3)      hdr += " · Mid";
+      else                     hdr += ` · Mid ${n}`;   // Mid 1, Mid 2 for 4-ch
+    }
+
+    // Instrument select
+    const instrHtml = test.sources.length
+      ? test.sources.map(src =>
+          `<option value="${escHtml(src.value)}"${src.value === defRes ? " selected" : ""}>${escHtml(src.label)}</option>`
+        ).join("")
+      : `<option value="">No PSU found</option>`;
+
+    // PSU output-channel select
+    const chHtml = ["1","2","3","4"].map(c =>
+      `<option${c === s.ch ? " selected" : ""}>${c}</option>`
+    ).join("");
+
+    const col = document.createElement("div");
+    col.className = "dcsw-ch";
+    col.innerHTML = `
+      <div class="dcsw-ch-hdr">${hdr}</div>
+      <div class="dcsw-field">
+        <span class="dcsw-field-label">Instr.</span>
+        <select class="dcsw-select" id="dcsw-ch${n}-instr">${instrHtml}</select>
+      </div>
+      <div class="dcsw-field">
+        <span class="dcsw-field-label">Output ch</span>
+        <select class="dcsw-select" id="dcsw-ch${n}-ch">${chHtml}</select>
+      </div>
+      <div class="dcsw-field">
+        <span class="dcsw-field-label">V start</span>
+        <div class="dcsw-field-iw">
+          <input class="dcsw-field-input" id="dcsw-ch${n}-vstart" type="number" step="any" value="${escHtml(s.v_start)}" />
+          <span class="dcsw-field-unit">V</span>
+        </div>
+      </div>
+      <div class="dcsw-field">
+        <span class="dcsw-field-label">V step</span>
+        <div class="dcsw-field-iw">
+          <input class="dcsw-field-input" id="dcsw-ch${n}-vstep" type="number" step="any" value="${escHtml(s.v_step)}" />
+          <span class="dcsw-field-unit">V</span>
+        </div>
+      </div>
+      <div class="dcsw-field">
+        <span class="dcsw-field-label">V stop</span>
+        <div class="dcsw-field-iw">
+          <input class="dcsw-field-input" id="dcsw-ch${n}-vstop" type="number" step="any" value="${escHtml(s.v_stop)}" />
+          <span class="dcsw-field-unit">V</span>
+        </div>
+      </div>
+      <div class="dcsw-field">
+        <span class="dcsw-field-label">I limit</span>
+        <div class="dcsw-field-iw">
+          <input class="dcsw-field-input" id="dcsw-ch${n}-ilim" type="number" step="any" value="${escHtml(s.i_limit)}" />
+          <span class="dcsw-field-unit">A</span>
+        </div>
+      </div>
+      <div class="dcsw-field">
+        <span class="dcsw-field-label">Settle</span>
+        <div class="dcsw-field-iw">
+          <input class="dcsw-field-input" id="dcsw-ch${n}-settle" type="number" step="any" value="${escHtml(s.settle)}" />
+          <span class="dcsw-field-unit">s</span>
+        </div>
+      </div>`;
+    container.appendChild(col);
+  }
+
+  // Live-update diagram when any voltage input changes
+  for (let n = 0; n < _dcSw.numCh; n++) {
+    for (const sfx of ["vstart","vstep","vstop"]) {
+      document.getElementById(`dcsw-ch${n}-${sfx}`)
+        ?.addEventListener("input", _dcSwUpdateDiagram);
+    }
+  }
+  _dcSwUpdateDiagram();
+}
+
+function _dcSwUpdateDiagram() {
+  const div = document.getElementById("dcsw-diagram");
+  if (!div) return;
+  const channels = Array.from({length: _dcSw.numCh}, (_, i) => ({
+    vStart: parseFloat(document.getElementById(`dcsw-ch${i}-vstart`)?.value) || 0,
+    vStep:  parseFloat(document.getElementById(`dcsw-ch${i}-vstep`)?.value)  || 0.1,
+    vStop:  parseFloat(document.getElementById(`dcsw-ch${i}-vstop`)?.value)  || 5,
+  }));
+  div.innerHTML = _dcSweepSVG(channels, _dcSw.sweepMode);
+}
+
+function _dcSweepSVG(channels, mode) {
+  if (!channels || !channels.length) return '';
+  const W=460, H=124, LP=36, RP=52, TP=12, BP=40;
+  const wx=LP, ww=W-LP-RP, wy=TP, wh=H-TP-BP;
+  const COLORS = ["var(--accent)","var(--green)","var(--amber)","var(--purple)"];
+  const THRESH  = wh * 0.12;
+
+  function stepsFor(ch) {
+    const s = Math.max(Math.abs(ch.vStep), 1e-6);
+    const dir = ch.vStop >= ch.vStart ? 1 : -1;
+    const n   = Math.max(0, Math.round(Math.abs(ch.vStop - ch.vStart) / s));
+    return Array.from({length: n+1}, (_, i) => parseFloat((ch.vStart + i*dir*s).toFixed(6)));
+  }
+
+  const rawSeqs = channels.map(stepsFor);
+
+  let seqs;
+  if (mode === "nested" && channels.length > 1) {
+    const totalN = rawSeqs.reduce((a, s) => a * s.length, 1);
+    const full = rawSeqs.map((_, ci) => {
+      const inner = rawSeqs.slice(0, ci).reduce((a, s) => a * s.length, 1);
+      return Array.from({length: totalN}, (_, i) =>
+        rawSeqs[ci][Math.floor(i / inner) % rawSeqs[ci].length]
+      );
+    });
+    const MAX = 40;
+    if (totalN <= MAX) {
+      seqs = full;
+    } else {
+      const idxs = Array.from({length: MAX}, (_, i) => Math.round(i*(totalN-1)/(MAX-1)));
+      seqs = full.map(s => idxs.map(i => s[i]));
+    }
+  } else {
+    const maxLen = rawSeqs.reduce((a, s) => Math.max(a, s.length), 1);
+    seqs = rawSeqs.map(s =>
+      s.length < maxLen ? [...s, ...Array(maxLen - s.length).fill(s.at(-1) ?? 0)] : s
+    );
+  }
+
+  const nVis = seqs[0]?.length ?? 0;
+  if (nVis === 0) return '';
+
+  const allV = seqs.flat();
+  const vLo = Math.min(...allV), vHi = Math.max(...allV);
+  const span = Math.max(vHi - vLo, 0.001);
+  const vTop = vHi + span*0.22, vBot = vLo - span*0.10;
+  const vR   = vTop - vBot;
+  const yv   = v => wy + wh - (v - vBot) / vR * wh;
+
+  // Staircase path per channel
+  let pathSvg = '';
+  channels.forEach((_, ci) => {
+    const seq = seqs[ci];
+    const col = COLORS[ci] ?? "var(--accent)";
+    let d = '';
+    seq.forEach((v, i) => {
+      const x0 = wx + (i / Math.max(nVis-1, 1)) * ww;
+      const x1 = i < nVis-1 ? wx + ((i+1) / Math.max(nVis-1, 1)) * ww : wx+ww;
+      const y  = yv(v);
+      d += i === 0 ? `M${x0.toFixed(1)},${y.toFixed(1)}` : ` V${y.toFixed(1)}`;
+      d += ` H${x1.toFixed(1)}`;
+    });
+    pathSvg += `<path d="${d}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  });
+
+  // Left labels (channel name at mid-point) + right voltage values
+  const fmtV = v => Math.abs(v) < 0.001 ? '0V' : `${parseFloat(v.toFixed(2))}V`;
+  const usedR = [];
+  const bumpY = (arr, y) => {
+    let yy = Math.max(wy+4, Math.min(wy+wh-4, y));
+    while (arr.some(u => Math.abs(u-yy) < THRESH)) yy += THRESH;
+    arr.push(yy); return yy;
+  };
+  let lsvg = '', rsvg = '';
+  channels.forEach((ch, ci) => {
+    const col  = COLORS[ci] ?? "var(--accent)";
+    const midY = Math.max(wy+8, Math.min(wy+wh, (yv(ch.vStart)+yv(ch.vStop))/2));
+    lsvg += `<text x="${wx-4}" y="${midY+3.5}" text-anchor="end" font-size="9" font-family="var(--mono)" font-weight="700" fill="${col}">${channels.length>1?`CH${ci+1}`:"V"}</text>`;
+    const ryA = bumpY(usedR, yv(ch.vStart));
+    rsvg += `<text x="${wx+ww+6}" y="${ryA+3.5}" text-anchor="start" font-size="8.5" font-family="var(--mono)" fill="${col}" opacity="0.85">${fmtV(ch.vStart)}</text>`;
+    const ryB = bumpY(usedR, yv(ch.vStop));
+    rsvg += `<text x="${wx+ww+6}" y="${ryB+3.5}" text-anchor="start" font-size="8.5" font-family="var(--mono)" fill="${col}" opacity="0.85">${fmtV(ch.vStop)}</text>`;
+  });
+
+  // Bottom annotation
+  const BY = wy+wh+16, TH = 4;
+  let botSvg;
+  if (channels.length === 1) {
+    const n = rawSeqs[0].length;
+    botSvg = `
+      <line x1="${wx+1}" y1="${BY}" x2="${wx+ww-1}" y2="${BY}" stroke="var(--text-dim)" stroke-width="1"/>
+      <line x1="${wx+1}" y1="${BY-TH}" x2="${wx+1}" y2="${BY+TH}" stroke="var(--text-dim)" stroke-width="1"/>
+      <line x1="${wx+ww-1}" y1="${BY-TH}" x2="${wx+ww-1}" y2="${BY+TH}" stroke="var(--text-dim)" stroke-width="1"/>
+      <text x="${wx+ww/2}" y="${BY+13}" text-anchor="middle" font-size="8.5" font-family="var(--mono)" fill="var(--text-faint)">${n} steps</text>`;
+  } else {
+    const counts = rawSeqs.map((s, i) => `CH${i+1}:${s.length}`).join(' · ');
+    const tag    = mode === "nested" ? `nested — ${counts}` : `simultaneous — ${counts}`;
+    botSvg = `<text x="${wx+ww/2}" y="${BY+13}" text-anchor="middle" font-size="8.5" font-family="var(--mono)" fill="var(--text-faint)">${tag}</text>`;
+  }
+
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;">
+  <line x1="${wx}" y1="${wy}" x2="${wx}" y2="${wy+wh}" stroke="var(--border)" stroke-width="0.7" opacity="0.5"/>
+  ${pathSvg}${lsvg}${rsvg}${botSvg}
+</svg>`;
+}
+
+// ── Measurement list helpers ─────────────────────────────────────────
+
+// Measure-type option lists
+const _MEAS_OPTS_PSU = [
+  ["voltage","Voltage (V)"], ["current","Current (A)"],
+];
+const _MEAS_OPTS_DMM = [
+  ["voltage","DC Voltage (V)"], ["current","DC Current (A)"],
+  ["vac","AC Voltage (V)"],     ["r","Resistance (Ω)"], ["r4w","4W Resistance (Ω)"],
+];
+const _MEAS_OPTS_SCOPE = [
+  ["vpp","Vpp (V)"],      ["vrms","Vrms (V)"],  ["freq","Frequency (Hz)"],
+  ["duty","Duty cycle (%)"], ["rise","Rise time (s)"], ["fall","Fall time (s)"],
+  ["overshoot","Overshoot (%)"], ["period","Period (s)"],
+];
+
+// Read current DOM values back into _dcSw.measItems
+function _dcSwSnapshotMeasItems() {
+  const list = document.getElementById("dcsw-meas-list");
+  if (!list) return;
+  _dcSw.measItems = Array.from(list.querySelectorAll(".dcsw-mi")).map((el, i) => {
+    const kind = el.dataset.kind;
+    const trigger = el.querySelector(`[data-field="trigger"]`)?.value ?? "every";
+    if (kind === "measurement") {
+      return {
+        kind:       "measurement",
+        instrument: el.querySelector(`[data-field="instrument"]`)?.value ?? "psu",
+        measure:    el.querySelector(`[data-field="measure"]`)?.value    ?? "voltage",
+        instr_ch:   parseInt(el.querySelector(`[data-field="instr_ch"]`)?.value ?? "1"),
+        samples:    parseInt(el.querySelector(`[data-field="samples"]`)?.value  ?? "1"),
+        settle:     parseFloat(el.querySelector(`[data-field="settle"]`)?.value ?? "0.1"),
+        label:      el.querySelector(`[data-field="label"]`)?.value      ?? "",
+        trigger,
+      };
+    } else {
+      const action = el.querySelector(`[data-field="action"]`)?.value ?? "screenshot";
+      return {
+        kind:            "action",
+        action:          action,
+        filename_prefix: action === "screenshot" ? (el.querySelector(`[data-field="filename_prefix"]`)?.value.trim() ?? "") : "",
+        script:          action === "script" ? (el.querySelector(`[data-field="script"]`)?.value  ?? "") : "",
+        scpi_instrument: action === "scpi"   ? (el.querySelector(`[data-field="scpi_instrument"]`)?.value ?? "") : "",
+        scpi_command:    action === "scpi"   ? (el.querySelector(`[data-field="scpi_command"]`)?.value    ?? "") : "",
+        scpi_settle:     action === "scpi"   ? parseFloat(el.querySelector(`[data-field="scpi_settle"]`)?.value ?? "0.1") : 0,
+        label:           el.querySelector(`[data-field="label"]`)?.value ?? "",
+        trigger,
+      };
+    }
+  });
+}
+
+// Build trigger options based on current sweep mode / channel count
+function _dcSwTriggerOpts(selected) {
+  const sel = selected ?? "every";
+  const n   = _dcSw.numCh;
+  const nested = _dcSw.sweepMode === "nested" && n >= 2;
+
+  const opts = [["every", "Every step"]];
+  if (nested) {
+    opts.push(["inner", "Inner loop end"]);
+    if (n === 3) opts.push(["mid",  "Mid loop end"]);
+    if (n >= 4)  opts.push(["mid1", "Mid 1 loop end"], ["mid2", "Mid 2 loop end"]);
+    opts.push(["outer", "Outer loop end"]);
+  }
+  return opts.map(([v, l]) =>
+    `<option value="${v}"${v === sel ? " selected" : ""}>${l}</option>`
+  ).join("");
+}
+
+// Resolve instrument type ("psu" | "dmm" | "scope" | "awg" ...) from a resource string.
+// Uses test.meters (populated by backend) which includes an itype field.
+function _getInstrType(instrValue) {
+  if (!instrValue || instrValue === "psu") return "psu";
+  const test = _dcSw.test;
+  if (test && test.meters) {
+    const m = test.meters.find(m => m.value === instrValue);
+    if (m && m.itype) return m.itype;
+  }
+  // Fallback: look up in state.instruments (all connected)
+  const instr = (state.instruments || []).find(i => i.resource === instrValue);
+  return instr ? (instr.type || "dmm") : "dmm";
+}
+
+// Build the option HTML for the measure-type dropdown in item i
+function _dcSwMeasTypeOpts(item) {
+  const type = _getInstrType(item.instrument);
+  let opts;
+  if      (type === "scope") opts = _MEAS_OPTS_SCOPE;
+  else if (type === "psu")   opts = _MEAS_OPTS_PSU;
+  else                       opts = _MEAS_OPTS_DMM;
+  return opts.map(([v, l]) =>
+    `<option value="${v}"${v === item.measure ? " selected" : ""}>${l}</option>`
+  ).join("");
+}
+
+// Build the instrument options HTML for a measurement item (PSU + DMMs + Scopes)
+function _dcSwInstrOpts(item) {
+  const test  = _dcSw.test;
+  const sources = test ? (test.meters || []) : [];
+  return sources
+    .map(m => `<option value="${escHtml(m.value)}"${m.value === item.instrument ? " selected" : ""}>${escHtml(m.label)}</option>`)
+    .join("");
+}
+
+// Build instrument options for SCPI query — all connected instruments
+function _dcSwAllInstrOpts(selected) {
+  const connected = state.instruments.filter(i => i.ok && i.resource);
+  if (!connected.length) return `<option value="">— no instruments connected —</option>`;
+  return connected.map(i => {
+    const label = `${i.type ? i.type.toUpperCase() : "?"} · ${i.model || i.resource}`;
+    return `<option value="${escHtml(i.resource)}"${i.resource === selected ? " selected" : ""}>${escHtml(label)}</option>`;
+  }).join("");
+}
+
+// Render a single measurement item element
+function _dcSwBuildMeasItem(item, i) {
+  const el = document.createElement("div");
+  el.className = "dcsw-mi";
+  el.dataset.kind = item.kind;
+
+  if (item.kind === "measurement") {
+    const itype   = _getInstrType(item.instrument);
+    const needsCh = (itype === "scope" || itype === "psu");
+    const instrCh = item.instr_ch || 1;
+    el.innerHTML = `
+      <div class="dcsw-mi-hdr">
+        <span class="dcsw-mi-tag meas">Measurement</span>
+        <button class="dcsw-mi-remove" onclick="_dcSwRemoveItem(${i})" title="Remove">×</button>
+      </div>
+      <div class="dcsw-mi-grid">
+        <div class="dcsw-field">
+          <span class="dcsw-field-label">Instrument</span>
+          <select class="dcsw-select" data-field="instrument"
+                  onchange="_dcSwMeasInstrChange(this)">${_dcSwInstrOpts(item)}</select>
+        </div>
+        <div class="dcsw-field" style="display:${needsCh ? "" : "none"};" data-meas-row="instr_ch">
+          <span class="dcsw-field-label">Channel</span>
+          <select class="dcsw-select" data-field="instr_ch">
+            <option value="1"${instrCh==1?" selected":""}>CH 1</option>
+            <option value="2"${instrCh==2?" selected":""}>CH 2</option>
+            <option value="3"${instrCh==3?" selected":""}>CH 3</option>
+            <option value="4"${instrCh==4?" selected":""}>CH 4</option>
+          </select>
+        </div>
+        <div class="dcsw-field">
+          <span class="dcsw-field-label">Measure</span>
+          <select class="dcsw-select" data-field="measure">${_dcSwMeasTypeOpts(item)}</select>
+        </div>
+        <div class="dcsw-field">
+          <span class="dcsw-field-label">Samples</span>
+          <div class="dcsw-field-iw">
+            <input class="dcsw-field-input" data-field="samples" type="number" min="1" step="1"
+                   value="${item.samples}" />
+          </div>
+        </div>
+        <div class="dcsw-field">
+          <span class="dcsw-field-label">Settle</span>
+          <div class="dcsw-field-iw">
+            <input class="dcsw-field-input" data-field="settle" type="number" step="0.01" min="0"
+                   value="${item.settle}" />
+            <span class="dcsw-field-unit">s</span>
+          </div>
+        </div>
+        <div class="dcsw-field" style="grid-column:1/-1;">
+          <span class="dcsw-field-label">Label</span>
+          <div class="dcsw-field-iw">
+            <input class="dcsw-field-input" data-field="label" type="text" placeholder="auto"
+                   value="${escHtml(item.label)}" />
+          </div>
+        </div>
+        <div class="dcsw-field" style="grid-column:1/-1;">
+          <span class="dcsw-field-label">Trigger</span>
+          <select class="dcsw-select" data-field="trigger">${_dcSwTriggerOpts(item.trigger)}</select>
+        </div>
+      </div>`;
+  } else {
+    // action
+    const isScript = (item.action === "script");
+    const isScpi   = (item.action === "scpi");
+    el.innerHTML = `
+      <div class="dcsw-mi-hdr">
+        <span class="dcsw-mi-tag action">Action</span>
+        <button class="dcsw-mi-remove" onclick="_dcSwRemoveItem(${i})" title="Remove">×</button>
+      </div>
+      <div class="dcsw-mi-grid">
+        <div class="dcsw-field" style="grid-column:1/-1;">
+          <span class="dcsw-field-label">Action</span>
+          <select class="dcsw-select" data-field="action"
+                  onchange="_dcSwActionTypeChange(this)">
+            <option value="screenshot"${!isScript && !isScpi ? " selected" : ""}>📷 Capture screen data</option>
+            <option value="scpi"${isScpi ? " selected" : ""}>📡 SCPI query</option>
+            <option value="script"${isScript ? " selected" : ""}>⚙ External script</option>
+          </select>
+        </div>
+
+        <!-- Screenshot row (hidden unless action = screenshot) -->
+        <div class="dcsw-field" style="grid-column:1/-1; display:${!isScript && !isScpi ? "" : "none"};"
+             data-action-row="screenshot">
+          <span class="dcsw-field-label">Prefix</span>
+          <div class="dcsw-field-iw">
+            <input class="dcsw-field-input" data-field="filename_prefix" type="text"
+                   placeholder="sweep" spellcheck="false"
+                   value="${escHtml(item.filename_prefix ?? "")}" />
+          </div>
+        </div>
+
+        <!-- SCPI rows (hidden unless action = scpi) -->
+        <div class="dcsw-field" style="grid-column:1/-1; display:${isScpi ? "" : "none"};"
+             data-action-row="scpi">
+          <span class="dcsw-field-label">Instrument</span>
+          <select class="dcsw-select" data-field="scpi_instrument">
+            ${_dcSwAllInstrOpts(item.scpi_instrument ?? "")}
+          </select>
+        </div>
+        <div class="dcsw-field" style="grid-column:1/-1; display:${isScpi ? "" : "none"};"
+             data-action-row="scpi">
+          <span class="dcsw-field-label">Command</span>
+          <div class="dcsw-field-iw">
+            <input class="dcsw-field-input" data-field="scpi_command" type="text"
+                   placeholder="MEAS:VOLT:DC?" spellcheck="false"
+                   style="font-family:var(--mono);"
+                   value="${escHtml(item.scpi_command ?? "")}" />
+          </div>
+        </div>
+        <div class="dcsw-field" style="display:${isScpi ? "" : "none"};"
+             data-action-row="scpi">
+          <span class="dcsw-field-label">Settle</span>
+          <div class="dcsw-field-iw">
+            <input class="dcsw-field-input" data-field="scpi_settle" type="number"
+                   step="0.01" min="0"
+                   value="${item.scpi_settle ?? 0.1}" />
+            <span class="dcsw-field-unit">s</span>
+          </div>
+        </div>
+
+        <!-- Script row (hidden unless action = script) -->
+        <div class="dcsw-field" style="grid-column:1/-1; display:${isScript ? "" : "none"};"
+             data-action-row="script">
+          <span class="dcsw-field-label">Script</span>
+          <div class="dcsw-field-iw">
+            <input class="dcsw-field-input" data-field="script" type="text"
+                   placeholder="/path/to/script.py"
+                   value="${escHtml(item.script ?? "")}" />
+          </div>
+        </div>
+
+        <div class="dcsw-field" style="grid-column:1/-1;">
+          <span class="dcsw-field-label">Label</span>
+          <div class="dcsw-field-iw">
+            <input class="dcsw-field-input" data-field="label" type="text" placeholder="auto"
+                   value="${escHtml(item.label)}" />
+          </div>
+        </div>
+        <div class="dcsw-field" style="grid-column:1/-1;">
+          <span class="dcsw-field-label">Trigger</span>
+          <select class="dcsw-select" data-field="trigger">${_dcSwTriggerOpts(item.trigger)}</select>
+        </div>
+      </div>`;
+  }
+  return el;
+}
+
+// Rebuild the whole measurement list from _dcSw.measItems
+function _dcSwRenderMeasList() {
+  const list = document.getElementById("dcsw-meas-list");
+  if (!list) return;
+  list.innerHTML = "";
+  _dcSw.measItems.forEach((item, i) => {
+    list.appendChild(_dcSwBuildMeasItem(item, i));
+  });
+}
+
+// Add a new item (snapshots first to preserve edits)
+function _dcSwAddItem(kind) {
+  _dcSwSnapshotMeasItems();
+  if (kind === "measurement") {
+    _dcSw.measItems.push({ kind:"measurement", instrument:"psu", measure:"voltage",
+                           instr_ch:1, samples:1, settle:0.1, label:"" });
+  } else {
+    _dcSw.measItems.push({ kind:"action", action:"screenshot", script:"", label:"" });
+  }
+  _dcSwRenderMeasList();
+}
+
+// Remove item at index i
+function _dcSwRemoveItem(i) {
+  _dcSwSnapshotMeasItems();
+  _dcSw.measItems.splice(i, 1);
+  _dcSwRenderMeasList();
+}
+
+// Called when instrument dropdown inside a measurement item changes
+function _dcSwMeasInstrChange(sel) {
+  const mi     = sel.closest(".dcsw-mi");
+  const msel   = mi.querySelector('[data-field="measure"]');
+  const chRow  = mi.querySelector('[data-meas-row="instr_ch"]');
+  if (!msel) return;
+
+  const type = _getInstrType(sel.value);
+  const prev = msel.value;
+  let opts;
+  if      (type === "scope") opts = _MEAS_OPTS_SCOPE;
+  else if (type === "psu")   opts = _MEAS_OPTS_PSU;
+  else                       opts = _MEAS_OPTS_DMM;
+
+  // Rebuild measure type options (keep existing selection if compatible)
+  msel.innerHTML = opts.map(([v, l]) =>
+    `<option value="${v}"${v === prev ? " selected" : ""}>${l}</option>`
+  ).join("");
+
+  // Show channel picker for PSU and scope; DMMs are single-channel
+  if (chRow) chRow.style.display = (type === "psu" || type === "scope") ? "" : "none";
+}
+
+// Called when action type dropdown changes — show/hide conditional rows
+function _dcSwActionTypeChange(sel) {
+  const mi  = sel.closest(".dcsw-mi");
+  const val = sel.value;
+  mi.querySelectorAll("[data-action-row]").forEach(row => {
+    row.style.display = row.dataset.actionRow === val ? "" : "none";
+  });
+}
+
+// ── Channel-count segmented control ─────────────────────────────────
+function dcSwSetNumCh(n) {
+  _dcSw.numCh = n;
+  document.querySelectorAll("#dcsw-nch-seg .dcsw-seg-btn").forEach((b, i) => {
+    b.classList.toggle("active", i + 1 === n);
+  });
+  // Mode selector only makes sense with 2+ channels
+  const modeWrap = document.getElementById("dcsw-mode-wrap");
+  if (modeWrap) modeWrap.style.display = n > 1 ? "" : "none";
+  _dcSwRenderChannels();
+  _dcSwSnapshotMeasItems();   // preserve edits, then re-render trigger dropdowns
+  _dcSwRenderMeasList();
+}
+
+// ── Sweep-mode segmented control ────────────────────────────────────
+function dcSwSetMode(mode) {
+  _dcSw.sweepMode = mode;
+  document.getElementById("dcsw-mode-simul")?.classList.toggle("active", mode === "simultaneous");
+  document.getElementById("dcsw-mode-nested")?.classList.toggle("active", mode === "nested");
+  _dcSwRenderChannels();   // refresh labels (inner/outer annotations)
+  _dcSwSnapshotMeasItems();
+  _dcSwRenderMeasList();   // refresh trigger dropdowns (options depend on mode)
+}
+
+// ── Build the full DC Sweep card DOM ────────────────────────────────
+function buildDcSweepCard(test) {
+  _dcSw.test      = test;
+  _dcSw.numCh     = 1;
+  _dcSw.sweepMode = "simultaneous";
+  // Reset saved slots to defaults
+  _dcSw.saved = Array.from({length: 4}, (_, n) => ({
+    resource: null,
+    ch:       String(Math.min(n + 1, 4)),
+    v_start:  "0",
+    v_step:   n === 0 ? "0.1" : "1",
+    v_stop:   n === 0 ? "5"   : "3",
+    i_limit:  "0.5",
+    settle:   "0.1",
+  }));
+
+  const div = document.createElement("div");
+  div.className = "test-card";
+  div.id        = "test-card-dc_sweep";
+  div.innerHTML = `
+    <div class="test-card-header">
+      <div class="test-card-icon">⚡</div>
+      <div>
+        <div class="test-card-title">${escHtml(test.name)}</div>
+        <div class="test-card-desc">${escHtml(test.description)}</div>
+      </div>
+    </div>
+    <div class="test-card-body">
+
+      <!-- ── Sweep diagram ────────────────────────────────────── -->
+      <div id="dcsw-diagram" class="psu-int-diagram" style="margin-bottom:10px;"></div>
+
+      <!-- ── Top controls ─────────────────────────────────────── -->
+      <div class="dcsw-top">
+        <div>
+          <div class="section-label">Channels</div>
+          <div class="dcsw-seg" id="dcsw-nch-seg">
+            <button class="dcsw-seg-btn active" onclick="dcSwSetNumCh(1)">1</button>
+            <button class="dcsw-seg-btn"        onclick="dcSwSetNumCh(2)">2</button>
+            <button class="dcsw-seg-btn"        onclick="dcSwSetNumCh(3)">3</button>
+            <button class="dcsw-seg-btn"        onclick="dcSwSetNumCh(4)">4</button>
+          </div>
+        </div>
+        <div id="dcsw-mode-wrap" style="display:none;">
+          <div class="section-label">Sweep mode</div>
+          <div class="dcsw-seg">
+            <button class="dcsw-seg-btn active" id="dcsw-mode-simul"  onclick="dcSwSetMode('simultaneous')">Simultaneous</button>
+            <button class="dcsw-seg-btn"        id="dcsw-mode-nested" onclick="dcSwSetMode('nested')">Nested</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Channel columns (rendered dynamically) ───────────── -->
+      <div class="dcsw-channels" id="dcsw-channels"></div>
+
+      <!-- ── Measurement / action list ──────────────────────────── -->
+      <div class="dcsw-meas">
+        <div class="dcsw-meas-hdr">Measurements &amp; Actions</div>
+        <div class="dcsw-meas-list" id="dcsw-meas-list"></div>
+        <div class="dcsw-meas-add-row">
+          <button class="dcsw-meas-add-btn" onclick="_dcSwAddItem('measurement')">＋ Measurement</button>
+          <button class="dcsw-meas-add-btn" onclick="_dcSwAddItem('action')">＋ Action</button>
+        </div>
+      </div>
+
+      <!-- ── Progress bar ─────────────────────────────────────── -->
+      <div class="test-progress" id="tprog-dc_sweep">
+        <div class="progress-track">
+          <div class="progress-fill" id="tprog-fill-dc_sweep"></div>
+        </div>
+        <div class="progress-label" id="tprog-label-dc_sweep">Running…</div>
+      </div>
+
+      <!-- ── Run / Stop actions ───────────────────────────────── -->
+      <div class="test-actions">
+        <button class="btn btn-primary" id="trun-dc_sweep"
+                onclick="runTest('dc_sweep')">▶ Run</button>
+        <button class="btn btn-danger hidden" id="tstop-dc_sweep"
+                onclick="stopTest()">■ Stop</button>
+      </div>
+
+    </div>`;
+  return div;
+}
+
+// ── Collect params from the DC sweep card ───────────────────────────
+function getDcSweepParams() {
+  // Snapshot measurement list DOM → _dcSw.measItems
+  _dcSwSnapshotMeasItems();
+
+  const p = {
+    num_channels: _dcSw.numCh,
+    sweep_mode:   _dcSw.sweepMode,
+    measurements: JSON.stringify(_dcSw.measItems),
+  };
+  for (let n = 0; n < _dcSw.numCh; n++) {
+    p[`ch${n}_resource`] = document.getElementById(`dcsw-ch${n}-instr`)?.value  ?? "";
+    p[`ch${n}_ch`]       = parseInt(document.getElementById(`dcsw-ch${n}-ch`)?.value    ?? "1");
+    p[`ch${n}_v_start`]  = parseFloat(document.getElementById(`dcsw-ch${n}-vstart`)?.value ?? "0");
+    p[`ch${n}_v_step`]   = parseFloat(document.getElementById(`dcsw-ch${n}-vstep`)?.value  ?? "0.1");
+    p[`ch${n}_v_stop`]   = parseFloat(document.getElementById(`dcsw-ch${n}-vstop`)?.value  ?? "5");
+    p[`ch${n}_i_limit`]  = parseFloat(document.getElementById(`dcsw-ch${n}-ilim`)?.value   ?? "0.5");
+    p[`ch${n}_settle`]   = parseFloat(document.getElementById(`dcsw-ch${n}-settle`)?.value ?? "0.1");
+  }
+  return p;
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+(async () => { await loadWorkbenches(); })();
+</script>
+</body>
+</html>

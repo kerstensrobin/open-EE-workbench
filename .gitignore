@@ -223,3 +223,13 @@ workbenches/*.json
 
 # Vendor programming manuals — not redistributed due to copyright
 documentation/*.pdf
+
+# Generated launcher files (contain machine-specific absolute paths)
+# Regenerate with:  python setup_launcher.py
+open-EE-workbench.desktop
+# ui/gui_assets/icon.png is committed directly — no longer generated at install
+
+# Measurement / sweep output data (generated at runtime)
+data/
+*.csv
+*.bmp

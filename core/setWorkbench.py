@@ -4,9 +4,10 @@
 # or resets them all to safe defaults with --reset-bench.
 #
 # Usage:
-#   python setWorkbench.py                       # apply workbench_config.json
-#   python setWorkbench.py --set foo.json        # apply a specific config file
-#   python setWorkbench.py --reset-bench         # reset all instruments to safe defaults
+#   python setWorkbench.py                            # apply workbench_config.json
+#   python setWorkbench.py --set foo.json             # apply a specific config file
+#   python setWorkbench.py --reset-bench              # reset all instruments to safe defaults
+#   python setWorkbench.py --reset-bench --usb-only   # reset USB-connected instruments only
 
 import argparse
 import itertools
@@ -118,11 +119,11 @@ class Spinner:
 # ---------------------------------------------------------------------------
 
 try:
-    from instruments import classify as _db_classify
+    from eewBackbone import classify as _db_classify
 except ImportError:
     _db_classify = None
 
-# Maps instruments.json family IDs to the handler keys used by APPLY/RESET_HANDLERS.
+# Maps eewBackbone.json family IDs to the handler keys used by APPLY/RESET_HANDLERS.
 # Families not listed here fall back to their generic type (e.g. "scope").
 _FAMILY_TO_HANDLER = {
     "keysight_edu36311a": "edu36311a",
@@ -142,7 +143,7 @@ def classify(idn: str) -> str:
             if ftype in APPLY_HANDLERS:
                 return ftype
             return "unknown"
-    # fallback if instruments.py is unavailable
+    # fallback if eewBackbone.py is unavailable
     u = idn.upper()
     if "EDU36311A" in u:
         return "edu36311a"
@@ -556,6 +557,11 @@ def main():
         metavar="NAME",
         help="Read current instrument settings and write them to <NAME>.json.",
     )
+    parser.add_argument(
+        "--usb-only",
+        action="store_true",
+        help="Scan USB devices only; skip LAN/TCPIP hosts (useful with --reset-bench).",
+    )
     args = parser.parse_args()
 
     workflow = None
@@ -564,19 +570,22 @@ def main():
 
     if args.save_current:
         _subtitle = f"saving: {args.save_current}"
-        try:
-            with open(default_config) as f:
-                extra_hosts = json.load(f).get("hosts", [])
-        except Exception:
-            pass
+        if not args.usb_only:
+            try:
+                with open(default_config) as f:
+                    extra_hosts = json.load(f).get("hosts", [])
+            except Exception:
+                pass
     elif args.reset_bench:
         _subtitle = "workbench reset"
-        # Load hosts from default config even in reset mode so LAN instruments are reached.
-        try:
-            with open(default_config) as f:
-                extra_hosts = json.load(f).get("hosts", [])
-        except Exception:
-            pass
+        # Load hosts from default config so LAN instruments are reached,
+        # unless --usb-only was requested.
+        if not args.usb_only:
+            try:
+                with open(default_config) as f:
+                    extra_hosts = json.load(f).get("hosts", [])
+            except Exception:
+                pass
     else:
         config_path = args.set or default_config
         try:

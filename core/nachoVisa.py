@@ -189,7 +189,7 @@ except ImportError:
     list_ports = None
 
 try:
-    from instruments import classify as _db_classify
+    from eewBackbone import classify as _db_classify
 except ImportError:
     _db_classify = None
 
@@ -204,7 +204,7 @@ LAN_PROBE_PORTS = (5025, 4880, 111)
 
 WORKBENCH_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "workbenches")
 
-# instruments.json uses "awg" as the type; map it to the conventional role name
+# eewBackbone.json uses "awg" as the type; map it to the conventional role name
 _TYPE_TO_ROLE = {"awg": "generator"}
 
 
@@ -424,6 +424,27 @@ def list_usb_fallback_resources() -> Tuple[List[str], List[str]]:
     return sorted(resources), errors
 
 
+def discover_serial_resources() -> Tuple[List[str], List[str]]:
+    """Return ASRL resource strings for USB-connected serial ports.
+
+    pyvisa-py does NOT include serial ports in rm.list_resources(), so we
+    enumerate them explicitly via pyserial's list_ports helper.  Only ports
+    with a non-None VID are included (i.e. physically connected via USB-to-
+    serial adapters: Prolific PL2303, FTDI, CH340, Silabs CP210x, etc.).
+    """
+    if list_ports is None:
+        return [], []
+    try:
+        resources = [
+            f"ASRL{port.device}::INSTR"
+            for port in list_ports.comports()
+            if port.vid is not None
+        ]
+        return resources, []
+    except Exception as exc:
+        return [], [f"Serial port discovery: {exc}"]
+
+
 def discover_resources(rm, spinner: Spinner = None) -> Tuple[List[str], List[str]]:
     resources = set()
     errors = []
@@ -441,6 +462,13 @@ def discover_resources(rm, spinner: Spinner = None) -> Tuple[List[str], List[str
     usb_resources, usb_errors = list_usb_fallback_resources()
     resources.update(usb_resources)
     errors.extend(usb_errors)
+
+    status("Querying USB-serial ports")
+    if spinner:
+        spinner.update("Querying serial ports")
+    serial_resources, serial_errors = discover_serial_resources()
+    resources.update(serial_resources)
+    errors.extend(serial_errors)
 
     return sorted(resources), errors
 
@@ -1080,7 +1108,14 @@ def main():
             ]
 
         if args.usb_only:
-            resources = [name for name in resources if name.upper().startswith("USB")]
+            # Keep native USB VISA resources *and* USB-to-serial ports (ASRL).
+            # USB-serial adapters (FTDI, CH340, CP2102, Prolific …) are USB
+            # devices; is_usb_serial_resource() already confirmed their VID/PID.
+            resources = [
+                name for name in resources
+                if name.upper().startswith("USB")
+                or is_usb_serial_resource(name, serial_metadata)
+            ]
 
         instrument_reports = []
         instrument_data = []
