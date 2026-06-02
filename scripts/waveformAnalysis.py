@@ -40,7 +40,7 @@ from pathlib import Path
 import pyvisa
 
 ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(ROOT / "setup"))
+sys.path.insert(0, str(ROOT / "core"))
 
 from workbench import load_workbench, open_by_role
 from eewBackbone import classify, get_command
