@@ -1147,13 +1147,13 @@ def _suggest_tests() -> list:
                 {"id": "v3",            "label": "V3",           "unit": "V",   "default": 5.0,   "type": "number"},
                 {"id": "t3",            "label": "T3 settle",    "unit": "ms",  "default": 500,   "type": "number"},
                 {"id": "current_limit", "label": "I limit",      "unit": "A",   "default": 0.5,   "type": "number"},
-                {"id": "scope_channel",      "label": "PSU mon. CH",     "unit": "",   "default": 1,              "type": "number"},
-                {"id": "scope_scale",        "label": "ms/div override",  "unit": "ms", "default": 0,              "type": "number"},
-                {"id": "scope_slope",        "label": "Trig slope",       "unit": "",   "default": "falling",      "type": "select",
+                {"id": "scope_channel",      "label": "Scope CH",      "unit": "",   "default": 1,              "type": "number"},
+                {"id": "scope_slope",        "label": "Trig slope",    "unit": "",   "default": "falling",      "type": "select",
                  "options": [{"value": "falling", "label": "Falling (NEG)"}, {"value": "rising", "label": "Rising (POS)"}]},
-                {"id": "scope_horiz_pos",    "label": "Horiz offset",     "unit": "",   "default": "yes",          "type": "select",
-                 "options": ["yes", "no"]},
-                {"id": "scope_measurements", "label": "Measurements",     "unit": "",   "default": "vmax,vmin,nwidth", "type": "hidden"},
+                {"id": "scope_scale",        "label": "Time/div",      "unit": "ms", "default": 0,              "type": "number"},
+                {"id": "scope_horiz_pos",    "label": "H. offset",     "unit": "",   "default": "yes",          "type": "select",
+                 "options": [{"value": "yes", "label": "Auto"}, {"value": "no", "label": "Off"}]},
+                {"id": "scope_measurements", "label": "Measurements",  "unit": "",   "default": "vmax,vmin,nwidth", "type": "hidden"},
             ],
             "columns": ["run", "t2_ms",
                         "v1_meas_V", "v1_meas_A",
@@ -2381,7 +2381,7 @@ def api_automation_run():
         total_time    = float(params.get("total_time",         0))
         i_limit       = float(params.get("current_limit",      0.5))
         scope_ch         = max(1, int(params.get("scope_channel",      1)))
-        scope_scale      = float(params.get("scope_scale",            0))
+        scope_scale      = float(params.get("scope_scale",            0) or 0)
         scope_slope      = str(params.get("scope_slope",      "falling")).lower()
         slope_scpi       = "POS" if scope_slope == "rising" else "NEG"
         scope_horiz_pos  = str(params.get("scope_horiz_pos",    "yes")).lower() == "yes"
