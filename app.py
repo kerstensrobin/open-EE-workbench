@@ -138,9 +138,11 @@ _state: dict = {
     "families":    {},     # resource_str -> resolved family dict
     "connected":   False,
 }
-_lock     = threading.Lock()
-_executor = ThreadPoolExecutor(max_workers=8)
-_poll_stop = threading.Event()
+_lock         = threading.Lock()
+_executor     = ThreadPoolExecutor(max_workers=8)
+_poll_stop    = threading.Event()
+_poller_idle  = threading.Event()
+_poller_idle.set()   # no poller running initially
 
 
 # ── SCPI helpers ──────────────────────────────────────────────────────────────
@@ -394,8 +396,8 @@ def api_disconnect():
     _poll_stop.set()
     with _lock:
         for rstr, r in _state["resources"].items():
-            # Return serial instruments to local (front-panel) control
-            if rstr.upper().startswith("ASRL") and HELPERS_OK:
+            # Return all instruments to local (front-panel) control before closing
+            if HELPERS_OK:
                 fam = _state["families"].get(rstr)
                 if fam:
                     try:
@@ -659,7 +661,11 @@ def api_scope_set():
         if res is None:
             sio.emit("log", {"msg": "⚠ No scope connected"}); return
         try:
-            _run_steps(res, get_command(fam, op, **kw))
+            steps = get_command(fam, op, **kw)
+            _run_steps(res, steps)
+            writes = [s for a, s in steps if a in ("write", "query")]
+            if writes:
+                sio.emit("log", {"msg": "→  " + "  |  ".join(writes[:2])})
         except KeyError:
             sio.emit("log", {"msg": f"⚠ scope: {op!r} not supported on this scope model"})
         except Exception as exc:
@@ -854,31 +860,37 @@ def _start_polling():
     _poll_stop.clear()
 
     def _loop():
-        while not _poll_stop.is_set() and _state["connected"]:
-            wb = _state.get("workbench")
-            if wb:
-                for instr in wb.get("_unique", []):
-                    if instr.get("type") != "psu":
-                        continue
-                    rstr = instr.get("resource", "")
-                    res  = _state["resources"].get(rstr)
-                    fam  = _state["families"].get(rstr)
-                    if res is None or fam is None:
-                        continue
-                    for ch in range(1, 5):
-                        readings: dict = {}
-                        for op, key in [("measure_voltage", "v"),
-                                        ("measure_current", "i"),
-                                        ("measure_power",   "p")]:
-                            try:
-                                r = _run_steps(res, get_command(fam, op, ch=ch))
-                                if r is not None:
-                                    readings[key] = float(r)
-                            except Exception:
-                                pass
-                        if readings:
-                            sio.emit("psu_reading", {"ch": ch, **readings})
-            _poll_stop.wait(timeout=1.5)
+        _poller_idle.clear()
+        try:
+            while not _poll_stop.is_set() and _state["connected"]:
+                wb = _state.get("workbench")
+                if wb:
+                    for instr in wb.get("_unique", []):
+                        if instr.get("type") != "psu":
+                            continue
+                        rstr = instr.get("resource", "")
+                        res  = _state["resources"].get(rstr)
+                        fam  = _state["families"].get(rstr)
+                        if res is None or fam is None:
+                            continue
+                        for ch in range(1, 5):
+                            if _poll_stop.is_set():
+                                break
+                            readings: dict = {}
+                            for op, key in [("measure_voltage", "v"),
+                                            ("measure_current", "i"),
+                                            ("measure_power",   "p")]:
+                                try:
+                                    r = _run_steps(res, get_command(fam, op, ch=ch))
+                                    if r is not None:
+                                        readings[key] = float(r)
+                                except Exception:
+                                    pass
+                            if readings:
+                                sio.emit("psu_reading", {"ch": ch, **readings})
+                _poll_stop.wait(timeout=1.5)
+        finally:
+            _poller_idle.set()
 
     _executor.submit(_loop)
 
@@ -1025,57 +1037,16 @@ def api_scan_save():
         return jsonify({"error": str(exc)}), 500
 
 
-@flask_app.route("/api/fix-udev", methods=["POST"])
-def api_fix_udev():
-    """Write udev rules for blocked USBTMC devices and reload udev (Linux only)."""
-    if not sys.platform.startswith("linux"):
-        return jsonify({"error": "udev is only supported on Linux"}), 400
-
-    try:
-        from nachoVisa import probe_usb_devices, build_udev_rule, detect_usb_group, UDEV_RULES_PATH
-    except ImportError as exc:
-        return jsonify({"error": f"Import error: {exc}"}), 500
-
-    devices, errors = probe_usb_devices()
-    blocked = [d for d in devices if d["is_usbtmc"] and not d["can_write"]]
-
-    if not blocked:
-        usbtmc = [d for d in devices if d["is_usbtmc"]]
-        if usbtmc:
-            return jsonify({"status": "ok", "msg": "USBTMC devices found — permissions look fine. Try replugging.", "rules": [], "usermod_cmd": None})
-        return jsonify({"status": "ok", "msg": "No USBTMC devices detected on USB.", "rules": [], "usermod_cmd": None})
-
-    group, member = detect_usb_group()
-    world_writable = group is None
-    lines = [build_udev_rule(d["vendor_id"][2:], d["product_id"][2:], group, world_writable) for d in blocked]
-    content = "\n".join(lines) + "\n"
-
-    result = subprocess.run(["sudo", "-n", "tee", UDEV_RULES_PATH], input=content.encode(), capture_output=True)
-    if result.returncode != 0:
-        manual = (
-            [f"printf '%s\\n' {repr(line)} | sudo tee {UDEV_RULES_PATH}" for line in lines]
-            + ["sudo udevadm control --reload-rules", "sudo udevadm trigger --subsystem-match=usb"]
-        )
-        if group and not member:
-            manual.append(f"sudo usermod -aG {group} $USER  # then log out and back in")
-        return jsonify({"status": "manual", "rules": lines, "manual_cmds": manual})
-
-    for cmd in (["sudo", "-n", "udevadm", "control", "--reload-rules"],
-                ["sudo", "-n", "udevadm", "trigger", "--subsystem-match=usb"]):
-        r = subprocess.run(cmd, capture_output=True)
-        if r.returncode != 0:
-            return jsonify({"error": f"{' '.join(cmd)}: {r.stderr.decode().strip()}"}), 500
-
-    usermod_cmd = f"sudo usermod -aG {group} $USER" if group and not member else None
-    msg = "udev rules written and reloaded — replug your device."
-    if usermod_cmd:
-        msg += f"\nAlso run: {usermod_cmd}  (then log out and back in)"
-    return jsonify({"status": "ok", "msg": msg, "rules": lines, "usermod_cmd": usermod_cmd})
-
-
 # ── Automation ────────────────────────────────────────────────────────────────
 _auto_stop    = threading.Event()
+_auto_pause   = threading.Event()   # set = paused; runners call _pause_point()
 _auto_running = False
+
+
+def _pause_point():
+    """Block here between run-steps while paused; returns immediately if stopped."""
+    while _auto_pause.is_set() and not _auto_stop.is_set():
+        time.sleep(0.05)
 
 
 def _suggest_tests() -> list:
@@ -1161,9 +1132,9 @@ def _suggest_tests() -> list:
                 {"id": "t1",            "label": "T1 settle",    "unit": "ms",  "default": 500,   "type": "number"},
                 {"id": "v2_mode",       "label": "Interrupt state", "unit": "",    "default": "off", "type": "select",
                  "options": [{"value": "off", "label": "PSU channel off"}, {"value": "voltage", "label": "Specific V2 voltage"}]},
-                {"id": "v2",            "label": "V2",           "unit": "V",   "default": 0.0,   "type": "number"},
                 {"id": "v2_sweep",      "label": "Sweep V2",     "unit": "",    "default": "no",  "type": "select",
                  "options": ["no", "yes"]},
+                {"id": "v2",            "label": "V2",           "unit": "V",   "default": 0.0,   "type": "number"},
                 {"id": "v2_start",      "label": "V2 start",     "unit": "V",   "default": 0.0,   "type": "number"},
                 {"id": "v2_stop",       "label": "V2 stop",      "unit": "V",   "default": 3.0,   "type": "number"},
                 {"id": "v2_step",       "label": "V2 step",      "unit": "V",   "default": 0.5,   "type": "number"},
@@ -1176,7 +1147,13 @@ def _suggest_tests() -> list:
                 {"id": "v3",            "label": "V3",           "unit": "V",   "default": 5.0,   "type": "number"},
                 {"id": "t3",            "label": "T3 settle",    "unit": "ms",  "default": 500,   "type": "number"},
                 {"id": "current_limit", "label": "I limit",      "unit": "A",   "default": 0.5,   "type": "number"},
-                {"id": "scope_channel", "label": "Scope CH",     "unit": "",    "default": 1,     "type": "number"},
+                {"id": "scope_channel",      "label": "PSU mon. CH",     "unit": "",   "default": 1,              "type": "number"},
+                {"id": "scope_scale",        "label": "ms/div override",  "unit": "ms", "default": 0,              "type": "number"},
+                {"id": "scope_slope",        "label": "Trig slope",       "unit": "",   "default": "falling",      "type": "select",
+                 "options": [{"value": "falling", "label": "Falling (NEG)"}, {"value": "rising", "label": "Rising (POS)"}]},
+                {"id": "scope_horiz_pos",    "label": "Horiz offset",     "unit": "",   "default": "yes",          "type": "select",
+                 "options": ["yes", "no"]},
+                {"id": "scope_measurements", "label": "Measurements",     "unit": "",   "default": "vmax,vmin,nwidth", "type": "hidden"},
             ],
             "columns": ["run", "t2_ms",
                         "v1_meas_V", "v1_meas_A",
@@ -1248,9 +1225,24 @@ def api_automation_tests():
 @flask_app.route("/api/automation/stop", methods=["POST"])
 def api_automation_stop():
     global _auto_running
+    _auto_pause.clear()   # unblock any paused runner so it can see _auto_stop
     _auto_stop.set()
     _auto_running = False
     return jsonify({"status": "stopping"})
+
+
+@flask_app.route("/api/automation/pause", methods=["POST"])
+def api_automation_pause():
+    _auto_pause.set()
+    sio.emit("automation_paused", {})
+    return jsonify({"status": "paused"})
+
+
+@flask_app.route("/api/automation/resume", methods=["POST"])
+def api_automation_resume():
+    _auto_pause.clear()
+    sio.emit("automation_resumed", {})
+    return jsonify({"status": "running"})
 
 
 @flask_app.route("/api/pick-folder", methods=["POST"])
@@ -1259,16 +1251,85 @@ def api_pick_folder():
     try:
         import tkinter as _tk
         from tkinter import filedialog as _fd
-        root = _tk.Tk()
-        root.withdraw()          # hide the empty Tk window
-        root.attributes("-topmost", True)
+
         initial = (request.json or {}).get("initial", str(Path.home()))
-        path = _fd.askdirectory(parent=root, title="Select output folder",
-                                initialdir=initial)
+        result  = {"path": None}
+
+        root = _tk.Tk()
+        root.withdraw()
+
+        dlg = _tk.Toplevel(root)
+        dlg.title("Select output folder")
+        dlg.resizable(True, False)
+        dlg.attributes("-topmost", True)
+
+        folder_var = _tk.StringVar(value=initial)
+
+        # ── Row 1: folder path + Browse ───────────────────────────────
+        r1 = _tk.Frame(dlg, padx=10, pady=8)
+        r1.pack(fill="x")
+        _tk.Label(r1, text="Folder:", width=12, anchor="w").pack(side="left")
+        _tk.Entry(r1, textvariable=folder_var, width=44).pack(
+            side="left", fill="x", expand=True, padx=(0, 6))
+
+        def _browse():
+            p = _fd.askdirectory(parent=dlg, title="Select folder",
+                                  initialdir=folder_var.get() or initial)
+            if p:
+                folder_var.set(p)
+
+        _tk.Button(r1, text="Browse…", command=_browse).pack(side="left")
+
+        # ── Row 2: new subfolder + Create ─────────────────────────────
+        r2 = _tk.Frame(dlg, padx=10, pady=2)
+        r2.pack(fill="x")
+        _tk.Label(r2, text="New subfolder:", width=12, anchor="w").pack(side="left")
+        sub_var = _tk.StringVar()
+        sub_entry = _tk.Entry(r2, textvariable=sub_var, width=44)
+        sub_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
+
+        def _create():
+            name = sub_var.get().strip()
+            if not name:
+                return
+            base = folder_var.get().strip() or str(Path.home())
+            new_path = Path(base) / name
+            try:
+                new_path.mkdir(parents=True, exist_ok=True)
+                folder_var.set(str(new_path))
+                sub_var.set("")
+            except Exception as exc:
+                _tk.messagebox.showerror("Error", str(exc), parent=dlg)
+
+        sub_entry.bind("<Return>", lambda _: _create())
+        _tk.Button(r2, text="Create", command=_create).pack(side="left")
+
+        # ── Row 3: OK / Cancel ────────────────────────────────────────
+        r3 = _tk.Frame(dlg, padx=10, pady=10)
+        r3.pack(fill="x")
+
+        def _ok():
+            result["path"] = folder_var.get().strip() or None
+            dlg.destroy()
+
+        def _cancel():
+            dlg.destroy()
+
+        dlg.protocol("WM_DELETE_WINDOW", _cancel)
+        _tk.Button(r3, text="Cancel", command=_cancel, width=8).pack(side="right")
+        _tk.Button(r3, text="OK",     command=_ok,     width=8).pack(
+            side="right", padx=(0, 6))
+
+        dlg.update_idletasks()
+        sw, sh = dlg.winfo_screenwidth(), dlg.winfo_screenheight()
+        w,  h  = dlg.winfo_reqwidth(),    dlg.winfo_reqheight()
+        dlg.geometry(f"+{(sw-w)//2}+{(sh-h)//2}")
+
+        dlg.grab_set()
+        root.wait_window(dlg)
         root.destroy()
-        if path:
-            return jsonify({"path": path})
-        return jsonify({"path": None})
+
+        return jsonify({"path": result["path"]})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
@@ -1322,11 +1383,31 @@ def api_automation_run():
         return jsonify({"error": "Not connected to instruments"}), 400
 
     _auto_stop.clear()
+    _auto_pause.clear()
     _auto_running = True
 
     def _emit_progress(msg: str):
         sio.emit("automation_progress", {"test_id": test_id, "msg": msg})
         _log(f"[auto] {msg}")
+
+    def _psu_local_mode(handles):
+        """Restore front-panel control on all PSU handles and clear any stuck USBTMC state."""
+        seen = set()
+        for h in handles:
+            res = h["res"]
+            if id(res) in seen:
+                continue
+            seen.add(id(res))
+            try:
+                for _act, scpi in get_command(h["fam"], "local_mode"):
+                    if _act == "write":
+                        res.write(scpi)
+            except Exception:
+                pass
+            try:
+                res.clear()
+            except Exception:
+                pass
 
     def _done(rows, columns, error=None):
         global _auto_running
@@ -1775,32 +1856,35 @@ def api_automation_run():
             except Exception as exc:
                 _done([], cols, f"Setup failed: {exc}"); return
 
-            for k in range(total):
-                if _auto_stop.is_set():
-                    _emit_progress("Stopped by user"); break
-                try:
-                    v_sets = {}
-                    for n, h in enumerate(ch_handles):
-                        v = vols_all[n][min(k, len(vols_all[n]) - 1)]
-                        _set_v(h, v)
-                        v_sets[f"ch{n + 1}"] = round(v, 6)
-                    time.sleep(ch_cfgs[0]["settle"])
+            try:
+                for k in range(total):
+                    _pause_point()
+                    if _auto_stop.is_set():
+                        _emit_progress("Stopped by user"); break
+                    try:
+                        v_sets = {}
+                        for n, h in enumerate(ch_handles):
+                            v = vols_all[n][min(k, len(vols_all[n]) - 1)]
+                            _set_v(h, v)
+                            v_sets[f"ch{n + 1}"] = round(v, 6)
+                        time.sleep(ch_cfgs[0]["settle"])
 
-                    step_ctx = {"step": k + 1, **v_sets}
-                    meas_vals = _exec_all(step_ctx)
+                        step_ctx = {"step": k + 1, **v_sets}
+                        meas_vals = _exec_all(step_ctx)
 
-                    if num_ch == 1:
-                        row = [v_sets["ch1"]] + meas_vals
-                    else:
-                        row = [v_sets[f"ch{n + 1}"] for n in range(num_ch)] + meas_vals
+                        if num_ch == 1:
+                            row = [v_sets["ch1"]] + meas_vals
+                        else:
+                            row = [v_sets[f"ch{n + 1}"] for n in range(num_ch)] + meas_vals
 
-                    rows.append(row)
-                    _emit_row(row, cols, (k + 1) / total)
-                except Exception as exc:
-                    _log(f"[auto] step {k + 1}: {exc}")
-
-            for h in ch_handles:
-                _teardown_ch(h)
+                        rows.append(row)
+                        _emit_row(row, cols, (k + 1) / total)
+                    except Exception as exc:
+                        _log(f"[auto] step {k + 1}: {exc}")
+            finally:
+                for h in ch_handles:
+                    _teardown_ch(h)
+                _psu_local_mode(ch_handles)
 
         # ════════════════════════════════════════════════════════════════════
         # NESTED: CH1 = inner (fastest loop), CHN = outer (slowest loop).
@@ -1845,56 +1929,63 @@ def api_automation_run():
             step       = 0
             prev_combo = None
 
-            for combo in itertools.product(*vols_outer_first):
-                # combo = (v_outer, [v_mid…], v_inner)
-                if _auto_stop.is_set():
-                    _emit_progress("Stopped by user"); break
+            try:
+                for combo in itertools.product(*vols_outer_first):
+                    # combo = (v_outer, [v_mid…], v_inner)
+                    _pause_point()
+                    if _auto_stop.is_set():
+                        _emit_progress("Stopped by user"); break
 
-                # Determine which level changed since last step
-                if prev_combo is None:
-                    first_changed = 0        # everything is new
-                else:
-                    first_changed = next(
-                        (i for i, (a, b) in enumerate(zip(combo, prev_combo))
-                         if a != b),
-                        num_ch - 1)
+                    # Determine which level changed since last step
+                    if prev_combo is None:
+                        first_changed = 0        # everything is new
+                    else:
+                        first_changed = next(
+                            (i for i, (a, b) in enumerate(zip(combo, prev_combo))
+                             if a != b),
+                            num_ch - 1)
 
-                # Set only channels that changed; settle all but innermost
-                for i in range(first_changed, num_ch):
-                    h = handles_outer_first[i]
-                    _set_v(h, combo[i])
-                    if i < num_ch - 1:          # not the innermost
-                        time.sleep(h["cfg"]["settle"])
+                    # Set only channels that changed; settle all but innermost
+                    for i in range(first_changed, num_ch):
+                        h = handles_outer_first[i]
+                        _set_v(h, combo[i])
+                        if i < num_ch - 1:          # not the innermost
+                            time.sleep(h["cfg"]["settle"])
 
-                prev_combo = combo
-                step += 1
+                    prev_combo = combo
+                    step += 1
 
-                # step_ctx: ch1 = inner voltage, chN = outer voltage
-                step_ctx = {"step": step}
-                for i, v in enumerate(reversed(combo)):   # i=0 → inner
-                    step_ctx[f"ch{i + 1}"] = round(v, 6)
+                    # step_ctx: ch1 = inner voltage, chN = outer voltage
+                    step_ctx = {"step": step}
+                    for i, v in enumerate(reversed(combo)):   # i=0 → inner
+                        step_ctx[f"ch{i + 1}"] = round(v, 6)
 
-                # level_changed: 0 = outer changed, num_ch-1 = only inner changed
-                # expressed as the *name* of the level that changed most
-                step_ctx["_level_changed"] = _nest_name(num_ch - 1 - first_changed)
+                    # level_changed: 0 = outer changed, num_ch-1 = only inner changed
+                    # expressed as the *name* of the level that changed most
+                    step_ctx["_level_changed"] = _nest_name(num_ch - 1 - first_changed)
 
-                meas_vals = _exec_all(step_ctx)
-                row       = [round(v, 6) for v in combo] + meas_vals
-                rows.append(row)
-                _emit_row(row, cols, step / total)
+                    try:
+                        meas_vals = _exec_all(step_ctx)
+                    except Exception as exc:
+                        _log(f"[auto] step {step}: {exc}")
+                        meas_vals = [None] * len(meas_items)
+                    row = [round(v, 6) for v in combo] + meas_vals
+                    rows.append(row)
+                    _emit_row(row, cols, step / total)
 
-                # Announce whenever an outer level completes its inner pass
-                if first_changed == 0 and step > 1:
-                    # inner just ticked — no announcement needed
-                    pass
-                elif first_changed < num_ch - 1:
-                    changed_name = _nest_name(num_ch - 1 - first_changed)
-                    changed_v    = combo[first_changed]
-                    _emit_progress(
-                        f"  {changed_name} = {changed_v:.4g} V — sweeping inner…")
-
-            for h in ch_handles:
-                _teardown_ch(h)
+                    # Announce whenever an outer level completes its inner pass
+                    if first_changed == 0 and step > 1:
+                        # inner just ticked — no announcement needed
+                        pass
+                    elif first_changed < num_ch - 1:
+                        changed_name = _nest_name(num_ch - 1 - first_changed)
+                        changed_v    = combo[first_changed]
+                        _emit_progress(
+                            f"  {changed_name} = {changed_v:.4g} V — sweeping inner…")
+            finally:
+                for h in ch_handles:
+                    _teardown_ch(h)
+                _psu_local_mode(ch_handles)
 
         else:
             _done([], [], f"Unknown sweep_mode {sweep_mode!r}"); return
@@ -2289,8 +2380,25 @@ def api_automation_run():
         t3_ms_default = float(params.get("t3",                 500))
         total_time    = float(params.get("total_time",         0))
         i_limit       = float(params.get("current_limit",      0.5))
-        scope_ch      = max(1, int(params.get("scope_channel", 1)))
-        scope_scale   = float(params.get("scope_scale",        0))
+        scope_ch         = max(1, int(params.get("scope_channel",      1)))
+        scope_scale      = float(params.get("scope_scale",            0))
+        scope_slope      = str(params.get("scope_slope",      "falling")).lower()
+        slope_scpi       = "POS" if scope_slope == "rising" else "NEG"
+        scope_horiz_pos  = str(params.get("scope_horiz_pos",    "yes")).lower() == "yes"
+        scope_meas_str   = str(params.get("scope_measurements", "vmax,vmin,nwidth"))
+
+        _MEAS_MAP = {
+            "vmax":   ("measure_vmax",     "scope_vmax_V"),
+            "vmin":   ("measure_vmin",     "scope_vmin_V"),
+            "nwidth": ("measure_nwidth",   "scope_nwidth_s"),
+            "pwidth": ("measure_pwidth",   "scope_pwidth_s"),
+            "vpp":    ("measure_vpp",      "scope_vpp_V"),
+            "vrms":   ("measure_vrms",     "scope_vrms_V"),
+            "rise":   ("measure_risetime", "scope_rise_s"),
+            "fall":   ("measure_falltime", "scope_fall_s"),
+            "duty":   ("measure_dutycycle","scope_duty_pct"),
+        }
+        selected_meas = [m.strip() for m in scope_meas_str.split(",") if m.strip() in _MEAS_MAP]
 
         def _ms_steps(start, stop, step):
             step = abs(step)
@@ -2347,6 +2455,20 @@ def api_automation_run():
             # LEFT on screen (more post-trigger room on the right). We want T1 of
             # pre-trigger, so offset = win/2 - T1, which is positive when T1 < win/2.
             position   = scope_win / 2.0 - t1_ms / 1000.0
+
+            # Vertical — compute V/div and offset from the full signal range.
+            # Include 0 V so the "output off" floor is always in range.
+            _all_v = [v1, v3, 0.0]
+            if v2_mode == "voltage":
+                _all_v += [x for x in v2_list if x is not None]
+            v_lo     = min(_all_v)
+            v_hi     = max(_all_v)
+            v_span   = max(v_hi - v_lo, 0.1)   # guard against identical voltages
+            v_center = (v_hi + v_lo) / 2.0
+            _VDIV = [1e-3, 2e-3, 5e-3, 10e-3, 20e-3, 50e-3,
+                     0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0]
+            vdiv = next((v for v in _VDIV if v >= v_span / 6.0), _VDIV[-1])
+
             try:
                 def _sw(op, **kw):
                     for act, scpi in get_command(scope_fam, op, **kw):
@@ -2355,14 +2477,27 @@ def api_automation_run():
                 try: _sw("trigger_mode")
                 except KeyError: pass
                 _sw("trigger_source",  ch=scope_ch)
-                _sw("trigger_slope",   slope="NEG")
+                _sw("trigger_slope",   slope=slope_scpi)
                 _sw("trigger_level",   value=f"{trig_lv:.4f}")
                 _sw("timebase_scale",  value=f"{tpd:.6e}")
-                _sw("timebase_position", value=f"{position:.6e}")
+                if scope_horiz_pos:
+                    _sw("timebase_position", value=f"{position:.6e}")
+                try: _sw("channel_scale",  ch=scope_ch, value=f"{vdiv:.6e}")
+                except KeyError: pass
+                try: _sw("channel_offset", ch=scope_ch, value=f"{v_center:.4f}")
+                except KeyError: pass
+                # Enable selected measurements on screen
+                _scope_enable_measures(
+                    scope_res, scope_fam,
+                    [(_MEAS_MAP[m][0], scope_ch) for m in selected_meas],
+                )
                 _emit_progress(
-                    f"Scope configured: trig NEG @ {trig_lv:.3f} V, "
+                    f"Scope configured: trig {slope_scpi} @ {trig_lv:.3f} V, "
                     f"{tpd * 1000:.3g} ms/div on CH{scope_ch}, "
-                    f"window {scope_win * 1000:.0f} ms, offset {position * 1000:.1f} ms"
+                    f"window {scope_win * 1000:.0f} ms"
+                    + (f", offset {position * 1000:.1f} ms" if scope_horiz_pos else "") +
+                    f" | CH{scope_ch} {vdiv * 1000:.4g} mV/div, centre {v_center:.3f} V"
+                    + (f" | meas: {', '.join(selected_meas)}" if selected_meas else "")
                 )
             except Exception as exc:
                 _emit_progress(f"[warn] Scope setup failed: {exc} — continuing without scope")
@@ -2391,8 +2526,10 @@ def api_automation_run():
             cols.append("v2_set_V")
         cols += ["v1_meas_V", "v1_meas_A",
                  "v2_meas_V", "v2_meas_A",
-                 "v3_meas_V", "v3_meas_A",
-                 "screenshot"]
+                 "v3_meas_V", "v3_meas_A"]
+        if scope_res is not None:
+            cols += [_MEAS_MAP[m][1] for m in selected_meas]
+        cols.append("screenshot")
         rows = []
 
         def _take_screenshot_app(run_num, t2_ms, run_v2=None):
@@ -2467,6 +2604,7 @@ def api_automation_run():
         all_runs = list(itertools.product(v2_list, t2_list))
         try:
             for run_num, (run_v2, t2_ms) in enumerate(all_runs, start=1):
+                _pause_point()
                 if _auto_stop.is_set():
                     _emit_progress("Stopped by user"); break
 
@@ -2475,8 +2613,18 @@ def api_automation_run():
 
                 # Arm scope BEFORE Phase 1 so the pre-trigger buffer fills with T1 ms
                 # of steady V1 — gives a clean baseline and avoids the 150 ms race.
+                # Update the trigger level for this run's actual V2 value so the falling
+                # edge always crosses it regardless of sweep position.
                 scope_arm_t = 0.0
                 if scope_res is not None:
+                    try:
+                        run_trig_lv = (v1 + (run_v2 if run_v2 is not None else 0.0)) / 2.0
+                        for act, scpi in get_command(scope_fam, "trigger_level",
+                                                     value=f"{run_trig_lv:.4f}"):
+                            if act == "write":
+                                scope_res.write(scpi)
+                    except Exception:
+                        pass
                     try:
                         for act, scpi in get_command(scope_fam, "single"):
                             if act == "write":
@@ -2485,21 +2633,25 @@ def api_automation_run():
                     except Exception:
                         pass
 
-                # Phase 1 — establish V1
+                # Phase 1 — establish V1.
+                # Measure V1 before the settle sleep so the queries don't eat into
+                # the gap between T1 ending and the interrupt starting.
                 _run_steps(psu_res, get_command(psu_fam, "set_voltage", ch=ch, value=f"{v1:.6f}"))
                 _run_steps(psu_res, get_command(psu_fam, "output_on",   ch=ch))
-                time.sleep(t1_ms / 1000.0)
                 v1_v = float(_run_steps(psu_res, get_command(psu_fam, "measure_voltage", ch=ch)) or 0)
                 v1_i = float(_run_steps(psu_res, get_command(psu_fam, "measure_current", ch=ch)) or 0)
+                time.sleep(t1_ms / 1000.0)
 
-                # Phase 2 — interrupt (triggers scope)
+                # Phase 2 — interrupt (triggers scope).
+                # V2 is logged as the programmed value; querying it here would add
+                # ~220 ms of PSU query overhead and make short T2 values impossible.
                 if ch_off:
                     _run_steps(psu_res, get_command(psu_fam, "output_off", ch=ch))
                 else:
                     _run_steps(psu_res, get_command(psu_fam, "set_voltage", ch=ch, value=f"{run_v2:.6f}"))
                 time.sleep(t2_ms / 1000.0)
-                v2_v = float(_run_steps(psu_res, get_command(psu_fam, "measure_voltage", ch=ch)) or 0)
-                v2_i = float(_run_steps(psu_res, get_command(psu_fam, "measure_current", ch=ch)) or 0)
+                v2_v = run_v2 if run_v2 is not None else 0.0
+                v2_i = None
 
                 # Phase 3 — restore
                 _run_steps(psu_res, get_command(psu_fam, "set_voltage", ch=ch, value=f"{v3:.6f}"))
@@ -2521,13 +2673,23 @@ def api_automation_run():
 
                 shot = _take_screenshot_app(run_num, t2_ms, run_v2)
 
+                # Scope measurements — query after screenshot; scope is already
+                # stopped by _take_screenshot_app so measurements are stable.
+                scope_meas_vals = {}
+                if scope_res is not None:
+                    for _mkey in selected_meas:
+                        _op, _ = _MEAS_MAP[_mkey]
+                        _v = _scope_query_only(scope_res, scope_fam, _op, ch=scope_ch)
+                        scope_meas_vals[_mkey] = round(_v, 9) if _v is not None else None
+
                 row = [run_num, round(t2_ms, 3)]
                 if v2_mode == "voltage":
                     row.append(round(run_v2, 6) if run_v2 is not None else None)
                 row += [round(v1_v, 6), round(v1_i, 6),
-                        round(v2_v, 6), round(v2_i, 6),
-                        round(v3_v, 6), round(v3_i, 6),
-                        shot]
+                        round(v2_v, 6), round(v2_i, 6) if v2_i is not None else None,
+                        round(v3_v, 6), round(v3_i, 6)]
+                row += [scope_meas_vals.get(m) for m in selected_meas]
+                row.append(shot)
                 rows.append(row)
                 sio.emit("automation_row", {
                     "test_id": test_id, "row": row, "columns": cols,
@@ -2537,6 +2699,10 @@ def api_automation_run():
                     f"Run {run_num}/{len(all_runs)}  T2={t2_ms:.1f} ms"
                     + (f"  V2={run_v2:.3f} V" if run_v2 is not None else "")
                     + f"  V1={v1_v:.4f} V  V3={v3_v:.4f} V"
+                    + "".join(
+                        f"  {_MEAS_MAP[m][1]}={scope_meas_vals[m]:.4g}"
+                        for m in selected_meas if scope_meas_vals.get(m) is not None
+                    )
                     + (f"  → {os.path.basename(shot)}" if shot else "")
                 )
 
@@ -2547,9 +2713,9 @@ def api_automation_run():
             try:
                 _run_steps(psu_res, get_command(psu_fam, "set_voltage", ch=ch, value="0.0"))
                 _run_steps(psu_res, get_command(psu_fam, "output_off",  ch=ch))
-                psu_res.write("SYSTem:LOCal")
             except Exception:
                 pass
+            _psu_local_mode([{"res": psu_res, "fam": psu_fam}])
 
         _done(rows, cols)
 
@@ -2567,9 +2733,12 @@ def api_automation_run():
         return jsonify({"error": f"Unknown test: {test_id!r}"}), 400
 
     # Stop the PSU polling loop so automation has exclusive access to resources.
-    # PyVISA resource objects are not thread-safe; concurrent poller + runner
-    # calls produce "Invalid session handle" errors.  _done() will restart it.
+    # _poll_stop signals the poller to exit, but the poller may still be mid-
+    # iteration (up to ~1 s of in-flight VISA queries).  Wait for _poller_idle
+    # before submitting the runner; without this, both threads race on the same
+    # VISA resource and corrupt the session within the first few measurements.
     _poll_stop.set()
+    _poller_idle.wait(timeout=5.0)
 
     _executor.submit(runner)
     return jsonify({"status": "running", "test_id": test_id})

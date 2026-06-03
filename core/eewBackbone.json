@@ -66,41 +66,62 @@
           "write": ":TRIGger:EDGE:SLOPe {slope}",
           "query": ":TRIGger:EDGE:SLOPe?"
         },
+        "measure_clear_all": ":MEASure:CLEar",
         "measure_vpp": {
+          "write": ":MEASure:VPP CHANnel{ch}",
           "query": ":MEASure:VPP? CHANnel{ch}"
         },
         "measure_freq": {
+          "write": ":MEASure:FREQuency CHANnel{ch}",
           "query": ":MEASure:FREQuency? CHANnel{ch}"
         },
         "measure_period": {
+          "write": ":MEASure:PERiod CHANnel{ch}",
           "query": ":MEASure:PERiod? CHANnel{ch}"
         },
         "measure_vavg": {
+          "write": ":MEASure:VAVerage CHANnel{ch}",
           "query": ":MEASure:VAVerage? CHANnel{ch}"
         },
         "measure_vrms": {
+          "write": ":MEASure:VRMS CHANnel{ch}",
           "query": ":MEASure:VRMS? CHANnel{ch}"
         },
         "measure_vmax": {
+          "write": ":MEASure:VMAX CHANnel{ch}",
           "query": ":MEASure:VMAX? CHANnel{ch}"
         },
         "measure_vmin": {
+          "write": ":MEASure:VMIN CHANnel{ch}",
           "query": ":MEASure:VMIN? CHANnel{ch}"
         },
         "measure_risetime": {
+          "write": ":MEASure:RISetime CHANnel{ch}",
           "query": ":MEASure:RISetime? CHANnel{ch}"
         },
         "measure_falltime": {
+          "write": ":MEASure:FALLtime CHANnel{ch}",
           "query": ":MEASure:FALLtime? CHANnel{ch}"
         },
         "measure_dutycycle": {
+          "write": ":MEASure:DUTYcycle CHANnel{ch}",
           "query": ":MEASure:DUTYcycle? CHANnel{ch}"
         },
         "measure_overshoot": {
+          "write": ":MEASure:OVERShoot CHANnel{ch}",
           "query": ":MEASure:OVERShoot? CHANnel{ch}"
         },
         "measure_preshoot": {
+          "write": ":MEASure:PREShoot CHANnel{ch}",
           "query": ":MEASure:PREShoot? CHANnel{ch}"
+        },
+        "measure_nwidth": {
+          "write": ":MEASure:NWIDth CHANnel{ch}",
+          "query": ":MEASure:NWIDth? CHANnel{ch}"
+        },
+        "measure_pwidth": {
+          "write": ":MEASure:PWIDth CHANnel{ch}",
+          "query": ":MEASure:PWIDth? CHANnel{ch}"
         },
         "waveform_source": ":WAVeform:SOURce CHANnel{ch}",
         "waveform_format_ascii": ":WAVeform:FORMat ASCii",
@@ -196,6 +217,14 @@
         "measure_preshoot": {
           "write": ":MEASure:ITEM PREShoot,CHANnel{ch}",
           "query": ":MEASure:ITEM? PREShoot,CHANnel{ch}"
+        },
+        "measure_nwidth": {
+          "write": ":MEASure:ITEM NWIDTH,CHANnel{ch}",
+          "query": ":MEASure:ITEM? NWIDTH,CHANnel{ch}"
+        },
+        "measure_pwidth": {
+          "write": ":MEASure:ITEM PWIDTH,CHANnel{ch}",
+          "query": ":MEASure:ITEM? PWIDTH,CHANnel{ch}"
         },
         "screenshot": {
           "raw_query": ":DISPlay:DATA?"
@@ -623,7 +652,8 @@
         },
         "measure_power": {
           "query": "MEAS:POW? (@{ch})"
-        }
+        },
+        "local_mode": "SYSTem:LOCal"
       }
     },
     {

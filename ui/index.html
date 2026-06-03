@@ -409,13 +409,13 @@
       border:1px solid var(--border); border-top:none;
       border-radius:0 0 var(--radius-lg) var(--radius-lg);
       overflow:hidden;
+      max-width:700px;
     }
 
     /* test card — borderless; container (#test-grid) provides the frame */
     .test-card {
       background:var(--surface);
       transition:border-color .2s;
-      max-width:700px;
     }
     .test-card.running { box-shadow:inset 0 2px 0 var(--accent); }
     .test-card.done    { box-shadow:inset 0 2px 0 var(--green); }
@@ -847,6 +847,9 @@
         </button>
       </div>
       <div id="scan-footer-done" class="hidden save-form" style="width:100%;">
+        <button class="btn btn-ghost" style="font-size:11px;padding:3px 10px;flex-shrink:0;" onclick="rescan(true)">Scan USB</button>
+        <button class="btn btn-ghost" style="font-size:11px;padding:3px 10px;flex-shrink:0;" onclick="rescan(false)">Scan again</button>
+        <div style="flex:1"></div>
         <input id="scan-save-name" type="text" placeholder="workbench name…"
                onkeydown="if(event.key==='Enter') saveScanWorkbench()" />
         <button class="btn btn-primary" onclick="saveScanWorkbench()">Save workbench</button>
@@ -1302,13 +1305,13 @@ function _scopeChRowsHTML(nCh, hasLabel=false) {
         <span class="tog-dot"></span>ON
       </button>
       ${labelInp}
-      <select class="scope-sel" id="scope-ch-vdiv-${i}" title="V/div" onchange="scopeSet('channel_scale',{ch:${i},value:this.value})">
+      <select class="scope-sel" id="scope-ch-vdiv-${i}" title="V/div" onchange="if(!this._programmatic)scopeSet('channel_scale',{ch:${i},value:this.value})">
         ${scopeOptHTML(SCOPE_VDIV_VALS, fmtVDiv, 1)}
       </select>
       <select class="scope-sel" id="scope-ch-coup-${i}" title="Coupling" onchange="scopeSet('channel_coupling',{ch:${i},coupling:this.value})">
         <option value="DC">DC</option><option value="AC">AC</option><option value="GND">GND</option>
       </select>
-      <select class="scope-sel" id="scope-ch-probe-${i}" title="Probe ×" onchange="scopeSet('channel_probe',{ch:${i},attenuation:this.value})">
+      <select class="scope-sel" id="scope-ch-probe-${i}" title="Probe ×" onchange="if(!this._programmatic)scopeSet('channel_probe',{ch:${i},attenuation:this.value})">
         ${_probeOptHTML(1)}
       </select>
     </div>`;
@@ -1424,7 +1427,7 @@ function buildScopeCard(instr) {
       <div class="section-label mt4">Timebase</div>
       <div class="scope-tb-row">
         <span class="scope-tb-label">s/div</span>
-        <select class="scope-sel" id="scope-tb-sel" title="Time/div" onchange="scopeSet('timebase_scale',{value:this.value})">
+        <select class="scope-sel" id="scope-tb-sel" title="Time/div" onchange="if(!this._programmatic)scopeSet('timebase_scale',{value:this.value})">
           ${scopeOptHTML(SCOPE_TDIV_VALS, fmtDiv, 1e-3)}
         </select>
       </div>
@@ -1496,7 +1499,9 @@ function _setSelectNearest(sel, value, vals) {
   if (!sel || value == null) return;
   let best=0, bestDist=Infinity;
   vals.forEach((v,i) => { const d=Math.abs(v-value)/(Math.abs(value)||1); if(d<bestDist){bestDist=d;best=i;} });
+  sel._programmatic = true;
   sel.selectedIndex = best;
+  setTimeout(() => { sel._programmatic = false; }, 0);
 }
 
 function applyScopeState(s) {
@@ -1931,6 +1936,9 @@ function buildTestCard(test) {
 
   // Parameter inputs
   const paramRows = test.params.map(p => {
+    if (p.type === "hidden") {
+      return `<input type="hidden" id="tp-${test.id}-${p.id}" value="${escHtml(String(p.default))}">`;
+    }
     if (p.type === "select") {
       // Options can be plain strings or {value, label} objects
       const opts = p.options.map(o => {
@@ -1980,6 +1988,9 @@ function buildTestCard(test) {
         <button class="btn btn-primary" id="trun-${test.id}" onclick="runTest('${test.id}')">
           ▶ Run
         </button>
+        <button class="btn btn-ghost hidden" id="tpause-${test.id}" onclick="pauseTest('${test.id}')">
+          ⏸ Pause
+        </button>
         <button class="btn btn-danger hidden" id="tstop-${test.id}" onclick="stopTest()">
           ■ Stop
         </button>
@@ -2006,20 +2017,21 @@ function _psuInterruptInit(testId) {
   // Mirror V1 → V3 whenever V1 changes
   v1El?.addEventListener("input", () => { if (v3El) v3El.value = v1El.value; });
 
-  // V2 group — all children of v2_mode=voltage
+  // V2 group — hierarchy: v2_mode=voltage → v2_sweep; v2_sweep=no → v2; v2_sweep=yes → v2_start/stop/step
   const v2ModeEl       = id("v2_mode");
   const v2Row          = row("v2");
   const v2SweepEl      = id("v2_sweep");
   const v2SweepRow     = row("v2_sweep");
   const v2SweepSubRows = ["v2_start", "v2_stop", "v2_step"].map(row);
 
-  [v2Row, v2SweepRow].forEach(r => {
-    if (!r) return;
-    r.style.paddingLeft = "18px";
-    r.style.borderLeft  = "2px solid var(--border)";
-    r.style.marginLeft  = "2px";
-  });
-  v2SweepSubRows.forEach(r => {
+  // v2_sweep is a direct child of v2_mode=voltage (one level of indent)
+  if (v2SweepRow) {
+    v2SweepRow.style.paddingLeft = "18px";
+    v2SweepRow.style.borderLeft  = "2px solid var(--border)";
+    v2SweepRow.style.marginLeft  = "2px";
+  }
+  // v2 (single value) and sweep sub-rows are children of v2_sweep (two levels)
+  [v2Row, ...v2SweepSubRows].forEach(r => {
     if (!r) return;
     r.style.paddingLeft = "36px";
     r.style.borderLeft  = "2px solid var(--border)";
@@ -2027,14 +2039,18 @@ function _psuInterruptInit(testId) {
   });
 
   function _updateV2SweepVisibility() {
-    const show = v2ModeEl?.value !== "off" && v2SweepEl?.value === "yes";
-    v2SweepSubRows.forEach(r => { if (r) r.style.display = show ? "" : "none"; });
+    const sweeping = v2SweepEl?.value === "yes";
+    if (v2Row) v2Row.style.display = sweeping ? "none" : "";
+    v2SweepSubRows.forEach(r => { if (r) r.style.display = sweeping ? "" : "none"; });
   }
   function _updateV2Visibility() {
     const isVoltage = v2ModeEl?.value !== "off";
-    if (v2Row)      v2Row.style.display      = isVoltage ? "" : "none";
     if (v2SweepRow) v2SweepRow.style.display = isVoltage ? "" : "none";
     _updateV2SweepVisibility();
+    if (!isVoltage) {
+      if (v2Row) v2Row.style.display = "none";
+      v2SweepSubRows.forEach(r => { if (r) r.style.display = "none"; });
+    }
   }
   v2ModeEl?.addEventListener("change", _updateV2Visibility);
   v2SweepEl?.addEventListener("change", _updateV2SweepVisibility);
@@ -2049,6 +2065,164 @@ function _psuInterruptInit(testId) {
   }
   sweepEl?.addEventListener("change", _updateSweepVisibility);
   _updateSweepVisibility();
+
+  // ── Scope section header + settings ──────────────────────────────────────
+  const scopeChRow = row("scope_channel");
+  if (scopeChRow) {
+    const hdr = document.createElement("div");
+    hdr.style.cssText = "font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;padding:6px 0 2px;margin-top:4px;border-top:1px solid var(--border);";
+    hdr.textContent = "Scope";
+    scopeChRow.parentNode.insertBefore(hdr, scopeChRow);
+    scopeChRow.style.display = "none";  // CH moved into settings panel
+  }
+  // Hide the raw param rows — values still read by getTestParams
+  [row("scope_scale"), row("scope_slope"), row("scope_horiz_pos")].forEach(r => {
+    if (r) r.style.display = "none";
+  });
+
+  function _niceTime(s) {
+    if (s <= 0) return 1e-3;
+    const exp = Math.floor(Math.log10(s));
+    const m   = s / Math.pow(10, exp);
+    for (const step of [1, 2, 5, 10]) { if (m <= step) return step * Math.pow(10, exp); }
+    return 10 * Math.pow(10, exp);
+  }
+  function _snapVdiv(span) {
+    const STEPS = [1e-3,2e-3,5e-3,10e-3,20e-3,50e-3,0.1,0.2,0.5,1,2,5,10,20,50];
+    return STEPS.find(v => v >= span / 6) || 50;
+  }
+  function _fmtTime(s) {
+    if (s >= 1)    return `${(s).toFixed(2)} s`;
+    if (s >= 1e-3) return `${(s*1e3).toPrecision(3)} ms`;
+    return `${(s*1e6).toPrecision(3)} µs`;
+  }
+  function _fmtVolt(v) {
+    if (Math.abs(v) < 0.001) return `${(v*1e3).toPrecision(3)} mV`;
+    return `${parseFloat(v.toPrecision(4))} V`;
+  }
+
+  const scopeScaleEl = id("scope_scale");
+  const scopeSlopeEl = id("scope_slope");
+  const scopeHposEl  = id("scope_horiz_pos");
+
+  // ── Scope settings panel ─────────────────────────────────────────────────
+  const _initSlope = scopeSlopeEl?.value || "falling";
+  const _initHpos  = scopeHposEl?.value  || "yes";
+  const _initCh    = id("scope_channel")?.value || "1";
+
+  const _inpStyle = `font-size:11px;font-family:var(--mono);background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:2px 6px;color:var(--text);outline:none;`;
+  const _radioLbl = `display:inline-flex;align-items:center;gap:3px;cursor:pointer;margin-right:10px;font-size:11px;color:var(--text);`;
+  const ssPanel = document.createElement("div");
+  ssPanel.style.cssText = "padding-left:10px;margin-top:4px;display:grid;grid-template-columns:max-content 1fr;gap:5px 10px;align-items:center;font-size:11px;font-family:var(--mono);";
+  ssPanel.innerHTML =
+    `<span style="color:var(--text-dim)">CH</span>` +
+    `<span><input id="ss-ch-inp-${testId}" type="number" min="1" max="4" step="1" value="${escHtml(_initCh)}"` +
+      ` style="width:40px;${_inpStyle}"></span>` +
+
+    `<span style="color:var(--text-dim)">Trig level</span>` +
+    `<span id="ss-triglv-${testId}" style="color:var(--text)">—</span>` +
+
+    `<span style="color:var(--text-dim)">Trig slope</span>` +
+    `<span>` +
+      `<label style="${_radioLbl}"><input type="radio" name="ss-slope-${testId}" value="falling"${_initSlope==="falling"?" checked":""}> Falling (NEG)</label>` +
+      `<label style="${_radioLbl}"><input type="radio" name="ss-slope-${testId}" value="rising"${_initSlope==="rising"?" checked":""}> Rising (POS)</label>` +
+    `</span>` +
+
+    `<span style="color:var(--text-dim)">Time/div</span>` +
+    `<span style="display:flex;align-items:center;gap:6px;">` +
+      `<span id="ss-tdiv-auto-${testId}" style="color:var(--text)">—</span>` +
+      `<input id="ss-tdiv-inp-${testId}" type="number" step="any" min="0.001" placeholder="ms/div"` +
+        ` style="display:none;width:72px;${_inpStyle}">` +
+      `<button id="ss-tdiv-tog-${testId}"` +
+        ` style="font-size:10px;padding:1px 6px;background:var(--surface2);border:1px solid var(--border);` +
+        `border-radius:var(--radius);color:var(--text-dim);cursor:pointer;">override</button>` +
+    `</span>` +
+
+    `<span style="color:var(--text-dim)">Vertical</span>` +
+    `<span id="ss-vdiv-${testId}" style="color:var(--text)">—</span>` +
+
+    `<span style="color:var(--text-dim)">H. offset</span>` +
+    `<span>` +
+      `<label style="${_radioLbl}"><input type="radio" name="ss-hpos-${testId}" value="yes"${_initHpos==="yes"?" checked":""}> Auto` +
+        ` <span id="ss-hpos-disp-${testId}" style="color:var(--text-dim);font-size:10px;"></span></label>` +
+      `<label style="${_radioLbl}"><input type="radio" name="ss-hpos-${testId}" value="no"${_initHpos==="no"?" checked":""}> Off</label>` +
+    `</span>`;
+
+  // Wire CH input → hidden number input
+  ssPanel.querySelector(`#ss-ch-inp-${testId}`)?.addEventListener("input", e => {
+    const chEl = id("scope_channel");
+    if (chEl) chEl.value = e.target.value;
+  });
+  // Wire slope radios → hidden select
+  ssPanel.querySelectorAll(`input[name="ss-slope-${testId}"]`).forEach(r => {
+    r.addEventListener("change", () => { if (scopeSlopeEl) scopeSlopeEl.value = r.value; _updateDiagram(); });
+  });
+  // Wire H. offset radios → hidden select
+  ssPanel.querySelectorAll(`input[name="ss-hpos-${testId}"]`).forEach(r => {
+    r.addEventListener("change", () => { if (scopeHposEl) scopeHposEl.value = r.value; _updateDiagram(); });
+  });
+  // Time/div override toggle (use ssPanel.querySelector — not yet in document DOM)
+  let _tdivManual = false;
+  const _tdivAutoEl = ssPanel.querySelector(`#ss-tdiv-auto-${testId}`);
+  const _tdivInpEl  = ssPanel.querySelector(`#ss-tdiv-inp-${testId}`);
+  const _tdivTogEl  = ssPanel.querySelector(`#ss-tdiv-tog-${testId}`);
+  _tdivTogEl?.addEventListener("click", () => {
+    _tdivManual = !_tdivManual;
+    if (_tdivManual) {
+      _tdivAutoEl.style.display = "none"; _tdivInpEl.style.display = ""; _tdivTogEl.textContent = "auto";
+      _tdivInpEl.focus();
+    } else {
+      _tdivAutoEl.style.display = ""; _tdivInpEl.style.display = "none"; _tdivTogEl.textContent = "override";
+      if (scopeScaleEl) scopeScaleEl.value = "0";
+      _updateDiagram();
+    }
+  });
+  _tdivInpEl?.addEventListener("input", () => {
+    const v = parseFloat(_tdivInpEl.value);
+    if (scopeScaleEl) scopeScaleEl.value = v > 0 ? String(v) : "0";
+    _updateDiagram();
+  });
+
+  // Insert settings panel after scope_channel row
+  if (scopeChRow) scopeChRow.after(ssPanel);
+
+  // ── Measurements checkbox widget ──────────────────────────────────────────
+  const measHidden = document.getElementById(`tp-${testId}-scope_measurements`);
+  const _MEAS_DEFS = [
+    {id:"vmax", label:"Vmax"}, {id:"vmin", label:"Vmin"}, {id:"nwidth", label:"−width"},
+    {id:"pwidth", label:"+width"}, {id:"vpp", label:"Vpp"}, {id:"vrms", label:"Vrms"},
+    {id:"rise", label:"Rise"}, {id:"fall", label:"Fall"}, {id:"duty", label:"Duty"},
+  ];
+  const _defaultChecked = new Set((measHidden?.value || "vmax,vmin,nwidth").split(",").map(s => s.trim()));
+
+  function _updateMeasHidden() {
+    if (!measHidden) return;
+    const checked = _MEAS_DEFS
+      .filter(m => document.getElementById(`meas-cb-${testId}-${m.id}`)?.checked)
+      .map(m => m.id);
+    measHidden.value = checked.join(",");
+  }
+
+  const measWidget = document.createElement("div");
+  measWidget.style.cssText = "padding-left:10px;margin-top:4px;";
+  measWidget.innerHTML =
+    `<div style="font-size:10px;color:var(--text-dim);margin-bottom:4px;">Measurements</div>` +
+    `<div style="display:flex;flex-wrap:wrap;gap:4px;">` +
+    _MEAS_DEFS.map(m =>
+      `<label style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text);` +
+      `cursor:pointer;padding:2px 6px;background:var(--surface2);border:1px solid var(--border);` +
+      `border-radius:var(--radius);">` +
+      `<input type="checkbox" id="meas-cb-${testId}-${m.id}"` +
+      (_defaultChecked.has(m.id) ? " checked" : "") + `>` +
+      `${escHtml(m.label)}</label>`
+    ).join("") +
+    `</div>` +
+    `<div style="font-size:10px;color:var(--text-dim);margin-top:5px;">Unselect all to keep the scope's current measurement display.</div>`;
+
+  ssPanel.after(measWidget);
+  measWidget.querySelectorAll("input[type=checkbox]").forEach(cb => {
+    cb.addEventListener("change", _updateMeasHidden);
+  });
 
   // ── Waveform diagram ──────────────────────────────────────────────────────
   const diagDiv = document.createElement("div");
@@ -2071,6 +2245,40 @@ function _psuInterruptInit(testId) {
     const v2Start = v2Swept ? (parseFloat(id("v2_start")?.value) ?? v2) : v2;
     const v2Stop  = v2Swept ? (parseFloat(id("v2_stop")?.value)  ?? v2) : v2;
     diagDiv.innerHTML = _psuInterruptSVG(v1, v2, v3, t1, t2, t3, t2Swept, v2Swept, t2Start, t2Stop, v2Start, v2Stop);
+
+    // Scope summary — mirror the backend's calculation logic
+    const v2Floor   = v2mode === "off" ? 0 : (v2Swept ? Math.min(v2Start, v2Stop) : v2);
+    const trigLv    = (v1 + v2Floor) / 2;
+    const maxT2     = t2Swept ? Math.max(t2Start, t2Stop) : t2;
+    const maxT3     = t3; // simplified (total_time not considered here)
+    const totalS    = (t1 + maxT2 + maxT3) / 1000 * 1.1;
+    const scaleOvr  = parseFloat(scopeScaleEl?.value) || 0;
+    const tpd       = scaleOvr > 0 ? scaleOvr / 1000 : _niceTime(totalS / 12);
+    const win       = tpd * 12;
+    const allV      = [v1, v3, 0];
+    if (v2mode === "voltage") allV.push(...[v2Start, v2Stop]);
+    const vLo  = Math.min(...allV), vHi = Math.max(...allV);
+    const vDiv = _snapVdiv(Math.max(vHi - vLo, 0.1));
+    const vCtr = (vHi + vLo) / 2;
+
+    // Update scope settings panel calculated values
+    const _ssEl = s => document.getElementById(`ss-${s}-${testId}`);
+    const trigLvEl = _ssEl("triglv");
+    if (trigLvEl) trigLvEl.innerHTML =
+      `<span style="color:var(--text-dim)">Auto</span>  ${_fmtVolt(trigLv)}` +
+      (v2Swept ? `  <span style="color:var(--text-dim);font-size:10px;">(recalculates per run)</span>` : "");
+    if (!_tdivManual && _tdivAutoEl)
+      _tdivAutoEl.innerHTML =
+        `<span style="color:var(--text-dim)">Auto</span>  ${_fmtTime(tpd)}  <span style="color:var(--text-dim)">window ${_fmtTime(win)}</span>`;
+    const vdivEl = _ssEl("vdiv");
+    if (vdivEl) vdivEl.innerHTML =
+      `<span style="color:var(--text-dim)">Auto</span>  ${_fmtVolt(vDiv)}  <span style="color:var(--text-dim)">centre ${_fmtVolt(vCtr)}</span>`;
+    const hposDispEl = _ssEl("hpos-disp");
+    if (hposDispEl) {
+      const hposOn = ssPanel?.querySelector(`input[name="ss-hpos-${testId}"][value="yes"]`)?.checked ?? true;
+      const position = win / 2 - t1 / 1000;
+      hposDispEl.textContent = hposOn ? `(${position >= 0 ? "+" : ""}${_fmtTime(Math.abs(position))})` : "";
+    }
   }
 
   ["v1","v2","v2_mode","v2_sweep","v2_start","v2_stop","v3","t1","t2","t2_start","t2_stop","t3"].forEach(fid => {
@@ -2196,6 +2404,7 @@ async function browseOutputFolder() {
   }
 }
 
+
 async function runTest(testId) {
   if (state.autoRunning) { toast("A test is already running","error"); return; }
   if (!state.connected)  { toast("Not connected to instruments","error"); return; }
@@ -2211,6 +2420,7 @@ async function runTest(testId) {
   const card = document.getElementById(`test-card-${testId}`);
   if (card) card.classList.add("running");
   document.getElementById(`trun-${testId}`).classList.add("hidden");
+  document.getElementById(`tpause-${testId}`)?.classList.remove("hidden");
   document.getElementById(`tstop-${testId}`).classList.remove("hidden");
   const prog = document.getElementById(`tprog-${testId}`);
   if (prog) { prog.classList.add("visible"); }
@@ -2232,6 +2442,28 @@ async function stopTest() {
   try { await POST("/api/automation/stop"); }
   catch(e) { /* best-effort */ }
 }
+
+async function pauseTest(testId) {
+  const btn = document.getElementById(`tpause-${testId}`);
+  if (!btn) return;
+  const pausing = btn.textContent.includes("Pause");
+  try {
+    if (pausing) {
+      await POST("/api/automation/pause");
+    } else {
+      await POST("/api/automation/resume");
+    }
+  } catch(e) { /* best-effort */ }
+}
+
+socket.on("automation_paused",  () => {
+  const btn = document.getElementById(`tpause-${state.autoTestId}`);
+  if (btn) btn.textContent = "⏵ Resume";
+});
+socket.on("automation_resumed", () => {
+  const btn = document.getElementById(`tpause-${state.autoTestId}`);
+  if (btn) btn.textContent = "⏸ Pause";
+});
 
 socket.on("automation_progress", ({ test_id, msg }) => {
   logMsg(`[auto/${test_id}] ${msg}`);
@@ -2277,10 +2509,12 @@ function testFinished(testId, error, csv_path) {
     card.classList.remove("running");
     if (!error) card.classList.add("done");
   }
-  const run  = document.getElementById(`trun-${testId}`);
-  const stop = document.getElementById(`tstop-${testId}`);
-  if (run)  run.classList.remove("hidden");
-  if (stop) stop.classList.add("hidden");
+  const run   = document.getElementById(`trun-${testId}`);
+  const pause = document.getElementById(`tpause-${testId}`);
+  const stop  = document.getElementById(`tstop-${testId}`);
+  if (run)   run.classList.remove("hidden");
+  if (pause) { pause.classList.add("hidden"); pause.textContent = "⏸ Pause"; }
+  if (stop)  stop.classList.add("hidden");
   const prog = document.getElementById(`tprog-${testId}`);
   if (prog) prog.classList.remove("visible");
 
@@ -2387,6 +2621,21 @@ function startScan(usbOnly=false) {
   POST("/api/scan",{usb_only:usbOnly}).catch(e=>{toast(e.message,"error");closeScanModal();});
 }
 
+function rescan(usbOnly=false) {
+  _scanResults=[];
+  document.getElementById("scan-done").classList.add("hidden");
+  document.getElementById("scan-footer-done").classList.add("hidden");
+  document.getElementById("scan-footer-idle").style.display="none";
+  document.getElementById("scan-found-list").innerHTML="";
+  document.getElementById("scan-results-list").innerHTML="";
+  document.getElementById("scan-udev-hint").classList.add("hidden");
+  document.getElementById("scan-udev-result").classList.add("hidden");
+  document.getElementById("scan-udev-result").textContent="";
+  document.getElementById("scan-running").classList.remove("hidden");
+  document.getElementById("scan-phase-text").textContent="Starting…";
+  POST("/api/scan",{usb_only:usbOnly}).catch(e=>{toast(e.message,"error");closeScanModal();});
+}
+
 socket.on("scan_progress", ({ msg, instrument }) => {
   const phase=document.getElementById("scan-phase-text");
   if (phase) phase.textContent=msg;
@@ -2447,29 +2696,11 @@ function buildScanInstrRow(instr,live) {
   return div;
 }
 
-async function fixUdev() {
-  const btn = document.querySelector("#scan-udev-hint button");
-  const out  = document.getElementById("scan-udev-result");
-  btn.disabled = true;
-  btn.textContent = "Fixing…";
+function fixUdev() {
+  const out = document.getElementById("scan-udev-result");
   out.classList.remove("hidden");
   out.style.color = "var(--text-dim)";
-  out.textContent = "Running…";
-  try {
-    const r = await POST("/api/fix-udev", {});
-    if (r.status === "manual") {
-      out.style.color = "var(--amber)";
-      out.textContent = "Sudo needs a password — run these in your terminal:\n\n" + r.manual_cmds.join("\n");
-    } else {
-      out.style.color = "var(--green)";
-      out.textContent = r.msg || "Done.";
-    }
-  } catch(e) {
-    out.style.color = "var(--red)";
-    out.textContent = "Error: " + e.message;
-  }
-  btn.disabled = false;
-  btn.textContent = "Fix udev permissions";
+  out.textContent = "Run in your terminal:\n\npython core/nachoVisa.py --fix-udev\n\nThen replug your USB instruments.";
 }
 
 async function saveScanWorkbench() {
