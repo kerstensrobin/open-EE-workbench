@@ -402,6 +402,8 @@
       height:2px; background:var(--accent); border-radius:1px 1px 0 0;
     }
     .auto-test-tab-icon { font-size:13px; }
+    .auto-test-tab.unavailable { opacity:0.42; cursor:not-allowed; }
+    .auto-test-tab.unavailable:hover { color:var(--text-dim); background:transparent; }
 
     /* test cards — full width, no gap between tab strip and card */
     #test-grid {
@@ -2342,15 +2344,18 @@ function refreshAutoTab() {
 function buildTestGrid(tests) {
   const icons = { ac_frequency_sweep:"〼", dc_sweep:"⚡", dmm_logger:"Ω",
                   waveform_analysis:"∿",  harmonic_analysis:"≋" };
+  const instrNames = { psu:"PSU", scope:"Oscilloscope", awg:"AWG / Function generator", dmm:"Multimeter" };
 
   // ── Build tab strip ──────────────────────────────────────────────────
   const tabStrip = document.getElementById("auto-test-tabs");
   tabStrip.innerHTML = "";
   for (const test of tests) {
+    const avail = test.available !== false;
     const tab = document.createElement("button");
-    tab.className      = "auto-test-tab";
+    tab.className      = "auto-test-tab" + (avail ? "" : " unavailable");
     tab.dataset.testId = test.id;
     tab.onclick        = () => selectTest(test.id);
+    tab.title          = avail ? "" : "Requires: " + (test.requires||[]).map(r => instrNames[r]||r).join(" + ");
     tab.innerHTML      = `<span class="auto-test-tab-icon">${icons[test.id] || "▶"}</span>${escHtml(test.name)}`;
     tabStrip.appendChild(tab);
   }
@@ -2359,22 +2364,49 @@ function buildTestGrid(tests) {
   const grid = document.getElementById("test-grid");
   grid.innerHTML = "";
   for (const test of tests) {
-    const card = test.custom_ui ? buildDcSweepCard(test) : buildTestCard(test);
+    const avail = test.available !== false;
+    let card;
+    if (!avail) {
+      // Greyed-out unavailable card
+      card = document.createElement("div");
+      card.className = "test-card hidden";
+      card.id        = `test-card-${test.id}`;
+      const needed = (test.requires||[]).map(r => instrNames[r]||r).join(" + ");
+      card.innerHTML = `
+        <div class="test-card-header">
+          <div class="test-card-icon" style="opacity:.4;">${icons[test.id] || "▶"}</div>
+          <div>
+            <div class="test-card-title">${escHtml(test.name)}</div>
+            <div class="test-card-desc">${escHtml(test.description||"")}</div>
+          </div>
+        </div>
+        <div class="test-card-body">
+          <div class="auto-empty" style="min-height:100px;">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3;">
+              <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+            </svg>
+            <p style="font-size:12px;">Not available</p>
+            <small>Connect a ${escHtml(needed)} to use this test</small>
+          </div>
+        </div>`;
+    } else {
+      card = test.custom_ui ? buildDcSweepCard(test) : buildTestCard(test);
+      if (test.custom_ui) {
+        _dcSw.measItems = [
+          { kind:"measurement", instrument:"psu", measure:"voltage", instr_ch:1, samples:1, settle:0.1, label:"" },
+        ];
+      }
+    }
     card.classList.add("hidden");
     grid.appendChild(card);
-    if (test.custom_ui) {
-      _dcSw.measItems = [
-        { kind:"measurement", instrument:"psu", measure:"voltage", instr_ch:1, samples:1, settle:0.1, label:"" },
-      ];
-      _dcSwRenderChannels();
-      _dcSwRenderMeasList();
-    }
-    if (test.id === "psu_interrupt") _psuInterruptInit(test.id);
+    if (avail && test.custom_ui) { _dcSwRenderChannels(); _dcSwRenderMeasList(); }
+    if (avail && test.id === "psu_interrupt") _psuInterruptInit(test.id);
   }
 
-  // Auto-select the first test (or reselect the previously active one)
+  // Auto-select the first AVAILABLE test (or reselect the previously active one)
   const current = state.selectedTestId && tests.find(t => t.id === state.selectedTestId);
-  selectTest(current ? current.id : tests[0].id);
+  const firstAvail = tests.find(t => t.available !== false);
+  selectTest(current ? current.id : firstAvail?.id);
 }
 
 function selectTest(testId) {

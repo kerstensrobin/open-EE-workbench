@@ -1211,6 +1211,33 @@ def _suggest_tests() -> list:
                         "ref_vpp_V", "gain_dB"],
         })
 
+    # Append greyed-out stubs for any known test whose instruments aren't connected,
+    # so the frontend can show them as unavailable rather than hiding them entirely.
+    _KNOWN = [
+        {"id": "ac_frequency_sweep", "name": "AC Frequency Sweep",
+         "description": "Sweep AWG frequency, measure Vpp on scope CH1 and CH2",
+         "requires": ["awg", "scope"]},
+        {"id": "dc_sweep",           "name": "DC Sweep",
+         "description": "Sweep voltage source(s) across N channels and record measurements",
+         "requires": ["psu"]},
+        {"id": "psu_interrupt",      "name": "PSU Interrupt",
+         "description": "Interrupt a PSU channel for T2 ms and capture the transient response",
+         "requires": ["psu"]},
+        {"id": "dmm_logger",         "name": "DMM Logger",
+         "description": "Log DMM measurements at a fixed interval",
+         "requires": ["dmm"]},
+        {"id": "waveform_analysis",  "name": "Waveform Analysis",
+         "description": "Live waveform analysis: autoscale, measure, screenshot",
+         "requires": ["scope"]},
+        {"id": "harmonic_analysis",  "name": "Harmonic Analysis",
+         "description": "Crest factor, THD estimate, and optional CH1→CH2 gain",
+         "requires": ["scope"]},
+    ]
+    existing = {t["id"] for t in tests}
+    for kt in _KNOWN:
+        if kt["id"] not in existing:
+            tests.append({**kt, "available": False, "params": [], "columns": []})
+
     return tests
 
 
