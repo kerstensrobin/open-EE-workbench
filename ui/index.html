@@ -868,11 +868,15 @@
     <div id="auto-tab">
 
       <!-- no workbench (full-width placeholder) -->
-      <div class="auto-empty" id="auto-empty-nowb">
-        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <polygon points="5 3 19 12 5 21 5 3"/>
+      <!-- compact banner shown above the test strip when no workbench is selected -->
+      <div id="auto-empty-nowb" class="hidden" style="
+          display:flex; align-items:center; gap:8px; padding:8px 12px;
+          background:rgba(180,83,9,0.07); border:1px solid rgba(180,83,9,0.18);
+          border-radius:var(--radius); font-size:11px; color:var(--text-dim);">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
-        <p>Load a workbench first</p>
+        No workbench loaded — tests are shown for browsing only. Select a workbench and connect to run them.
       </div>
 
       <!-- no tests available (full-width placeholder) -->
@@ -2439,23 +2443,19 @@ function refreshAutoTab() {
   const noTests = document.getElementById("auto-empty-notests");
   const layout  = document.getElementById("auto-layout");
 
-  if (!state.workbench) {
-    noWb.classList.remove("hidden");
-    noTests.classList.add("hidden");
-    layout.classList.add("hidden");
-    _autoBuiltForTests = null;
-    return;
-  }
-  noWb.classList.add("hidden");
-
+  // Always fetch tests — backend returns stubs even without a workbench
   if (!state.autoTests.length) {
-    if (state.connected) refreshAutoTests();
+    refreshAutoTests();
     noTests.classList.remove("hidden");
+    noWb.classList.add("hidden");
     layout.classList.add("hidden");
     _autoBuiltForTests = null;
     return;
   }
+
   noTests.classList.add("hidden");
+  // Show a compact note if no workbench, but don't block the test list
+  noWb.classList.toggle("hidden", !!state.workbench);
   layout.style.display = "flex";
   layout.classList.remove("hidden");
 
@@ -5388,7 +5388,7 @@ window.addEventListener("resize", () => {
 });
 
 // ── Init ──────────────────────────────────────────────────────────
-(async () => { await loadWorkbenches(); })();
+(async () => { await loadWorkbenches(); refreshAutoTests(); })();
 </script>
 </body>
 </html>
