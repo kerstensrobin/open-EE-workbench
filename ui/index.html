@@ -4103,8 +4103,38 @@ function sbAddLoop() {
   const n = _sb.loops.length;
   _sb.loops.push({ id: _sbId(), var: `var${n+1}`, label: `Sweep ${n+1}`,
     instrument:"", ch:1, param:"voltage", start:0, stop:5, step:0.5,
-    settle:0.1, i_limit:0.5, v_compliance:5.0 });
+    settle:0.1, i_limit:0.5, v_compliance:5.0,
+    step_actions: [] });
   sbRender();
+}
+
+function sbAddLoopAction(loopId, type) {
+  const lp = _sb.loops.find(l => l.id === loopId);
+  if (!lp) return;
+  const id = _sbId();
+  if (type === "set")      lp.step_actions.push({ id, type, label:"Set",  instrument:"", ch:1, param:"voltage", value:"0", settle:0 });
+  if (type === "wait")     lp.step_actions.push({ id, type, label:"Wait", duration:0.1 });
+  if (type === "wait_for") lp.step_actions.push({ id, type, label:"Wait for state",
+    instrument:"", ch:1, param:"voltage", condition:">=", target:0, tolerance:0.5,
+    interval:5, timeout:300 });
+  sbRender();
+}
+
+function sbRemoveLoopAction(loopId, actionId) {
+  const lp = _sb.loops.find(l => l.id === loopId);
+  if (lp) lp.step_actions = lp.step_actions.filter(a => a.id !== actionId);
+  sbRender();
+}
+
+function _sbSetLoopAction(loopId, actionId, key, val) {
+  const lp = _sb.loops.find(l => l.id === loopId);
+  if (!lp) return;
+  const ac = lp.step_actions.find(a => a.id === actionId);
+  if (ac) ac[key] = val;
+}
+
+function _sbSetLoopActionRe(loopId, actionId, key, val) {
+  _sbSetLoopAction(loopId, actionId, key, val); sbRender();
 }
 
 function sbRemoveLoop(id) {
@@ -4205,6 +4235,84 @@ function sbRender() {
               <div class="test-param-input-wrap"><input class="test-param-input" type="number"
                 value="${lp.i_limit}" min="0" step="0.1" onchange="_sbSet('loop',${lp.id},'i_limit',+this.value)">
                 <span class="test-param-unit">A</span></div></div>`}
+          </div>
+
+          ${(lp.step_actions||[]).map(sa => {
+            const rm = `onclick="sbRemoveLoopAction(${lp.id},${sa.id})"`;
+            if (sa.type === "set") return `
+              <div class="sb-block sb-block-set">
+                <div class="sb-block-title">Set <button class="sb-rm" ${rm}>✕</button></div>
+                <div class="test-param-row"><span class="test-param-label">Instrument</span>
+                  <div class="test-param-input-wrap"><select class="test-param-input sel"
+                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'instrument',this.value)">${iOpts(sa.instrument)}</select></div></div>
+                <div class="test-param-row"><span class="test-param-label">Channel</span>
+                  <div class="test-param-input-wrap"><input class="test-param-input" type="number"
+                    value="${sa.ch||1}" min="1" max="4" onchange="_sbSetLoopAction(${lp.id},${sa.id},'ch',+this.value)"></div></div>
+                <div class="test-param-row"><span class="test-param-label">Parameter</span>
+                  <div class="test-param-input-wrap"><select class="test-param-input sel"
+                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'param',this.value)">${pOpts(sa.param)}</select></div></div>
+                <div class="test-param-row"><span class="test-param-label">Value</span>
+                  <div class="test-param-input-wrap"><input class="test-param-input" type="text"
+                    value="${escHtml(String(sa.value??'0'))}" placeholder="{var} or 0"
+                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'value',this.value)"></div></div>
+              </div>`;
+            if (sa.type === "wait") return `
+              <div class="sb-block sb-block-wait">
+                <div class="sb-block-title">Wait <button class="sb-rm" ${rm}>✕</button></div>
+                <div class="test-param-row"><span class="test-param-label">Duration</span>
+                  <div class="test-param-input-wrap"><input class="test-param-input" type="number"
+                    value="${sa.duration||0.1}" min="0.001" step="0.05"
+                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'duration',+this.value)">
+                    <span class="test-param-unit">s</span></div></div>
+              </div>`;
+            if (sa.type === "wait_for") return `
+              <div class="sb-block" style="border-left:3px solid var(--purple);">
+                <div class="sb-block-title" style="color:var(--purple);">Wait for State
+                  <button class="sb-rm" ${rm}>✕</button></div>
+                <div class="test-param-row"><span class="test-param-label">Instrument</span>
+                  <div class="test-param-input-wrap"><select class="test-param-input sel"
+                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'instrument',this.value)">${iOpts(sa.instrument)}</select></div></div>
+                <div class="test-param-row"><span class="test-param-label">Channel</span>
+                  <div class="test-param-input-wrap"><input class="test-param-input" type="number"
+                    value="${sa.ch||1}" min="1" max="4" onchange="_sbSetLoopAction(${lp.id},${sa.id},'ch',+this.value)"></div></div>
+                <div class="test-param-row"><span class="test-param-label">Parameter</span>
+                  <div class="test-param-input-wrap"><select class="test-param-input sel"
+                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'param',this.value)">${mOpts(sa.param)}</select></div></div>
+                <div class="test-param-row"><span class="test-param-label">Condition</span>
+                  <div class="test-param-input-wrap">
+                    <select class="test-param-input sel" style="flex:0 0 auto;width:60px;"
+                      onchange="_sbSetLoopActionRe(${lp.id},${sa.id},'condition',this.value)">
+                      <option value=">=" ${sa.condition===">="?"selected":""}>≥</option>
+                      <option value="<=" ${sa.condition==="<="?"selected":""}>≤</option>
+                      <option value="within" ${sa.condition==="within"?"selected":""}>±</option>
+                    </select>
+                    <input class="test-param-input" type="number" value="${sa.target??0}"
+                      onchange="_sbSetLoopAction(${lp.id},${sa.id},'target',+this.value)">
+                  </div></div>
+                ${sa.condition==="within"?`
+                <div class="test-param-row"><span class="test-param-label">Tolerance</span>
+                  <div class="test-param-input-wrap"><input class="test-param-input" type="number"
+                    value="${sa.tolerance??0.5}" min="0" step="0.1"
+                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'tolerance',+this.value)"></div></div>`:""}
+                <div class="test-param-row"><span class="test-param-label">Poll every</span>
+                  <div class="test-param-input-wrap"><input class="test-param-input" type="number"
+                    value="${sa.interval??5}" min="0.5" step="1"
+                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'interval',+this.value)">
+                    <span class="test-param-unit">s</span></div></div>
+                <div class="test-param-row"><span class="test-param-label">Timeout</span>
+                  <div class="test-param-input-wrap"><input class="test-param-input" type="number"
+                    value="${sa.timeout??300}" min="0" step="30"
+                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'timeout',+this.value)">
+                    <span class="test-param-unit">s (0=∞)</span></div></div>
+              </div>`;
+            return "";
+          }).join("")}
+
+          <div style="margin-top:4px;padding-top:6px;border-top:1px solid var(--border);display:flex;gap:4px;flex-wrap:wrap;">
+            <span style="font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-faint);align-self:center;flex-shrink:0;">Per step:</span>
+            <button class="sb-add-btn" style="flex:1;min-width:50px;" onclick="sbAddLoopAction(${lp.id},'set')">+ Set</button>
+            <button class="sb-add-btn" style="flex:1;min-width:50px;" onclick="sbAddLoopAction(${lp.id},'wait')">+ Wait</button>
+            <button class="sb-add-btn" style="flex:1;min-width:50px;border-color:var(--purple);color:var(--purple);" onclick="sbAddLoopAction(${lp.id},'wait_for')">+ Wait for</button>
           </div>
         </div>
       </div>`;

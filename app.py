@@ -2884,7 +2884,68 @@ def api_automation_run():
         except Exception as exc:
             _done([], cols, f"Setup failed: {exc}"); return
 
-        rows, step = [], 0
+        def _exec_action(ac, res, fam, var_map):
+            """Execute a single non-measure action block (set / wait / wait_for)."""
+            t = ac.get("type", "")
+            if t == "wait":
+                time.sleep(float(ac.get("duration", 0.1)))
+            elif t == "set" and res:
+                raw = str(ac.get("value", "0"))
+                for var, val in var_map.items():
+                    raw = raw.replace("{" + var + "}", str(val))
+                try:
+                    v, ch, par = float(raw), int(ac.get("ch", 1)), ac.get("param", "voltage")
+                    if par == "current":
+                        try: _run_steps(res, get_command(fam, "output_off", ch=ch))
+                        except Exception: pass
+                        _run_steps(res, get_command(fam, "set_current_limit",
+                            ch=ch, value=f"{v:.6f}"))
+                        _run_steps(res, get_command(fam, "output_on", ch=ch))
+                    else:
+                        _run_steps(res, get_command(fam, "set_voltage",
+                            ch=ch, value=f"{v:.6f}"))
+                    s = float(ac.get("settle", 0))
+                    if s > 0: time.sleep(s)
+                except Exception as exc:
+                    _log(f"[sandbox] set: {exc}")
+            elif t == "wait_for" and res:
+                op       = _MEAS_OPS.get(ac.get("param", "voltage"), "measure_voltage")
+                ch       = int(ac.get("ch", 1))
+                target   = float(ac.get("target", 0))
+                tol      = abs(float(ac.get("tolerance", 0.5)))
+                cond     = ac.get("condition", ">=")
+                interval = max(0.5, float(ac.get("interval", 5)))
+                timeout  = float(ac.get("timeout", 0))
+                t_start  = time.time()
+                _emit_progress(f"[sandbox] waiting for {ac.get('label','condition')}…")
+                while not _auto_stop.is_set():
+                    try:
+                        v = _sf(_run_steps(res, get_command(fam, op, ch=ch)))
+                        if v is not None:
+                            met = (cond == ">="     and v >= target) or \
+                                  (cond == "<="     and v <= target) or \
+                                  (cond == "within" and abs(v - target) <= tol)
+                            _log(f"[sandbox] wait_for: {v:.4g} (need {cond} {target})"
+                                 + (" ✓" if met else ""))
+                            if met: break
+                    except Exception as exc:
+                        _log(f"[sandbox] wait_for: {exc}")
+                    if timeout > 0 and (time.time() - t_start) >= timeout:
+                        _log(f"[sandbox] wait_for: timed out after {timeout}s"); break
+                    slept = 0.0
+                    while slept < interval and not _auto_stop.is_set():
+                        time.sleep(0.5); slept += 0.5
+
+        # Resolve step-action handles per loop (for per-level actions)
+        loop_sa_h = []
+        for lp in loops:
+            sas = []
+            for sa in lp.get("step_actions", []):
+                res2, fam2 = _get_h(sa.get("instrument", ""))
+                sas.append({"res": res2, "fam": fam2, "ac": sa})
+            loop_sa_h.append(sas)
+
+        rows, step, prev_combo = [], 0, None
         try:
             for combo in itertools.product(*ranges):
                 if _auto_stop.is_set():
@@ -2893,7 +2954,12 @@ def api_automation_run():
                 var_map = {lp.get("var", f"loop{i+1}"): combo[i]
                            for i, lp in enumerate(loops)}
 
-                for i, h in enumerate(loop_h):
+                # Only set + run per-step actions for levels whose value changed
+                changed = (list(range(len(loops))) if prev_combo is None
+                           else [i for i, (a, b) in enumerate(zip(combo, prev_combo))
+                                 if a != b])
+                for i in changed:
+                    h = loop_h[i]
                     lp, v, ch = h["lp"], combo[i], int(h["lp"].get("ch", 1))
                     par = lp.get("param", "voltage")
                     try:
@@ -2910,33 +2976,15 @@ def api_automation_run():
                         _log(f"[sandbox] loop {i}: {exc}")
                     s = float(lp.get("settle", 0.1))
                     if s > 0: time.sleep(s)
+                    # Per-step actions for this loop level
+                    for sa_h in loop_sa_h[i]:
+                        _exec_action(sa_h["ac"], sa_h["res"], sa_h["fam"], var_map)
 
+                prev_combo = combo
                 meas_vals = []
                 for h in act_h:
                     ac, res, fam = h["ac"], h["res"], h["fam"]
-                    t = ac.get("type", "")
-                    if t == "wait":
-                        time.sleep(float(ac.get("duration", 0.1)))
-                    elif t == "set" and res:
-                        raw = str(ac.get("value", "0"))
-                        for var, val in var_map.items():
-                            raw = raw.replace("{" + var + "}", str(val))
-                        try:
-                            v, ch, par = float(raw), int(ac.get("ch", 1)), ac.get("param", "voltage")
-                            if par == "current":
-                                try: _run_steps(res, get_command(fam, "output_off", ch=ch))
-                                except Exception: pass
-                                _run_steps(res, get_command(fam, "set_current_limit",
-                                    ch=ch, value=f"{v:.6f}"))
-                                _run_steps(res, get_command(fam, "output_on", ch=ch))
-                            else:
-                                _run_steps(res, get_command(fam, "set_voltage",
-                                    ch=ch, value=f"{v:.6f}"))
-                            s = float(ac.get("settle", 0))
-                            if s > 0: time.sleep(s)
-                        except Exception as exc:
-                            _log(f"[sandbox] set: {exc}")
-                    elif t == "measure":
+                    if ac.get("type") == "measure":
                         val = None
                         if res:
                             op  = _MEAS_OPS.get(ac.get("param", "voltage"), "measure_voltage")
@@ -2952,38 +3000,8 @@ def api_automation_run():
                             except Exception as exc:
                                 _log(f"[sandbox] measure: {exc}")
                         meas_vals.append(val)
-
-                    elif t == "wait_for":
-                        # Poll until condition met, with optional timeout
-                        if res:
-                            op       = _MEAS_OPS.get(ac.get("param", "voltage"), "measure_voltage")
-                            ch       = int(ac.get("ch", 1))
-                            target   = float(ac.get("target", 0))
-                            tol      = abs(float(ac.get("tolerance", 0.5)))
-                            cond     = ac.get("condition", ">=")
-                            interval = max(0.5, float(ac.get("interval", 5)))
-                            timeout  = float(ac.get("timeout", 0))  # 0 = no timeout
-                            t_start  = time.time()
-                            _emit_progress(f"[sandbox] waiting for {ac.get('label','condition')}…")
-                            while not _auto_stop.is_set():
-                                try:
-                                    v = _sf(_run_steps(res, get_command(fam, op, ch=ch)))
-                                    if v is not None:
-                                        met = (cond == ">="     and v >= target) or \
-                                              (cond == "<="     and v <= target) or \
-                                              (cond == "within" and abs(v - target) <= tol)
-                                        _log(f"[sandbox] wait_for: current={v:.4g} "
-                                             f"(need {cond} {target})"
-                                             + (" ✓" if met else ""))
-                                        if met: break
-                                except Exception as exc:
-                                    _log(f"[sandbox] wait_for read: {exc}")
-                                if timeout > 0 and (time.time() - t_start) >= timeout:
-                                    _log(f"[sandbox] wait_for: timed out after {timeout}s"); break
-                                # Sleep in half-second steps to stay responsive to Stop
-                                slept = 0.0
-                                while slept < interval and not _auto_stop.is_set():
-                                    time.sleep(0.5); slept += 0.5
+                    else:
+                        _exec_action(ac, res, fam, var_map)
 
                 step += 1
                 row = list(combo) + meas_vals
