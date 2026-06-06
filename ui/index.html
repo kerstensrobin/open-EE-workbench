@@ -996,12 +996,14 @@
         <p>Load a workbench first</p>
       </div>
 
-      <div class="auto-empty hidden" id="ts-empty-nopsu">
-        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8M12 3v4"/>
+      <div id="ts-empty-nopsu" class="hidden" style="
+          display:flex; align-items:center; gap:8px; padding:8px 12px;
+          background:rgba(180,83,9,0.07); border:1px solid rgba(180,83,9,0.18);
+          border-radius:var(--radius); font-size:11px; color:var(--text-dim);">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
-        <p>No PSU connected</p>
-        <small>IV Curve requires a programmable voltage source</small>
+        No PSU connected — tests are shown for browsing only. Connect a programmable voltage source to run them.
       </div>
 
       <div id="ts-layout" class="hidden">
@@ -4585,20 +4587,22 @@ function refreshTestSpecTab() {
     return;
   }
 
-  const dcTest = state.autoTests.find(t => t.id === "dc_sweep");
-  if (!dcTest || dcTest.available === false) {
-    noPsu.classList.remove("hidden");
-    layout.classList.add("hidden");
-    return;
-  }
-  noPsu.classList.add("hidden");
+  const dcTest  = state.autoTests.find(t => t.id === "dc_sweep");
+  const psuAvail = dcTest && dcTest.available !== false;
+  // Show compact banner but never block the layout
+  noPsu.classList.toggle("hidden", psuAvail);
   const firstBuild = layout.classList.contains("hidden");
   layout.classList.remove("hidden");
-  _tsPopulateDropdowns(dcTest);
+  if (dcTest) _tsPopulateDropdowns(dcTest);
   // Sync card UI to current devType/gateMode/plot state (important on first open)
   if (firstBuild) {
     tsSelectPlot(_tsActivePlot);
     ivSetDevType(_ivChart.devType);
+  }
+  // Grey out Run buttons when PSU not available
+  for (const id of ["ts-run-btn", "tc-run-btn"]) {
+    const btn = document.getElementById(id);
+    if (btn) { btn.disabled = !psuAvail; btn.title = psuAvail ? "" : "No PSU connected"; }
   }
 }
 
