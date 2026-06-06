@@ -2813,6 +2813,197 @@ def api_automation_run():
 
         _done(rows, cols)
 
+    # ── Sandbox runner ────────────────────────────────────────────────────────
+    def _run_sandbox():
+        """Execute a user-designed loop/action graph from the Sandbox tab."""
+        import json as _json
+        try:
+            sb = _json.loads(params.get("sandbox_json", "{}"))
+        except Exception as exc:
+            _done([], [], f"Invalid sandbox JSON: {exc}"); return
+
+        loops   = sb.get("loops",   [])
+        actions = sb.get("actions", [])
+        if not any(ac.get("type") == "measure" for ac in actions):
+            _done([], [], "Add at least one Measure action"); return
+
+        loop_cols = [lp.get("label") or lp.get("var") or f"loop_{i+1}"
+                     for i, lp in enumerate(loops)]
+        meas_cols = [ac.get("label") or f"meas_{i+1}"
+                     for ac in actions if ac.get("type") == "measure"]
+        cols = loop_cols + meas_cols
+
+        def _get_h(rstr, fallback="psu"):
+            res = _state["resources"].get(rstr)
+            fam = _state["families"].get(rstr)
+            if res is None:
+                res, fam = _find_instrument(fallback)
+            return res, fam
+
+        loop_h = []
+        for lp in loops:
+            res, fam = _get_h(lp.get("instrument", ""))
+            if res is None:
+                _done([], cols, f"No instrument for loop '{lp.get('label','')}'"); return
+            loop_h.append({"res": res, "fam": fam, "lp": lp})
+
+        act_h = [{"res": _get_h(ac.get("instrument",""))[0],
+                  "fam": _get_h(ac.get("instrument",""))[1],
+                  "ac": ac} for ac in actions]
+
+        def _mk_range(lp):
+            a, b = float(lp.get("start", 0)), float(lp.get("stop", 1))
+            s    = abs(float(lp.get("step", 0.1))) or 0.1
+            n, d = round(abs(b - a) / s), (1 if b >= a else -1)
+            return [round(a + k * d * s, 10) for k in range(n + 1)]
+
+        ranges = [_mk_range(lp) for lp in loops] or [()]
+        total  = max(1, 1)
+        for r in ranges:
+            if r: total *= len(r)
+
+        _MEAS_OPS = {
+            "voltage": "measure_voltage", "current": "measure_current",
+            "vac": "measure_vac", "r": "measure_r", "r4w": "measure_r4w",
+        }
+        def _sf(v):
+            try: f = float(v); return None if abs(f) > 1e30 else round(f, 6)
+            except Exception: return None
+
+        # Setup
+        try:
+            for h in loop_h:
+                lp, ch = h["lp"], int(h["lp"].get("ch", 1))
+                if lp.get("param") == "current":
+                    _run_steps(h["res"], get_command(h["fam"], "set_voltage",
+                        ch=ch, value=f"{float(lp.get('v_compliance', 5.0)):.4f}"))
+                else:
+                    _run_steps(h["res"], get_command(h["fam"], "set_current_limit",
+                        ch=ch, value=f"{float(lp.get('i_limit', 0.5)):.4f}"))
+                    _run_steps(h["res"], get_command(h["fam"], "output_on", ch=ch))
+        except Exception as exc:
+            _done([], cols, f"Setup failed: {exc}"); return
+
+        rows, step = [], 0
+        try:
+            for combo in itertools.product(*ranges):
+                if _auto_stop.is_set():
+                    _emit_progress("Stopped by user"); break
+                _pause_point()
+                var_map = {lp.get("var", f"loop{i+1}"): combo[i]
+                           for i, lp in enumerate(loops)}
+
+                for i, h in enumerate(loop_h):
+                    lp, v, ch = h["lp"], combo[i], int(h["lp"].get("ch", 1))
+                    par = lp.get("param", "voltage")
+                    try:
+                        if par == "current":
+                            try: _run_steps(h["res"], get_command(h["fam"], "output_off", ch=ch))
+                            except Exception: pass
+                            _run_steps(h["res"], get_command(h["fam"], "set_current_limit",
+                                ch=ch, value=f"{v:.6f}"))
+                            _run_steps(h["res"], get_command(h["fam"], "output_on", ch=ch))
+                        else:
+                            _run_steps(h["res"], get_command(h["fam"], "set_voltage",
+                                ch=ch, value=f"{v:.6f}"))
+                    except Exception as exc:
+                        _log(f"[sandbox] loop {i}: {exc}")
+                    s = float(lp.get("settle", 0.1))
+                    if s > 0: time.sleep(s)
+
+                meas_vals = []
+                for h in act_h:
+                    ac, res, fam = h["ac"], h["res"], h["fam"]
+                    t = ac.get("type", "")
+                    if t == "wait":
+                        time.sleep(float(ac.get("duration", 0.1)))
+                    elif t == "set" and res:
+                        raw = str(ac.get("value", "0"))
+                        for var, val in var_map.items():
+                            raw = raw.replace("{" + var + "}", str(val))
+                        try:
+                            v, ch, par = float(raw), int(ac.get("ch", 1)), ac.get("param", "voltage")
+                            if par == "current":
+                                try: _run_steps(res, get_command(fam, "output_off", ch=ch))
+                                except Exception: pass
+                                _run_steps(res, get_command(fam, "set_current_limit",
+                                    ch=ch, value=f"{v:.6f}"))
+                                _run_steps(res, get_command(fam, "output_on", ch=ch))
+                            else:
+                                _run_steps(res, get_command(fam, "set_voltage",
+                                    ch=ch, value=f"{v:.6f}"))
+                            s = float(ac.get("settle", 0))
+                            if s > 0: time.sleep(s)
+                        except Exception as exc:
+                            _log(f"[sandbox] set: {exc}")
+                    elif t == "measure":
+                        val = None
+                        if res:
+                            op  = _MEAS_OPS.get(ac.get("param", "voltage"), "measure_voltage")
+                            ch  = int(ac.get("ch", 1))
+                            s   = float(ac.get("settle", 0))
+                            n   = max(1, int(ac.get("samples", 1)))
+                            if s > 0: time.sleep(s)
+                            try:
+                                vs = [_sf(_run_steps(res, get_command(fam, op, ch=ch)))
+                                      for _ in range(n)]
+                                ns = [v for v in vs if v is not None]
+                                val = round(sum(ns) / len(ns), 6) if ns else None
+                            except Exception as exc:
+                                _log(f"[sandbox] measure: {exc}")
+                        meas_vals.append(val)
+
+                    elif t == "wait_for":
+                        # Poll until condition met, with optional timeout
+                        if res:
+                            op       = _MEAS_OPS.get(ac.get("param", "voltage"), "measure_voltage")
+                            ch       = int(ac.get("ch", 1))
+                            target   = float(ac.get("target", 0))
+                            tol      = abs(float(ac.get("tolerance", 0.5)))
+                            cond     = ac.get("condition", ">=")
+                            interval = max(0.5, float(ac.get("interval", 5)))
+                            timeout  = float(ac.get("timeout", 0))  # 0 = no timeout
+                            t_start  = time.time()
+                            _emit_progress(f"[sandbox] waiting for {ac.get('label','condition')}…")
+                            while not _auto_stop.is_set():
+                                try:
+                                    v = _sf(_run_steps(res, get_command(fam, op, ch=ch)))
+                                    if v is not None:
+                                        met = (cond == ">="     and v >= target) or \
+                                              (cond == "<="     and v <= target) or \
+                                              (cond == "within" and abs(v - target) <= tol)
+                                        _log(f"[sandbox] wait_for: current={v:.4g} "
+                                             f"(need {cond} {target})"
+                                             + (" ✓" if met else ""))
+                                        if met: break
+                                except Exception as exc:
+                                    _log(f"[sandbox] wait_for read: {exc}")
+                                if timeout > 0 and (time.time() - t_start) >= timeout:
+                                    _log(f"[sandbox] wait_for: timed out after {timeout}s"); break
+                                # Sleep in half-second steps to stay responsive to Stop
+                                slept = 0.0
+                                while slept < interval and not _auto_stop.is_set():
+                                    time.sleep(0.5); slept += 0.5
+
+                step += 1
+                row = list(combo) + meas_vals
+                rows.append(row)
+                _emit_row(row, cols, step / total)
+        finally:
+            for h in loop_h:
+                lp, ch = h["lp"], int(h["lp"].get("ch", 1))
+                try:
+                    if lp.get("param") == "current":
+                        _run_steps(h["res"], get_command(h["fam"], "set_current_limit",
+                            ch=ch, value="0.0"))
+                    else:
+                        _run_steps(h["res"], get_command(h["fam"], "set_voltage",
+                            ch=ch, value="0.0"))
+                    _run_steps(h["res"], get_command(h["fam"], "output_off", ch=ch))
+                except Exception: pass
+            _psu_local_mode(loop_h)
+        _done(rows, cols)
+
     runners = {
         "ac_frequency_sweep": _run_ac_sweep,
         "dc_sweep":           _run_dc_sweep,
@@ -2822,6 +3013,7 @@ def api_automation_run():
         "waveform_analysis":  _run_waveform_analysis,
         "harmonic_analysis":  _run_harmonic_analysis,
         "psu_interrupt":      _run_psu_interrupt,
+        "sandbox":            _run_sandbox,
     }
     runner = runners.get(test_id)
     if runner is None:

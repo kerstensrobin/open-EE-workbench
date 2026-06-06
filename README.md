@@ -64,6 +64,101 @@ The GUI shows a card for each instrument in the active workbench. From there you
   - *Static Characteristic (IV Curve)* — sweeps V_CE / V_DS, parameterised by base current (CC mode) or gate voltage. Plots a family of I_C / I_D curves.
   - *Transfer Characteristic* — sweeps V_BE / V_GS at a fixed collector/drain bias. Plots I_C / I_D vs gate/base voltage.
   - FET / BJT mode toggle; scroll-to-zoom and drag-to-pan after the run; PNG and CSV export to `./results/`.
+- **Sandbox** — build custom tests with a column-based pipeline editor. See [Building custom tests](#building-custom-tests) below.
+
+---
+
+## Building custom tests
+
+The **Sandbox** tab lets you design arbitrary test sequences without writing code. Tests are defined as a pipeline of **loop columns** followed by an **actions column**, matching the nested-loop structure of most EE characterisation work.
+
+### Concepts
+
+```
+┌──────────────┬──────────────┬──────────────────────────────┐
+│  Loop 1      │  Loop 2      │  Actions                     │
+│  (outermost) │  (innermost) │  (run at every combination)  │
+│              │              │                              │
+│  Sweep V_CE  │  Sweep V_BE  │  [Set CH1 current]           │
+│  1 → 5 V     │  0 → 0.8 V  │  [Wait 50 ms]                │
+│  step 2 V    │  step 0.01 V │  [Measure I_C → "I_C"]       │
+└──────────────┴──────────────┴──────────────────────────────┘
+```
+
+- **Loop columns** (left → right = outer → inner). Each loop sweeps one instrument parameter across a range. The total number of measurement rows = product of all loop sizes.
+- **Actions** run once per combination of loop values. Actions execute top-to-bottom.
+
+### Loop block fields
+
+| Field | Description |
+|---|---|
+| Variable | Short name used to reference this loop's current value in Set actions (e.g. `v_ce`). |
+| Label | Column header in the CSV output. |
+| Instrument | Which instrument to control. Populated from the active workbench. Leave blank to use the first available PSU. |
+| Channel | Instrument channel (1–4). |
+| Parameter | `Voltage` (CV mode) or `Current (CC)` (PSU constant-current mode). |
+| Start / Stop / Step | Sweep range. Step direction is inferred automatically. |
+| Settle | Time to wait after setting the new value before executing actions. |
+| I Limit / V Compliance | Current limit for voltage sweeps; compliance voltage for CC sweeps. |
+
+### Action block types
+
+**Set** — writes a value to an instrument at each loop step. The value field accepts a literal number (`0.001`) or a reference to a loop variable (`{v_ce}`).
+
+**Measure** — reads one value from an instrument and records it as a named column in the output. Parameters: `Voltage (DC)`, `Current`, `Voltage (AC)`, `Resistance`, `Resistance (4W)`.
+
+**Wait** — fixed settle delay in seconds.
+
+**Wait for State** — polls a measurement repeatedly until a condition is met before allowing the loop to continue. Useful for environmental conditioning (climate chambers, thermal soak, etc.).
+
+| Field | Description |
+|---|---|
+| Instrument / Channel / Parameter | What to read on each poll. |
+| Condition | `≥`, `≤`, or `±` (within tolerance). |
+| Target | The value to wait for. |
+| Tolerance | Used with `±` condition only. |
+| Poll every | Seconds between readings. |
+| Timeout | Give up and continue after N seconds (0 = wait forever). Progress is logged each poll. |
+
+### Cross-compatibility via eewBackbone
+
+All instrument commands go through `core/eewBackbone.json` — the same SCPI abstraction layer used by all built-in tests. This means a Sandbox test you build on a Keysight PSU will run unchanged on a Rigol or Siglent PSU with the same parameter types, provided both families define the relevant command.
+
+The mapping used for loop/action parameters:
+
+| Parameter | SCPI operation |
+|---|---|
+| Voltage | `set_voltage` / `measure_voltage` |
+| Current (CC) | `set_current_limit` + output cycle |
+| Voltage (AC) | `measure_vac` |
+| Resistance | `measure_r` |
+| Resistance (4W) | `measure_r4w` |
+
+To check which operations an instrument family supports, look up its `id` in `core/eewBackbone.json`. Any family that declares the required command key will work with that parameter type. Families that inherit from a parent (`"inherits": "parent_id"`) automatically get the parent's commands unless overridden.
+
+### Save and load
+
+Tests are exported as plain JSON (`💾 Save`) and reloaded with `📂 Load`. The JSON schema is intentionally simple:
+
+```json
+{
+  "name": "IV at temperature",
+  "loops": [
+    { "var": "v_ce", "label": "V_CE", "instrument": "USB0::...", "ch": 1,
+      "param": "voltage", "start": 0, "stop": 5, "step": 0.5,
+      "settle": 0.1, "i_limit": 0.5 }
+  ],
+  "actions": [
+    { "type": "wait_for", "instrument": "USB0::...", "ch": 1, "param": "voltage",
+      "condition": ">=", "target": 25.0, "interval": 10, "timeout": 600,
+      "label": "Wait 25°C" },
+    { "type": "measure", "instrument": "USB0::...", "ch": 1,
+      "param": "current", "label": "I_C", "samples": 3, "settle": 0.05 }
+  ]
+}
+```
+
+Results are auto-saved as CSV to `./results/` alongside all other test output.
 
 ---
 
