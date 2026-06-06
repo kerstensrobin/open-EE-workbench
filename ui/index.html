@@ -4586,7 +4586,7 @@ function refreshTestSpecTab() {
   }
 
   const dcTest = state.autoTests.find(t => t.id === "dc_sweep");
-  if (!dcTest) {
+  if (!dcTest || dcTest.available === false) {
     noPsu.classList.remove("hidden");
     layout.classList.add("hidden");
     return;
