@@ -57,7 +57,13 @@ python app.py           # opens in a native window
 python app.py --browser # opens in your system browser
 ```
 
-The GUI shows a card for each instrument in the active workbench. From there you can control outputs, capture screenshots, run the SCPI console, and launch automation tests (DC sweep, PSU interrupt, AC analysis).
+The GUI shows a card for each instrument in the active workbench. From there you can control outputs, capture screenshots, and run the SCPI console. Two additional tabs are available:
+
+- **Automation** — generic parametric tests: DC sweep (multi-channel, nested or simultaneous), PSU interrupt transient capture, AC frequency sweep, DMM logger, waveform analysis. Results are saved as CSV to `./results/`.
+- **Plot Specific** — purpose-built transistor characterisation tests with live canvas plots:
+  - *Static Characteristic (IV Curve)* — sweeps V_CE / V_DS, parameterised by base current (CC mode) or gate voltage. Plots a family of I_C / I_D curves.
+  - *Transfer Characteristic* — sweeps V_BE / V_GS at a fixed collector/drain bias. Plots I_C / I_D vs gate/base voltage.
+  - FET / BJT mode toggle; scroll-to-zoom and drag-to-pan after the run; PNG and CSV export to `./results/`.
 
 ---
 
