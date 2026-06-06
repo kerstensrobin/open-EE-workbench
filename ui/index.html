@@ -2494,42 +2494,23 @@ function buildTestGrid(tests) {
   grid.innerHTML = "";
   for (const test of tests) {
     const avail = test.available !== false;
-    let card;
-    if (!avail) {
-      // Greyed-out unavailable card
-      card = document.createElement("div");
-      card.className = "test-card hidden";
-      card.id        = `test-card-${test.id}`;
-      const needed = (test.requires||[]).map(r => instrNames[r]||r).join(" + ");
-      card.innerHTML = `
-        <div class="test-card-header">
-          <div class="test-card-icon" style="opacity:.4;">${icons[test.id] || "▶"}</div>
-          <div>
-            <div class="test-card-title">${escHtml(test.name)}</div>
-            <div class="test-card-desc">${escHtml(test.description||"")}</div>
-          </div>
-        </div>
-        <div class="test-card-body">
-          <div class="auto-empty" style="min-height:100px;">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.3;">
-              <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-            </svg>
-            <p style="font-size:12px;">Not available</p>
-            <small>Connect a ${escHtml(needed)} to use this test</small>
-          </div>
-        </div>`;
-    } else {
-      card = test.custom_ui ? buildDcSweepCard(test) : buildTestCard(test);
-      if (test.custom_ui) {
-        _dcSw.measItems = [
-          { kind:"measurement", instrument:"psu", measure:"voltage", instr_ch:1, samples:1, settle:0.1, label:"" },
-        ];
-      }
+    const card  = test.custom_ui ? buildDcSweepCard(test) : buildTestCard(test);
+    if (test.custom_ui) {
+      _dcSw.measItems = [
+        { kind:"measurement", instrument:"psu", measure:"voltage", instr_ch:1, samples:1, settle:0.1, label:"" },
+      ];
     }
     card.classList.add("hidden");
     grid.appendChild(card);
-    if (avail && test.custom_ui) { _dcSwRenderChannels(); _dcSwRenderMeasList(); }
-    if (avail && test.id === "psu_interrupt") _psuInterruptInit(test.id);
+    if (test.custom_ui) { _dcSwRenderChannels(); _dcSwRenderMeasList(); }
+    if (test.id === "psu_interrupt") _psuInterruptInit(test.id);
+
+    // Disable Run button with tooltip when required instruments are not connected
+    if (!avail) {
+      const needed  = (test.requires||[]).map(r => instrNames[r]||r).join(" + ");
+      const runBtn  = card.querySelector(`#trun-${test.id}`);
+      if (runBtn) { runBtn.disabled = true; runBtn.title = `Connect a ${needed} to run this test`; }
+    }
   }
 
   // Auto-select the first AVAILABLE test (or reselect the previously active one)
@@ -2564,12 +2545,14 @@ function buildTestCard(test) {
     }
     if (p.type === "select") {
       // Options can be plain strings or {value, label} objects
-      const opts = p.options.map(o => {
-        const val = (o && typeof o === "object") ? o.value : o;
-        const lbl = (o && typeof o === "object") ? o.label : o;
-        const sel = (val === p.default || lbl === p.default) ? " selected" : "";
-        return `<option value="${escHtml(String(val))}"${sel}>${escHtml(String(lbl))}</option>`;
-      }).join("");
+      const opts = (p.options && p.options.length)
+        ? p.options.map(o => {
+            const val = (o && typeof o === "object") ? o.value : o;
+            const lbl = (o && typeof o === "object") ? o.label : o;
+            const sel = (val === p.default || lbl === p.default) ? " selected" : "";
+            return `<option value="${escHtml(String(val))}"${sel}>${escHtml(String(lbl))}</option>`;
+          }).join("")
+        : `<option value="" disabled selected>— no applicable sources connected —</option>`;
       return `
         <div class="test-param-row">
           <span class="test-param-label">${escHtml(p.label)}</span>
@@ -3437,7 +3420,7 @@ function _dcSwRenderChannels() {
       ? test.sources.map(src =>
           `<option value="${escHtml(src.value)}"${src.value === defRes ? " selected" : ""}>${escHtml(src.label)}</option>`
         ).join("")
-      : `<option value="">No PSU found</option>`;
+      : `<option value="" disabled selected>— no applicable sources connected —</option>`;
 
     // PSU output-channel select
     const chHtml = ["1","2","3","4"].map(c =>
@@ -3720,9 +3703,9 @@ function _dcSwMeasTypeOpts(item) {
 function _dcSwInstrOpts(item) {
   const test  = _dcSw.test;
   const sources = test ? (test.meters || []) : [];
-  return sources
-    .map(m => `<option value="${escHtml(m.value)}"${m.value === item.instrument ? " selected" : ""}>${escHtml(m.label)}</option>`)
-    .join("");
+  return sources.length
+    ? sources.map(m => `<option value="${escHtml(m.value)}"${m.value === item.instrument ? " selected" : ""}>${escHtml(m.label)}</option>`).join("")
+    : `<option value="" disabled selected>— no applicable sources connected —</option>`;
 }
 
 // Build instrument options for SCPI query — all connected instruments
