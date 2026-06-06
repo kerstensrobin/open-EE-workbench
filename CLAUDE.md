@@ -14,9 +14,6 @@ python app.py --browser         # web GUI — system browser
 python app.py --port 5173       # different port
 python app.py gu128desk         # pre-load a named workbench
 
-python gui.py                   # Tkinter GUI (alternate front-end)
-python gui.py --demo            # no hardware required
-
 python core/nachoVisa.py        # scan USB + LAN, save workbench
 python core/nachoVisa.py --fix-udev   # write udev rules for USBTMC (Linux)
 
@@ -32,16 +29,11 @@ There are no test suites or build steps. Scripts in `scripts/` are standalone an
 pip install pyvisa pyvisa-py pyusb pyserial flask flask-socketio pywebview
 # Optional:
 pip install zeroconf          # mDNS / LAN instrument discovery
-pip install cairosvg pillow   # SVG logo rendering in Tkinter GUI
 ```
 
 ## Architecture
 
-### Two front-ends, one core
-
-**`app.py`** — primary front-end. Flask + SocketIO server (`/api/*` REST + SocketIO events) rendered inside a PyWebView native window. The web UI lives in `ui/index.html`. All instrument I/O is dispatched to a `ThreadPoolExecutor` (8 workers); results are pushed to the browser via SocketIO events (`connection_result`, `psu_reading`, `scope_measurement`, `automation_row`, etc.). A `threading.Lock` per resource (`res._visa_lock`) serialises concurrent USB access.
-
-**`gui.py`** — alternate Tkinter front-end. Same core imports, card-per-instrument layout (`ScopeCard`, `PSUCard`, `AWGCard`, `DMMCard`). Uses `app._run_async(fn, callback)` pattern — background thread, callback dispatched on the Tk main thread via `after(0, ...)`.
+**`app.py`** — Flask + SocketIO server (`/api/*` REST + SocketIO events) rendered inside a PyWebView native window. The web UI lives in `ui/index.html`. All instrument I/O is dispatched to a `ThreadPoolExecutor` (8 workers); results are pushed to the browser via SocketIO events (`connection_result`, `psu_reading`, `scope_measurement`, `automation_row`, etc.). A `threading.Lock` per resource (`res._visa_lock`) serialises concurrent USB access.
 
 ### Core library (`core/`)
 

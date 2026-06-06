@@ -33,8 +33,6 @@ REQUIRED = [
 
 OPTIONAL = {
     "zeroconf":  "mDNS / LAN instrument discovery",
-    "cairosvg":  "SVG logo rendering in Tkinter GUI",
-    "pillow":    "image support in Tkinter GUI",
 }
 
 def install_deps():

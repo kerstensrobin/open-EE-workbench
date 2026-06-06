@@ -23,7 +23,6 @@ python install.py
 
 **Optional packages** (prompted during install):
 - `zeroconf` — mDNS / LAN instrument discovery
-- `cairosvg` + `pillow` — SVG logo rendering in the Tkinter GUI
 
 ### 2. Linux: USB permissions
 
@@ -59,13 +58,6 @@ python app.py --browser # opens in your system browser
 ```
 
 The GUI shows a card for each instrument in the active workbench. From there you can control outputs, capture screenshots, run the SCPI console, and launch automation tests (DC sweep, PSU interrupt, AC analysis).
-
-An alternative Tkinter GUI is also available:
-
-```bash
-python gui.py           # Tkinter front-end
-python gui.py --demo    # demo mode — no hardware required
-```
 
 ---
 

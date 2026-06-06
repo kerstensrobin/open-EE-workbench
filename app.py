@@ -620,13 +620,10 @@ def api_screenshot():
 
         ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
         name = f"{filename}_{ts}{ext or '.bin'}"
-        if out_dir:
-            import pathlib as _pl
-            save_dir = _pl.Path(out_dir)
-            save_dir.mkdir(parents=True, exist_ok=True)
-            path = save_dir / name
-        else:
-            path = ROOT / name
+        import pathlib as _pl
+        save_dir = _pl.Path(out_dir) if out_dir else ROOT / "results"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        path = save_dir / name
         try:
             path.write_bytes(data)
         except Exception as exc:
@@ -1245,6 +1242,27 @@ def api_automation_resume():
     return jsonify({"status": "running"})
 
 
+@flask_app.route("/api/plot/save-image", methods=["POST"])
+def api_plot_save_image():
+    """Save a base64-encoded PNG from the plot canvas to the results folder."""
+    d        = request.json or {}
+    filename = d.get("filename", "plot_export")
+    data_url = d.get("data", "")
+    out_path = (d.get("output_path") or "").strip()
+    try:
+        import base64
+        header, b64 = data_url.split(",", 1) if "," in data_url else ("", data_url)
+        img_bytes = base64.b64decode(b64)
+        save_dir  = Path(os.path.expanduser(out_path)).resolve() if out_path else ROOT / "results"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
+        path = save_dir / f"{filename}_{ts}.png"
+        path.write_bytes(img_bytes)
+        return jsonify({"path": str(path)})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
 @flask_app.route("/api/pick-folder", methods=["POST"])
 def api_pick_folder():
     """Open a native OS folder-picker dialog and return the chosen path."""
@@ -1375,7 +1393,7 @@ def api_automation_run():
     params  = d.get("params", {})
     # Resolve output directory: expand ~ and make absolute
     raw_out = (d.get("output_path") or "").strip()
-    out_dir = Path(os.path.expanduser(raw_out)).resolve() if raw_out else Path.cwd()
+    out_dir = Path(os.path.expanduser(raw_out)).resolve() if raw_out else Path.cwd() / "results"
 
     if not test_id:
         return jsonify({"error": "test_id required"}), 400
@@ -1391,7 +1409,7 @@ def api_automation_run():
         _log(f"[auto] {msg}")
 
     def _psu_local_mode(handles):
-        """Restore front-panel control on all PSU handles and clear any stuck USBTMC state."""
+        """Restore front-panel control on all PSU handles."""
         seen = set()
         for h in handles:
             res = h["res"]
@@ -1404,10 +1422,11 @@ def api_automation_run():
                         res.write(scpi)
             except Exception:
                 pass
-            try:
-                res.clear()
-            except Exception:
-                pass
+            # Note: res.clear() (viClear) is intentionally omitted — on some
+            # USB instruments (e.g. Keithley 2200) it triggers endpoint
+            # re-enumeration and invalidates the PyVISA session for the rest
+            # of the process lifetime.  The USBTMC read patch already handles
+            # stuck buffers without needing a device-level clear.
 
     def _done(rows, columns, error=None):
         global _auto_running
@@ -1515,13 +1534,16 @@ def api_automation_run():
         ch_cfgs = []
         for n in range(num_ch):
             ch_cfgs.append({
-                "resource": str(params.get(f"ch{n}_resource", "")),
-                "ch":       max(1, int(params.get(f"ch{n}_ch",      n + 1))),
-                "v_start":  float(params.get(f"ch{n}_v_start", 0)),
-                "v_step":   abs(float(params.get(f"ch{n}_v_step",  0.1))) or 0.1,
-                "v_stop":   float(params.get(f"ch{n}_v_stop",  5)),
-                "i_limit":  float(params.get(f"ch{n}_i_limit", 0.5)),
-                "settle":   float(params.get(f"ch{n}_settle",  0.1)),
+                "resource":     str(params.get(f"ch{n}_resource", "")),
+                "ch":           max(1, int(params.get(f"ch{n}_ch",      n + 1))),
+                "v_start":      float(params.get(f"ch{n}_v_start", 0)),
+                "v_step":       abs(float(params.get(f"ch{n}_v_step",  0.1))) or 0.1,
+                "v_stop":       float(params.get(f"ch{n}_v_stop",  5)),
+                "i_limit":      float(params.get(f"ch{n}_i_limit", 0.5)),
+                "settle":       float(params.get(f"ch{n}_settle",  0.1)),
+                # CC mode: sweep set_current_limit instead of set_voltage
+                "sweep_type":   str(params.get(f"ch{n}_sweep_type", "voltage")),
+                "v_compliance": float(params.get(f"ch{n}_v_compliance", 5.0)),
             })
 
         # ── Resolve per-channel instrument handles ───────────────────────────
@@ -1550,24 +1572,58 @@ def api_automation_run():
                     for k in range(n + 1)]
 
         def _set_v(handle, v):
-            _run_steps(handle["res"], get_command(
-                handle["fam"], "set_voltage",
-                ch=handle["cfg"]["ch"], value=f"{v:.6f}"))
+            cfg = handle["cfg"]
+            if cfg["sweep_type"] == "current":
+                # CC mode: cycle output OFF → set current → ON so the PSU can
+                # transition CV→CC correctly (changing current limit while the
+                # output is already in CC at 0 V will not self-start).
+                try:
+                    _run_steps(handle["res"], get_command(
+                        handle["fam"], "output_off", ch=cfg["ch"]))
+                except Exception:
+                    pass
+                try:
+                    _run_steps(handle["res"], get_command(
+                        handle["fam"], "set_current_limit",
+                        ch=cfg["ch"], value=f"{v:.6f}"))
+                    _run_steps(handle["res"], get_command(
+                        handle["fam"], "output_on", ch=cfg["ch"]))
+                except Exception as exc:
+                    _log(f"[auto] CC set_v({v:.6f} A) failed: {exc}")
+            else:
+                _run_steps(handle["res"], get_command(
+                    handle["fam"], "set_voltage",
+                    ch=cfg["ch"], value=f"{v:.6f}"))
 
         def _setup_ch(handle):
-            _run_steps(handle["res"], get_command(
-                handle["fam"], "set_current_limit",
-                ch=handle["cfg"]["ch"], value=f"{handle['cfg']['i_limit']:.4f}"))
-            _run_steps(handle["res"], get_command(
-                handle["fam"], "output_on", ch=handle["cfg"]["ch"]))
+            cfg = handle["cfg"]
+            if cfg["sweep_type"] == "current":
+                # CC mode: set compliance voltage only; output stays OFF here.
+                # _set_v() will cycle OFF→set_current→ON for each outer step,
+                # which forces a proper CV→CC transition on every step.
+                _run_steps(handle["res"], get_command(
+                    handle["fam"], "set_voltage",
+                    ch=cfg["ch"], value=f"{cfg['v_compliance']:.4f}"))
+            else:
+                _run_steps(handle["res"], get_command(
+                    handle["fam"], "set_current_limit",
+                    ch=cfg["ch"], value=f"{cfg['i_limit']:.4f}"))
+                _run_steps(handle["res"], get_command(
+                    handle["fam"], "output_on", ch=cfg["ch"]))
 
         def _teardown_ch(handle):
             try:
+                cfg = handle["cfg"]
+                if cfg["sweep_type"] == "current":
+                    _run_steps(handle["res"], get_command(
+                        handle["fam"], "set_current_limit",
+                        ch=cfg["ch"], value="0.0"))
+                else:
+                    _run_steps(handle["res"], get_command(
+                        handle["fam"], "set_voltage",
+                        ch=cfg["ch"], value="0.0"))
                 _run_steps(handle["res"], get_command(
-                    handle["fam"], "set_voltage",
-                    ch=handle["cfg"]["ch"], value="0.0"))
-                _run_steps(handle["res"], get_command(
-                    handle["fam"], "output_off", ch=handle["cfg"]["ch"]))
+                    handle["fam"], "output_off", ch=cfg["ch"]))
             except Exception:
                 pass
 
@@ -1620,7 +1676,8 @@ def api_automation_run():
                 settle   = float(item.get("settle", 0.1))
                 instr_ch = max(1, int(item.get("instr_ch", 1) or 1))
 
-                use_ext = instr_id not in ("psu", "")
+                # "psu_outer" → ch_handles[1] (gate/base channel in a 2-ch nested sweep)
+                use_ext = instr_id not in ("psu", "psu_outer", "")
                 if use_ext:
                     res = _state["resources"].get(instr_id)
                     fam = _state["families"].get(instr_id)
@@ -1629,6 +1686,10 @@ def api_automation_run():
                         (i for i in (_state.get("workbench") or {}).get("_unique", [])
                          if i.get("resource") == instr_id), None)
                     instr_type = (wb_instr.get("type", "dmm") if wb_instr else "dmm")
+                elif instr_id == "psu_outer" and len(ch_handles) > 1:
+                    res = ch_handles[1]["res"]
+                    fam = ch_handles[1]["fam"]
+                    instr_type = "psu"
                 else:
                     res = ch_handles[0]["res"]
                     fam = ch_handles[0]["fam"]
@@ -1844,10 +1905,13 @@ def api_automation_run():
             vols_all = [_make_vols(h["cfg"]) for h in ch_handles]
             total    = max(len(v) for v in vols_all)
 
+            def _set_col(n):
+                return "i_set_A" if ch_cfgs[n]["sweep_type"] == "current" else "v_set_V"
+
             if num_ch == 1:
-                cols = ["v_set_V"] + meas_cols
+                cols = [_set_col(0)] + meas_cols
             else:
-                cols = [f"ch{n + 1}_v_set_V" for n in range(num_ch)] + meas_cols
+                cols = [f"ch{n + 1}_{_set_col(n)}" for n in range(num_ch)] + meas_cols
 
             _emit_progress(f"DC Sweep — {num_ch} ch simultaneous: {total} steps")
             try:
@@ -1911,10 +1975,13 @@ def api_automation_run():
             for v in vols_per_ch:
                 total *= len(v)
 
-            # Column order: outermost voltage first, innermost last
-            # e.g. 3-ch: ["v_outer_V", "v_mid_V", "v_inner_V"]
-            cols = [f"v_{_nest_name(n)}_V"
-                    for n in reversed(range(num_ch))] + meas_cols
+            # Column order: outermost first, innermost last
+            # e.g. 3-ch: ["v_outer_V", "v_mid_V", "v_inner_V"] (or i_*_A for CC channels)
+            def _nest_col(n):
+                pfx = "i" if ch_cfgs[n]["sweep_type"] == "current" else "v"
+                sfx = "A" if ch_cfgs[n]["sweep_type"] == "current" else "V"
+                return f"{pfx}_{_nest_name(n)}_{sfx}"
+            cols = [_nest_col(n) for n in reversed(range(num_ch))] + meas_cols
 
             shape_str = "×".join(str(len(v)) for v in vols_outer_first)
             _emit_progress(
@@ -2722,6 +2789,8 @@ def api_automation_run():
     runners = {
         "ac_frequency_sweep": _run_ac_sweep,
         "dc_sweep":           _run_dc_sweep,
+        "iv_curve":           _run_dc_sweep,   # Plot Specific: Static Characteristic
+        "transfer":           _run_dc_sweep,   # Plot Specific: Transfer Characteristic
         "dmm_logger":         _run_dmm_logger,
         "waveform_analysis":  _run_waveform_analysis,
         "harmonic_analysis":  _run_harmonic_analysis,
@@ -2740,7 +2809,16 @@ def api_automation_run():
     _poll_stop.set()
     _poller_idle.wait(timeout=5.0)
 
-    _executor.submit(runner)
+    def _safe_runner():
+        try:
+            runner()
+        except Exception as exc:
+            # Runner exited via an unhandled exception — _done was never called,
+            # so _auto_running is still True and polling never resumed.
+            _log(f"[auto/{test_id}] unhandled exception: {exc}")
+            _done([], [], str(exc))
+
+    _executor.submit(_safe_runner)
     return jsonify({"status": "running", "test_id": test_id})
 
 

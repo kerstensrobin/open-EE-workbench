@@ -503,6 +503,72 @@
     .results-tbl tr.new-row td { animation:row-flash .5s ease; }
     @keyframes row-flash { from{background:rgba(26,86,196,.15)} to{background:transparent} }
 
+    /* ── Test Specific tab ───────────────────────────────────────── */
+    #testspec-tab { display:none; flex-direction:column; gap:16px; }
+    #testspec-tab.visible { display:flex; }
+    #ts-layout { display:flex; flex-direction:column; gap:16px; }
+    .ts-subtab-bar {
+      display:flex; align-items:center;
+      background:var(--surface); border:1px solid var(--border);
+      border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+      border-bottom:none; padding:0 8px; gap:0;
+    }
+    .ts-subtabs { display:flex; align-items:flex-end; gap:0; flex:1; padding:0 4px; }
+    .ts-subtab {
+      padding:9px 14px; cursor:pointer; white-space:nowrap;
+      font-size:12px; font-weight:500; color:var(--text-dim);
+      border:1px solid transparent; border-bottom:none;
+      border-radius:var(--radius) var(--radius) 0 0;
+      background:transparent; position:relative;
+      transition:color .12s, background .12s;
+    }
+    .ts-subtab:hover { color:var(--text); background:var(--surface2); }
+    .ts-subtab.active {
+      color:var(--text); background:var(--bg); border-color:var(--border);
+    }
+    .ts-subtab.active::after {
+      content:''; position:absolute; bottom:-1px; left:0; right:0;
+      height:2px; background:var(--accent); border-radius:1px 1px 0 0;
+    }
+    /* card directly under the sub-tab bar has no top radius */
+    .ts-subtab-bar + .test-card { border-radius:0 var(--radius-lg) var(--radius-lg) var(--radius-lg); }
+    .ts-config-grid {
+      display:grid; grid-template-columns:1fr 1fr; gap:8px 16px;
+    }
+    .ts-config-span2 { grid-column:1/-1; }
+    #ts-chart-panel {
+      background:var(--surface); border:1px solid var(--border);
+      border-radius:var(--radius-lg); overflow:hidden;
+    }
+    .ts-chart-header {
+      display:flex; align-items:center; gap:10px;
+      padding:10px 16px; background:var(--surface2);
+      border-bottom:1px solid var(--border);
+    }
+    .ts-chart-title { font-size:12px; font-weight:600; color:var(--text); flex:1; }
+    .ts-axis-row { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text-dim); }
+    .ts-axis-sel {
+      background:var(--surface3); border:1px solid var(--border2);
+      border-radius:var(--radius); color:var(--text);
+      font-family:var(--mono); font-size:10px; padding:2px 5px; cursor:pointer;
+    }
+    #iv-canvas { display:block; width:100%; height:340px; cursor:grab; }
+    .iv-note {
+      display:flex; align-items:flex-start; gap:8px;
+      padding:8px 10px; border-radius:var(--radius);
+      background:rgba(180,83,9,0.07); border:1px solid rgba(180,83,9,0.18);
+      font-size:11px; color:var(--text-dim); line-height:1.55;
+    }
+    .iv-note svg { flex-shrink:0; margin-top:1px; color:var(--amber); }
+    #iv-canvas.dragging { cursor:grabbing; }
+    .ts-chart-footer {
+      padding:7px 16px; font-size:11px; color:var(--text-dim);
+      border-top:1px solid var(--border); background:var(--surface2);
+      font-family:var(--mono);
+      display:flex; align-items:center; gap:8px;
+    }
+    .ts-chart-footer span { flex:1; }
+
     .results-footer {
       padding:10px 16px; border-top:1px solid var(--border);
       display:flex; align-items:center; gap:8px;
@@ -655,7 +721,7 @@
   <div id="nav-outpath">
     <span id="nav-outpath-icon">📁</span>
     <input id="outpath-input" type="text"
-           placeholder="output path (leave blank for working directory)"
+           placeholder="output path (default: ./results/)"
            spellcheck="false" autocomplete="off"
            oninput="state.outputPath=this.value.trim()" />
     <button class="btn btn-ghost" id="outpath-browse" onclick="browseOutputFolder()" title="Browse…">Browse</button>
@@ -696,6 +762,16 @@
       <polygon points="5 3 19 12 5 21 5 3"/>
     </svg>
     Automation
+  </button>
+  <button class="tab" id="tab-testspec" onclick="switchTab('testspec')">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="3 20 8 14 13 17 20 6"/>
+      <circle cx="3" cy="20" r="1.5" fill="currentColor" stroke="none"/>
+      <circle cx="8" cy="14" r="1.5" fill="currentColor" stroke="none"/>
+      <circle cx="13" cy="17" r="1.5" fill="currentColor" stroke="none"/>
+      <circle cx="20" cy="6"  r="1.5" fill="currentColor" stroke="none"/>
+    </svg>
+    Plot Specific
   </button>
 </div>
 
@@ -774,7 +850,385 @@
 
       </div><!-- /auto-layout -->
 
-    </div>
+    </div><!-- /auto-tab -->
+
+    <!-- ── Test Specific tab ───────────────────────────────────────── -->
+    <div id="testspec-tab">
+
+      <div class="auto-empty" id="ts-empty-nowb">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <polyline points="3 20 8 14 13 17 20 6"/>
+          <circle cx="3"  cy="20" r="2" fill="currentColor" stroke="none"/>
+          <circle cx="8"  cy="14" r="2" fill="currentColor" stroke="none"/>
+          <circle cx="13" cy="17" r="2" fill="currentColor" stroke="none"/>
+          <circle cx="20" cy="6"  r="2" fill="currentColor" stroke="none"/>
+        </svg>
+        <p>Load a workbench first</p>
+      </div>
+
+      <div class="auto-empty hidden" id="ts-empty-nopsu">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 3H8M12 3v4"/>
+        </svg>
+        <p>No PSU connected</p>
+        <small>IV Curve requires a programmable voltage source</small>
+      </div>
+
+      <div id="ts-layout" class="hidden">
+
+        <!-- Sub-tab strip + FET/BJT toggle -->
+        <div class="ts-subtab-bar">
+          <div class="ts-subtabs">
+            <button class="ts-subtab active" data-plot="iv_curve" onclick="tsSelectPlot('iv_curve')">Static Characteristic</button>
+            <button class="ts-subtab"        data-plot="transfer"  onclick="tsSelectPlot('transfer')">Transfer Characteristic</button>
+          </div>
+          <div class="dcsw-seg" id="iv-devtype-seg" style="flex-shrink:0;margin:4px 4px;">
+            <button class="dcsw-seg-btn"        onclick="ivSetDevType('fet')">FET</button>
+            <button class="dcsw-seg-btn active" onclick="ivSetDevType('bjt')">BJT</button>
+          </div>
+        </div>
+
+        <!-- Static Characteristic (IV Curve) config card -->
+        <div class="test-card" id="ts-iv-card">
+          <div class="test-card-header">
+            <div class="test-card-icon" style="background:rgba(26,86,196,.12);color:var(--accent);">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 20 8 14 13 17 20 6"/>
+              </svg>
+            </div>
+            <div style="flex:1;">
+              <div class="test-card-title">Static Characteristic (IV Curve)</div>
+              <div class="test-card-desc">Sweep drain/collector voltage, parameterised by gate/base current</div>
+            </div>
+          </div>
+          <div class="test-card-body">
+
+            <div class="iv-note">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <span>Curve accuracy depends on the instruments used. For reliable results, a calibrated SMU is recommended — standard bench PSU current measurements are significantly less precise.</span>
+            </div>
+
+            <!-- Drain / Collector -->
+            <div class="psi-card">
+              <div class="psi-card-hdr psi-card-hdr-psu" id="iv-hdr-drain">Drain / Collector</div>
+              <div class="ts-config-grid">
+                <div class="test-param-row ts-config-span2">
+                  <span class="test-param-label">Source</span>
+                  <div class="test-param-input-wrap">
+                    <select class="test-param-input sel" id="iv-drain-src"></select>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Channel</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="iv-drain-ch" value="1" min="1" max="4" step="1" oninput="tsSyncMeterCh()">
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">I Limit</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="iv-drain-ilim" value="0.5" step="0.1" min="0">
+                    <span class="test-param-unit">A</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">V Start</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="iv-drain-vstart" value="0" step="0.1">
+                    <span class="test-param-unit">V</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">V Stop</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="iv-drain-vstop" value="10" step="0.5">
+                    <span class="test-param-unit">V</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">V Step</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="iv-drain-vstep" value="0.2" step="0.05" min="0.001">
+                    <span class="test-param-unit">V</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Settle</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="iv-drain-settle" value="0.05" step="0.01" min="0.005">
+                    <span class="test-param-unit">s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Gate / Base -->
+            <div class="psi-card">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span class="psi-card-hdr" id="iv-hdr-gate" style="color:var(--green);flex:1;">Gate / Base</span>
+                <div class="dcsw-seg" id="iv-gate-mode-seg" style="display:none;">
+                  <button class="dcsw-seg-btn active" onclick="ivSetGateMode('cc')">CC</button>
+                  <button class="dcsw-seg-btn"        onclick="ivSetGateMode('cv')">CV</button>
+                </div>
+              </div>
+              <div class="ts-config-grid">
+                <div class="test-param-row ts-config-span2">
+                  <span class="test-param-label">Source</span>
+                  <div class="test-param-input-wrap">
+                    <select class="test-param-input sel" id="iv-gate-src"></select>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Channel</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="iv-gate-ch" value="2" min="1" max="4" step="1" oninput="tsSyncMeterCh()">
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label" id="iv-gate-lim-label">I Limit</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="iv-gate-ilim" value="0.1" step="0.05" min="0">
+                    <span class="test-param-unit" id="iv-gate-lim-unit">A</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label" id="iv-gate-start-label">V Start</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="iv-gate-vstart" value="0" step="0.5">
+                    <span class="test-param-unit" id="iv-gate-start-unit">V</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label" id="iv-gate-stop-label">V Stop</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="iv-gate-vstop" value="4" step="0.5">
+                    <span class="test-param-unit" id="iv-gate-stop-unit">V</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label" id="iv-gate-step-label">V Step</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="iv-gate-vstep" value="1" step="0.5" min="0.001">
+                    <span class="test-param-unit" id="iv-gate-step-unit">V</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Settle</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="iv-gate-settle" value="0.1" step="0.05" min="0.005">
+                    <span class="test-param-unit">s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Current Measurement -->
+            <div class="psi-card">
+              <div class="psi-card-hdr psi-card-hdr-scope">Current Measurement</div>
+              <div class="ts-config-grid">
+                <div class="test-param-row">
+                  <span class="test-param-label">I Meter</span>
+                  <div class="test-param-input-wrap">
+                    <select class="test-param-input sel" id="iv-meter" onchange="tsSyncMeterCh()"></select>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label" id="iv-meter-ch-label">Meter CH</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="iv-meter-ch" value="1" min="1" max="4" step="1">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="test-progress" id="ts-prog">
+              <div class="progress-track">
+                <div class="progress-fill" id="ts-prog-fill"></div>
+              </div>
+              <div class="progress-label" id="ts-prog-label">Running…</div>
+            </div>
+
+            <div class="test-actions">
+              <button class="btn btn-primary" id="ts-run-btn" onclick="tsRunIVCurve()">▶ Run</button>
+              <button class="btn btn-danger hidden" id="ts-stop-btn" onclick="stopTest()">■ Stop</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Transfer Characteristic config card (hidden by default) -->
+        <div class="test-card hidden" id="ts-tc-card">
+          <div class="test-card-header">
+            <div class="test-card-icon" style="background:rgba(21,128,61,.12);color:var(--green);">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 19 9 13 14 16 21 5"/>
+              </svg>
+            </div>
+            <div style="flex:1;">
+              <div class="test-card-title">Transfer Characteristic</div>
+              <div class="test-card-desc">Sweep gate/base voltage, plot drain/collector current per V<sub>DS</sub>/V<sub>CE</sub></div>
+            </div>
+          </div>
+          <div class="test-card-body">
+
+            <div class="iv-note">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <span>Curve accuracy depends on the instruments used. For reliable results, a calibrated SMU is recommended.</span>
+            </div>
+
+            <!-- Gate / Base (inner, swept = X axis) -->
+            <div class="psi-card">
+              <div class="psi-card-hdr" id="tc-hdr-gate" style="color:var(--green);">Gate / Base — sweep</div>
+              <div class="ts-config-grid">
+                <div class="test-param-row ts-config-span2">
+                  <span class="test-param-label">Source</span>
+                  <div class="test-param-input-wrap">
+                    <select class="test-param-input sel" id="tc-gate-src"></select>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Channel</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="tc-gate-ch" value="2" min="1" max="4" step="1">
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">I Limit</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="tc-gate-ilim" value="0.01" step="0.005" min="0">
+                    <span class="test-param-unit">A</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label" id="tc-gate-start-label">V Start</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="tc-gate-vstart" value="0" step="0.05">
+                    <span class="test-param-unit">V</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label" id="tc-gate-stop-label">V Stop</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="tc-gate-vstop" value="0.8" step="0.05">
+                    <span class="test-param-unit">V</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label" id="tc-gate-step-label">V Step</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="tc-gate-vstep" value="0.01" step="0.005" min="0.001">
+                    <span class="test-param-unit">V</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Settle</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="tc-gate-settle" value="0.05" step="0.01" min="0.005">
+                    <span class="test-param-unit">s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Drain / Collector (fixed bias) -->
+            <div class="psi-card">
+              <div class="psi-card-hdr psi-card-hdr-psu" id="tc-hdr-drain">Drain / Collector — bias</div>
+              <div class="ts-config-grid">
+                <div class="test-param-row ts-config-span2">
+                  <span class="test-param-label">Source</span>
+                  <div class="test-param-input-wrap">
+                    <select class="test-param-input sel" id="tc-drain-src"></select>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Channel</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="tc-drain-ch" value="1" min="1" max="4" step="1" oninput="tsSyncTcMeterCh()">
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">I Limit</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="tc-drain-ilim" value="0.5" step="0.1" min="0">
+                    <span class="test-param-unit">A</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label" id="tc-drain-v-label">V_CE</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="tc-drain-vce" value="5" step="0.5" min="0">
+                    <span class="test-param-unit">V</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Settle</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="tc-drain-settle" value="0.1" step="0.05" min="0.005">
+                    <span class="test-param-unit">s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Current Measurement -->
+            <div class="psi-card">
+              <div class="psi-card-hdr psi-card-hdr-scope">Current Measurement</div>
+              <div class="ts-config-grid">
+                <div class="test-param-row">
+                  <span class="test-param-label">I Meter</span>
+                  <div class="test-param-input-wrap">
+                    <select class="test-param-input sel" id="tc-meter" onchange="tsSyncTcMeterCh()"></select>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label" id="tc-meter-ch-label">Drain CH</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="tc-meter-ch" value="2" min="1" max="4" step="1" disabled>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="test-progress" id="tc-prog">
+              <div class="progress-track"><div class="progress-fill" id="tc-prog-fill"></div></div>
+              <div class="progress-label" id="tc-prog-label">Running…</div>
+            </div>
+            <div class="test-actions">
+              <button class="btn btn-primary" id="tc-run-btn" onclick="tsRunTransfer()">▶ Run</button>
+              <button class="btn btn-danger hidden" id="tc-stop-btn" onclick="stopTest()">■ Stop</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live chart panel -->
+        <div id="ts-chart-panel">
+          <div class="ts-chart-header">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            <span class="ts-chart-title" id="ts-chart-title">Static Characteristic</span>
+            <div class="ts-axis-row" id="ts-axis-row" style="display:none;">
+              X <select class="ts-axis-sel" id="ts-x-sel" onchange="tsUpdateAxes()"></select>
+              Y <select class="ts-axis-sel" id="ts-y-sel" onchange="tsUpdateAxes()"></select>
+            </div>
+            <button class="btn btn-ghost" id="ts-zoom-reset-btn" style="font-size:11px;display:none;" onclick="tsResetZoom()">↺ Fit</button>
+            <button class="btn btn-ghost" style="font-size:11px;" onclick="tsClearChart()">Clear</button>
+          </div>
+          <canvas id="iv-canvas"></canvas>
+          <div class="ts-chart-footer">
+            <span id="ts-chart-footer">Ready — configure and press Run</span>
+            <button class="btn btn-ghost" style="font-size:11px;" onclick="tsExportImage()">⬇ PNG</button>
+            <button class="btn btn-ghost" style="font-size:11px;" onclick="tsExportCSV()">⬇ CSV</button>
+          </div>
+        </div>
+
+      </div><!-- /ts-layout -->
+
+    </div><!-- /testspec-tab -->
+
   </div>
 
   <!-- ── Log panel ──────────────────────────────────────────────── -->
@@ -899,10 +1353,12 @@ function switchTab(name) {
   state.activeTab = name;
   document.getElementById("tab-workbench").classList.toggle("active", name === "workbench");
   document.getElementById("tab-automation").classList.toggle("active", name === "automation");
+  document.getElementById("tab-testspec").classList.toggle("active", name === "testspec");
   document.getElementById("workbench-tab").style.display = name === "workbench" ? "" : "none";
-  const autoEl = document.getElementById("auto-tab");
-  autoEl.classList.toggle("visible", name === "automation");
+  document.getElementById("auto-tab").classList.toggle("visible", name === "automation");
+  document.getElementById("testspec-tab").classList.toggle("visible", name === "testspec");
   if (name === "automation") refreshAutoTab();
+  if (name === "testspec")   { refreshTestSpecTab(); setTimeout(ivChartDraw, 30); }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -1843,6 +2299,7 @@ async function refreshAutoTests() {
     const { tests } = await GET("/api/automation/tests");
     state.autoTests = tests || [];
     if (state.activeTab === "automation") refreshAutoTab();
+    if (state.activeTab === "testspec")   refreshTestSpecTab();
   } catch(e) { /* no-op */ }
 }
 
@@ -2445,6 +2902,15 @@ socket.on("automation_progress", ({ test_id, msg }) => {
 });
 
 socket.on("automation_row", ({ test_id, row, columns, progress }) => {
+  if (test_id === "iv_curve" || test_id === "transfer") {
+    ivChartAddPoint(columns, row);
+    const isIv   = test_id === "iv_curve";
+    const fillEl = document.getElementById(isIv ? "ts-prog-fill" : "tc-prog-fill");
+    if (fillEl) fillEl.style.width = (progress * 100).toFixed(1) + "%";
+    const lblEl  = document.getElementById(isIv ? "ts-prog-label" : "tc-prog-label");
+    if (lblEl) { const n = _ivChart.curves.reduce((s,c) => s+c.points.length, 0); lblEl.textContent = `${n} pts…`; }
+    return;
+  }
   if (!document.getElementById(`test-card-${test_id}`)) return;
   // On the first row, update columns if the runner determined a different schema
   // (e.g. dc_sweep changes columns based on sweep_mode at runtime)
@@ -2465,6 +2931,19 @@ socket.on("automation_row", ({ test_id, row, columns, progress }) => {
 
 socket.on("automation_done", ({ test_id, columns, rows, error, csv_path }) => {
   state.autoRunning = false;
+  if (test_id === "iv_curve" || test_id === "transfer") {
+    const label = test_id === "iv_curve" ? "Static Characteristic" : "Transfer Characteristic";
+    if (error) {
+      toast(`${label} failed: ` + error, "error");
+      logMsg(`✗ [${test_id}] ${error}`, "error");
+    } else {
+      const _ivTotal = _ivChart.curves.reduce((s,c) => s+c.points.length, 0);
+      toast(`${label} — ${_ivChart.curves.length} curves · ${_ivTotal} pts`, "ok");
+      logMsg(`✓ [${test_id}] done (${_ivChart.curves.length} curves, ${_ivTotal} pts)${csv_path ? " → " + csv_path : ""}`, "ok");
+    }
+    tsTestFinished(error, csv_path);
+    return;
+  }
   if (error) {
     toast("Test failed: "+error,"error");
     logMsg(`✗ [auto/${test_id}] ${error}`,"error");
@@ -3400,6 +3879,869 @@ function getDcSweepParams() {
   }
   return p;
 }
+
+// ── Plot Specific tab ───────────────────────────────────────────────
+// Curve colors — readable on the app's light-gray background
+const _CURVE_COLORS = [
+  "#1a56c4", "#15803d", "#b91c1c", "#b45309",
+  "#6d28d9", "#0891b2", "#be185d", "#0d7490",
+];
+
+// Active plot test: "iv_curve" | "transfer"
+let _tsActivePlot = "iv_curve";
+
+// Labels per plot type and device type
+const _PLOT_LABELS = {
+  iv_curve: {
+    fet: { x: "V_DS", y: "I_D", g: "V_GS", drain: "Drain",     gate: "Gate"  },
+    bjt: { x: "V_CE", y: "I_C", g: "V_BE", drain: "Collector", gate: "Base"  },
+  },
+  transfer: {
+    fet: { x: "V_GS", y: "I_D", g: "V_DS", drain: "Drain",     gate: "Gate"  },
+    bjt: { x: "V_BE", y: "I_C", g: "V_CE", drain: "Collector", gate: "Base"  },
+  },
+};
+function _plotLabels() {
+  return (_PLOT_LABELS[_tsActivePlot] || _PLOT_LABELS.iv_curve)[_ivChart.devType]
+      || _PLOT_LABELS.iv_curve.bjt;
+}
+
+const _ivChart = {
+  curves:       [],    // [{gateV, ib, points:[{x,y}]}]  ib=null for FET
+  currentGateV: null,
+  cols:         [],
+  gIdx:         0,     // outer (gate) column — used for curve grouping
+  xIdx:         1,     // drain voltage — X axis
+  yIdx:         2,     // current measurement — Y axis
+  ibIdx:        -1,    // column index of measured I_B; -1 = not present
+  status:       "idle",
+  view:         null,  // null = auto-fit; {xMin,xMax,yMin,yMax} = zoomed
+  devType:      "bjt", // "fet" | "bjt" — controls axis/legend labels
+  gateMode:     "cc",  // "cc" | "cv" — only meaningful when devType === "bjt"
+};
+
+let _ivDrag          = null;   // {startX, startY, startBounds, canvas}
+let _ivEventsAttached = false;
+
+function refreshTestSpecTab() {
+  const noWb   = document.getElementById("ts-empty-nowb");
+  const noPsu  = document.getElementById("ts-empty-nopsu");
+  const layout = document.getElementById("ts-layout");
+
+  if (!state.workbench) {
+    noWb.classList.remove("hidden");
+    noPsu.classList.add("hidden");
+    layout.classList.add("hidden");
+    return;
+  }
+  noWb.classList.add("hidden");
+
+  if (!state.autoTests.length && state.connected) {
+    refreshAutoTests();
+    return;
+  }
+
+  const dcTest = state.autoTests.find(t => t.id === "dc_sweep");
+  if (!dcTest) {
+    noPsu.classList.remove("hidden");
+    layout.classList.add("hidden");
+    return;
+  }
+  noPsu.classList.add("hidden");
+  const firstBuild = layout.classList.contains("hidden");
+  layout.classList.remove("hidden");
+  _tsPopulateDropdowns(dcTest);
+  // Sync card UI to current devType/gateMode/plot state (important on first open)
+  if (firstBuild) {
+    tsSelectPlot(_tsActivePlot);
+    ivSetDevType(_ivChart.devType);
+  }
+}
+
+function _tsPopulateDropdowns(dcTest) {
+  const srcOpts = (dcTest.sources || []).map(s =>
+    `<option value="${escHtml(s.value)}">${escHtml(s.label)}</option>`).join("");
+  const mtrOpts = (dcTest.meters || []).map(m =>
+    `<option value="${escHtml(m.value)}">${escHtml(m.label)}</option>`).join("");
+
+  for (const id of ["iv-drain-src", "iv-gate-src", "tc-gate-src", "tc-drain-src"]) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    const cur = el.value;
+    el.innerHTML = srcOpts;
+    if (cur) el.value = cur;
+  }
+  for (const id of ["iv-meter", "tc-meter"]) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    const cur = el.value;
+    el.innerHTML = mtrOpts;
+    if (cur) el.value = cur;
+  }
+  tsSyncMeterCh();
+  tsSyncTcMeterCh();
+}
+
+function tsSelectPlot(plot) {
+  _tsActivePlot = plot;
+  document.querySelectorAll(".ts-subtab").forEach(b =>
+    b.classList.toggle("active", b.dataset.plot === plot));
+  document.getElementById("ts-iv-card")?.classList.toggle("hidden", plot !== "iv_curve");
+  document.getElementById("ts-tc-card")?.classList.toggle("hidden", plot !== "transfer");
+  const title = document.getElementById("ts-chart-title");
+  if (title) title.textContent = plot === "iv_curve" ? "Static Characteristic" : "Transfer Characteristic";
+  tsClearChart();
+}
+
+function tsSyncTcMeterCh() {
+  const mtrSel   = document.getElementById("tc-meter");
+  const mtrChInp = document.getElementById("tc-meter-ch");
+  const mtrChLbl = document.getElementById("tc-meter-ch-label");
+  if (!mtrChInp) return;
+  const isPsu = !mtrSel?.value || mtrSel.value === "psu";
+  if (isPsu) {
+    const drainCh = parseInt(document.getElementById("tc-drain-ch")?.value || "2");
+    mtrChInp.value    = drainCh;
+    mtrChInp.disabled = true;
+    if (mtrChLbl) mtrChLbl.textContent = `${_plotLabels().drain} CH`;
+  } else {
+    mtrChInp.disabled = false;
+    if (mtrChLbl) mtrChLbl.textContent = "Meter CH";
+  }
+}
+
+function tsSyncMeterCh() {
+  const mtrSel    = document.getElementById("iv-meter");
+  const mtrChInp  = document.getElementById("iv-meter-ch");
+  const mtrChLbl  = document.getElementById("iv-meter-ch-label");
+  if (!mtrChInp) return;
+  const isPsu = !mtrSel?.value || mtrSel.value === "psu";
+  if (isPsu) {
+    // Lock to drain channel
+    const drainCh = parseInt(document.getElementById("iv-drain-ch")?.value || "1");
+    mtrChInp.value    = drainCh;
+    mtrChInp.disabled = true;
+    if (mtrChLbl) mtrChLbl.textContent = `${_ivDevLabels().drain} CH`;
+  } else {
+    mtrChInp.disabled = false;
+    if (mtrChLbl) mtrChLbl.textContent = "Meter CH";
+  }
+}
+
+function tsRunIVCurve() {
+  if (state.autoRunning) { toast("A test is already running", "error"); return; }
+  if (!state.connected)  { toast("Not connected to instruments", "error"); return; }
+
+  state.autoRunning = true;
+  state.autoTestId  = "iv_curve";
+
+  // Reset chart
+  _ivChart.curves       = [];
+  _ivChart.currentGateV = null;
+  _ivChart.cols         = [];
+  _ivChart.gIdx         = 0;
+  _ivChart.xIdx         = 1;
+  _ivChart.yIdx         = 2;
+  _ivChart.ibIdx        = -1;
+  _ivChart.status       = "running";
+  _ivChart.view         = null;
+  document.getElementById("ts-zoom-reset-btn").style.display = "none";
+  document.getElementById("ts-axis-row").style.display = "none";
+  document.getElementById("ts-chart-footer").textContent = "Running…";
+  ivChartDraw();
+
+  document.getElementById("ts-run-btn").classList.add("hidden");
+  document.getElementById("ts-stop-btn").classList.remove("hidden");
+  const prog = document.getElementById("ts-prog");
+  if (prog) prog.classList.add("visible");
+  document.getElementById("ts-prog-fill").style.width = "0%";
+  document.getElementById("ts-prog-label").textContent = "Starting…";
+
+  // Drain (inner / CH0)
+  const drainSrc    = document.getElementById("iv-drain-src")?.value   || "";
+  const drainCh     = parseInt(document.getElementById("iv-drain-ch")?.value    || "1");
+  const drainVStart = parseFloat(document.getElementById("iv-drain-vstart")?.value || "0");
+  const drainVStop  = parseFloat(document.getElementById("iv-drain-vstop")?.value  || "10");
+  const drainVStep  = parseFloat(document.getElementById("iv-drain-vstep")?.value  || "0.2");
+  const drainILim   = parseFloat(document.getElementById("iv-drain-ilim")?.value   || "0.5");
+  const drainSettle = parseFloat(document.getElementById("iv-drain-settle")?.value || "0.05");
+
+  // Gate (outer / CH1)
+  const gateSrc    = document.getElementById("iv-gate-src")?.value   || "";
+  const gateCh     = parseInt(document.getElementById("iv-gate-ch")?.value    || "2");
+  const gateSettle = parseFloat(document.getElementById("iv-gate-settle")?.value || "0.1");
+
+  const isBjt  = _ivChart.devType === "bjt";
+  const isCc   = isBjt && _ivChart.gateMode === "cc";
+  const mA2A   = isCc ? 0.001 : 1;   // UI inputs mA for CC mode
+
+  const gateVStart = parseFloat(document.getElementById("iv-gate-vstart")?.value || "0") * mA2A;
+  const gateVStop  = parseFloat(document.getElementById("iv-gate-vstop")?.value  || (isCc ? "0.5" : "4")) * mA2A;
+  const gateVStep  = parseFloat(document.getElementById("iv-gate-vstep")?.value  || (isCc ? "0.1" : "1")) * mA2A;
+  const gateILim   = parseFloat(document.getElementById("iv-gate-ilim")?.value   || (isCc ? "5" : "0.1"));
+
+  // Current measurement
+  const mtrVal = document.getElementById("iv-meter")?.value  || "psu";
+  const mtrCh  = parseInt(document.getElementById("iv-meter-ch")?.value || "1");
+  const isPsu  = !mtrVal || mtrVal === "psu";
+
+  const measItems = [{
+    kind:       "measurement",
+    instrument: isPsu ? "psu" : mtrVal,
+    measure:    "current",
+    instr_ch:   isPsu ? drainCh : mtrCh,
+    samples:    1,
+    settle:     0,
+    label:      isBjt ? "I_C" : "I",
+  }];
+  // In CV mode: add a separate I_B readback. In CC mode the outer column IS I_B.
+  if (isBjt && !isCc) {
+    measItems.push({
+      kind:       "measurement",
+      instrument: "psu_outer",
+      measure:    "current",
+      instr_ch:   gateCh,
+      samples:    1,
+      settle:     0,
+      label:      "I_B",
+    });
+  }
+
+  const params = {
+    num_channels:       2,
+    sweep_mode:         "nested",
+    measurements:       JSON.stringify(measItems),
+    // CH0 = inner (drain/collector)
+    ch0_resource:       drainSrc,
+    ch0_ch:             drainCh,
+    ch0_v_start:        drainVStart,
+    ch0_v_step:         drainVStep,
+    ch0_v_stop:         drainVStop,
+    ch0_i_limit:        drainILim,
+    ch0_settle:         drainSettle,
+    ch0_sweep_type:     "voltage",
+    // CH1 = outer (gate/base)
+    ch1_resource:       gateSrc,
+    ch1_ch:             gateCh,
+    ch1_v_start:        gateVStart,
+    ch1_v_step:         gateVStep,
+    ch1_v_stop:         gateVStop,
+    ch1_sweep_type:     isCc ? "current" : "voltage",
+    ch1_i_limit:        isCc ? 0.001 : gateILim,   // small I-limit for CV, irrelevant for CC
+    ch1_v_compliance:   isCc ? gateILim : 5.0,      // V compliance for CC, ignored for CV
+    ch1_settle:         gateSettle,
+  };
+
+  POST("/api/automation/run", { test_id: "iv_curve", params, output_path: state.outputPath || "" })
+    .catch(e => {
+      toast("Failed to start IV Curve: " + e.message, "error");
+      tsTestFinished(e.message, null);
+    });
+}
+
+function tsTestFinished(error, csv_path) {
+  state.autoRunning = false;
+  const isIv = state.autoTestId === "iv_curve";
+  document.getElementById(isIv ? "ts-run-btn" : "tc-run-btn")?.classList.remove("hidden");
+  document.getElementById(isIv ? "ts-stop-btn" : "tc-stop-btn")?.classList.add("hidden");
+  const prog = document.getElementById(isIv ? "ts-prog" : "tc-prog");
+  if (prog) prog.classList.remove("visible");
+  const fill = document.getElementById(isIv ? "ts-prog-fill" : "tc-prog-fill");
+  if (fill && !error) fill.style.width = "100%";
+  const footer = document.getElementById("ts-chart-footer");
+  if (footer) {
+    if (error) {
+      footer.textContent = `Error: ${error}`;
+    } else {
+      const total = _ivChart.curves.reduce((s, c) => s + c.points.length, 0);
+      const nc    = _ivChart.curves.length;
+      footer.textContent = `${nc} curve${nc !== 1 ? "s" : ""} · ${total} pts${csv_path ? " · 💾 " + csv_path : ""}`;
+    }
+  }
+  _ivChart.status = error ? "error" : "done";
+  ivChartDraw();
+}
+
+function tsRunTransfer() {
+  if (state.autoRunning) { toast("A test is already running", "error"); return; }
+  if (!state.connected)  { toast("Not connected to instruments", "error"); return; }
+
+  state.autoRunning = true;
+  state.autoTestId  = "transfer";
+
+  _ivChart.curves = []; _ivChart.currentGateV = null; _ivChart.cols = [];
+  _ivChart.gIdx = 0; _ivChart.xIdx = 1; _ivChart.yIdx = 2; _ivChart.ibIdx = -1;
+  _ivChart.status = "running"; _ivChart.view = null;
+  document.getElementById("ts-zoom-reset-btn").style.display = "none";
+  document.getElementById("ts-axis-row").style.display = "none";
+  document.getElementById("ts-chart-footer").textContent = "Running…";
+  ivChartDraw();
+
+  document.getElementById("tc-run-btn").classList.add("hidden");
+  document.getElementById("tc-stop-btn").classList.remove("hidden");
+  const prog = document.getElementById("tc-prog");
+  if (prog) prog.classList.add("visible");
+  document.getElementById("tc-prog-fill").style.width = "0%";
+  document.getElementById("tc-prog-label").textContent = "Starting…";
+
+  // Gate / Base — CH0, inner (swept = x-axis)
+  const gateSrc    = document.getElementById("tc-gate-src")?.value   || "";
+  const gateCh     = parseInt(document.getElementById("tc-gate-ch")?.value    || "1");
+  const gateVStart = parseFloat(document.getElementById("tc-gate-vstart")?.value || "0");
+  const gateVStop  = parseFloat(document.getElementById("tc-gate-vstop")?.value  || "0.8");
+  const gateVStep  = parseFloat(document.getElementById("tc-gate-vstep")?.value  || "0.01");
+  const gateILim   = parseFloat(document.getElementById("tc-gate-ilim")?.value   || "0.01");
+  const gateSettle = parseFloat(document.getElementById("tc-gate-settle")?.value || "0.05");
+
+  // Drain / Collector — CH1, outer (single fixed bias voltage)
+  const drainSrc    = document.getElementById("tc-drain-src")?.value   || "";
+  const drainCh     = parseInt(document.getElementById("tc-drain-ch")?.value    || "2");
+  const drainVce    = parseFloat(document.getElementById("tc-drain-vce")?.value    || "5");
+  const drainILim   = parseFloat(document.getElementById("tc-drain-ilim")?.value   || "0.5");
+  const drainSettle = parseFloat(document.getElementById("tc-drain-settle")?.value || "0.1");
+
+  const mtrVal = document.getElementById("tc-meter")?.value  || "psu";
+  const mtrCh  = parseInt(document.getElementById("tc-meter-ch")?.value || "2");
+  const isPsu  = !mtrVal || mtrVal === "psu";
+  const isBjt  = _ivChart.devType === "bjt";
+
+  const measItems = [{
+    kind: "measurement", instrument: isPsu ? "psu" : mtrVal,
+    measure: "current", instr_ch: isPsu ? drainCh : mtrCh,
+    samples: 1, settle: 0, label: isBjt ? "I_C" : "I_D",
+  }];
+
+  const params = {
+    num_channels: 2, sweep_mode: "nested",
+    measurements: JSON.stringify(measItems),
+    ch0_resource: gateSrc,  ch0_ch: gateCh,
+    ch0_v_start: gateVStart, ch0_v_step: gateVStep, ch0_v_stop: gateVStop,
+    ch0_i_limit: gateILim,   ch0_settle: gateSettle, ch0_sweep_type: "voltage",
+    ch1_resource: drainSrc, ch1_ch: drainCh,
+    ch1_v_start: drainVce, ch1_v_step: 1, ch1_v_stop: drainVce,  // single value → one outer step
+    ch1_i_limit: drainILim, ch1_settle: drainSettle, ch1_sweep_type: "voltage",
+    ch1_v_compliance: 5.0,
+  };
+
+  POST("/api/automation/run", { test_id: "transfer", params, output_path: state.outputPath || "" })
+    .catch(e => {
+      toast("Failed to start Transfer Characteristic: " + e.message, "error");
+      tsTestFinished(e.message, null);
+    });
+}
+
+// ── IV Canvas chart ─────────────────────────────────────────────────
+function ivChartAddPoint(cols, row) {
+  if (!_ivChart.cols.length && cols && cols.length) {
+    _ivChart.cols = cols;
+    // Nested 2-ch columns: ["v_outer_V", "v_inner_V", "I_C"/"I"] + optional "I_B"
+    _ivChart.gIdx  = 0;
+    _ivChart.xIdx  = Math.min(1, cols.length - 1);
+    _ivChart.yIdx  = Math.min(2, cols.length - 1);
+    _ivChart.ibIdx = cols.indexOf("I_B");   // -1 if not present (FET mode)
+    _ivChartPopulateAxisSelectors();
+  }
+
+  const g = row[_ivChart.gIdx];
+  const x = row[_ivChart.xIdx];
+  const y = row[_ivChart.yIdx];
+  if (x == null || y == null) return;
+
+  if (g !== _ivChart.currentGateV) {
+    _ivChart.currentGateV = g;
+    const ib = (_ivChart.ibIdx >= 0 && row[_ivChart.ibIdx] != null)
+      ? +row[_ivChart.ibIdx] : null;
+    _ivChart.curves.push({ gateV: g, ib, points: [] });
+  }
+  if (_ivChart.curves.length) {
+    const cur = _ivChart.curves[_ivChart.curves.length - 1];
+    // Capture the first valid I_B measurement for this curve (may arrive on any row)
+    if (cur.ib == null && _ivChart.ibIdx >= 0 && row[_ivChart.ibIdx] != null) {
+      cur.ib = +row[_ivChart.ibIdx];
+    }
+    cur.points.push({ x: +x, y: +y });
+  }
+  ivChartDraw();
+}
+
+function _ivChartPopulateAxisSelectors() {
+  const xSel = document.getElementById("ts-x-sel");
+  const ySel = document.getElementById("ts-y-sel");
+  const row  = document.getElementById("ts-axis-row");
+  if (!xSel || !ySel) return;
+  const opts = _ivChart.cols.map((c, i) =>
+    `<option value="${i}">${escHtml(c)}</option>`).join("");
+  xSel.innerHTML = opts;
+  ySel.innerHTML = opts;
+  xSel.value = String(_ivChart.xIdx);
+  ySel.value = String(_ivChart.yIdx);
+  if (row) row.style.display = "";
+}
+
+function tsUpdateAxes() {
+  _ivChart.xIdx = parseInt(document.getElementById("ts-x-sel")?.value  || "1");
+  _ivChart.yIdx = parseInt(document.getElementById("ts-y-sel")?.value  || "2");
+  ivChartDraw();
+}
+
+function tsClearChart() {
+  _ivChart.curves       = [];
+  _ivChart.currentGateV = null;
+  _ivChart.cols         = [];
+  _ivChart.gIdx         = 0;
+  _ivChart.xIdx         = 1;
+  _ivChart.yIdx         = 2;
+  _ivChart.ibIdx        = -1;
+  _ivChart.status       = "idle";
+  _ivChart.view         = null;
+  document.getElementById("ts-zoom-reset-btn").style.display = "none";
+  const row = document.getElementById("ts-axis-row");
+  if (row) row.style.display = "none";
+  const footer = document.getElementById("ts-chart-footer");
+  if (footer) footer.textContent = "Ready — configure and press Run";
+  ivChartDraw();
+}
+
+// ── FET / BJT label sets ────────────────────────────────────────────
+const _DEV_LABELS = {
+  fet: { drain: "Drain",     gate: "Gate",  x: "V_DS", y: "I_D", g: "V_GS" },
+  bjt: { drain: "Collector", gate: "Base",  x: "V_CE", y: "I_C", g: "V_BE" },
+};
+function _ivDevLabels() { return _DEV_LABELS[_ivChart.devType] || _DEV_LABELS.fet; }
+
+function ivSetDevType(type) {
+  _ivChart.devType = type;
+  const seg = document.getElementById("iv-devtype-seg");
+  if (seg) seg.querySelectorAll(".dcsw-seg-btn").forEach((b, i) => {
+    b.classList.toggle("active", (i === 0 && type === "fet") || (i === 1 && type === "bjt"));
+  });
+  const lb = _ivDevLabels();
+  // Update IV Curve card headers
+  const hdrD = document.getElementById("iv-hdr-drain");
+  if (hdrD) hdrD.textContent = lb.drain;
+  const hdrG = document.getElementById("iv-hdr-gate");
+  if (hdrG) hdrG.textContent = lb.gate;
+  // Update Transfer Characteristic card headers
+  const tcLb = (_PLOT_LABELS.transfer[type] || _PLOT_LABELS.transfer.bjt);
+  const tcHdrD = document.getElementById("tc-hdr-drain");
+  if (tcHdrD) tcHdrD.textContent = `${tcLb.drain} / ${tcLb.drain === "Collector" ? "Collector" : "Drain"} — fixed values`;
+  const tcHdrG = document.getElementById("tc-hdr-gate");
+  if (tcHdrG) tcHdrG.textContent = `${tcLb.gate} / ${tcLb.gate === "Base" ? "Base" : "Gate"} — sweep`;
+  // Update TC gate defaults for FET (wider sweep range)
+  const tcGateStop = document.getElementById("tc-gate-vstop");
+  if (tcGateStop) tcGateStop.value = type === "fet" ? "5" : "0.8";
+  const tcGateStep = document.getElementById("tc-gate-vstep");
+  if (tcGateStep) tcGateStep.value = type === "fet" ? "0.1" : "0.01";
+  // Update TC drain bias label (V_CE or V_DS) and default value
+  const tcDrainVLbl = document.getElementById("tc-drain-v-label");
+  if (tcDrainVLbl) tcDrainVLbl.textContent = tcLb.g; // g = "V_CE" or "V_DS"
+  const tcDrainVce = document.getElementById("tc-drain-vce");
+  if (tcDrainVce) tcDrainVce.value = type === "fet" ? "5" : "5";
+  // CC/CV toggle: only visible for BJT on IV Curve
+  const gateSeg = document.getElementById("iv-gate-mode-seg");
+  if (gateSeg) gateSeg.style.display = type === "bjt" ? "" : "none";
+  ivSetGateMode(type === "bjt" ? _ivChart.gateMode : "cv");
+  tsSyncMeterCh();
+  tsSyncTcMeterCh();
+  ivChartDraw();
+}
+
+function ivSetGateMode(mode) {
+  _ivChart.gateMode = mode;
+  const isCc = mode === "cc";
+  const seg  = document.getElementById("iv-gate-mode-seg");
+  if (seg) seg.querySelectorAll(".dcsw-seg-btn").forEach((b, i) => {
+    b.classList.toggle("active", (i === 0 && isCc) || (i === 1 && !isCc));
+  });
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set("iv-gate-start-label", isCc ? "I Start"  : "V Start");
+  set("iv-gate-stop-label",  isCc ? "I Stop"   : "V Stop");
+  set("iv-gate-step-label",  isCc ? "I Step"   : "V Step");
+  set("iv-gate-lim-label",   isCc ? "V Comp."  : "I Limit");
+  set("iv-gate-start-unit",  isCc ? "mA" : "V");
+  set("iv-gate-stop-unit",   isCc ? "mA" : "V");
+  set("iv-gate-step-unit",   isCc ? "mA" : "V");
+  set("iv-gate-lim-unit",    isCc ? "V"  : "A");
+  // Apply defaults when switching modes
+  if (isCc) {
+    document.getElementById("iv-gate-vstart").value = "0";
+    document.getElementById("iv-gate-vstop").value  = "5";    // mA
+    document.getElementById("iv-gate-vstep").value  = "1";    // mA — most bench PSUs min step
+    document.getElementById("iv-gate-ilim").value   = "5";    // V compliance
+    document.getElementById("iv-gate-vstep").step   = "0.5";
+  } else {
+    document.getElementById("iv-gate-vstart").value = "0";
+    document.getElementById("iv-gate-vstop").value  = "4";
+    document.getElementById("iv-gate-vstep").value  = "1";
+    document.getElementById("iv-gate-ilim").value   = "0.1";
+    document.getElementById("iv-gate-vstep").step   = "0.5";
+  }
+}
+
+function tsResetZoom() {
+  _ivChart.view = null;
+  document.getElementById("ts-zoom-reset-btn").style.display = "none";
+  ivChartDraw();
+}
+
+function _ivSetView(v) {
+  _ivChart.view = v;
+  document.getElementById("ts-zoom-reset-btn").style.display = v ? "" : "none";
+  ivChartDraw();
+}
+
+function _ivGetCurrentBounds() {
+  if (_ivChart.view) return { ..._ivChart.view };
+  const allPts = _ivChart.curves.flatMap(c => c.points);
+  if (!allPts.length) return { xMin: 0, xMax: 1, yMin: 0, yMax: 1 };
+  let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
+  for (const p of allPts) {
+    xMin = Math.min(xMin, p.x); xMax = Math.max(xMax, p.x);
+    yMin = Math.min(yMin, p.y); yMax = Math.max(yMax, p.y);
+  }
+  if (xMin === xMax) { xMin -= 0.5; xMax += 0.5; }
+  if (yMin === yMax) { const d = Math.abs(yMin) * 0.5 || 0.5; yMin -= d; yMax += d; }
+  const xT = _niceTicks(xMin, xMax, 6);
+  const yT = _niceTicks(yMin, yMax, 5);
+  return { xMin: xT[0], xMax: xT[xT.length - 1], yMin: yT[0], yMax: yT[yT.length - 1] };
+}
+
+function _ivChartInitEvents(canvas) {
+  const ML = () => 64, MR = () => 18, MT = () => 14, MB = () => 44;
+
+  canvas.addEventListener("wheel", e => {
+    e.preventDefault();
+    // Disable zoom during live sweep — accidental scrolling freezes auto-scale
+    if (_ivChart.status === "running") return;
+    if (!_ivChart.curves.some(c => c.points.length)) return;
+    const rect  = canvas.getBoundingClientRect();
+    const mx    = e.clientX - rect.left;
+    const my    = e.clientY - rect.top;
+    const pw    = canvas.offsetWidth  - ML() - MR();
+    const ph    = canvas.offsetHeight - MT() - MB();
+    if (mx < ML() || mx > ML() + pw || my < MT() || my > MT() + ph) return;
+    const b = _ivGetCurrentBounds();
+    const factor   = e.deltaY > 0 ? 1.18 : 1 / 1.18;
+    const xRatio   = (mx - ML()) / pw;
+    const yRatio   = 1 - (my - MT()) / ph;
+    const xCenter  = b.xMin + xRatio * (b.xMax - b.xMin);
+    const yCenter  = b.yMin + yRatio * (b.yMax - b.yMin);
+    const newXSpan = (b.xMax - b.xMin) * factor;
+    const newYSpan = (b.yMax - b.yMin) * factor;
+    _ivSetView({
+      xMin: xCenter - xRatio         * newXSpan,
+      xMax: xCenter + (1 - xRatio)   * newXSpan,
+      yMin: yCenter - yRatio         * newYSpan,
+      yMax: yCenter + (1 - yRatio)   * newYSpan,
+    });
+  }, { passive: false });
+
+  canvas.addEventListener("mousedown", e => {
+    if (e.button !== 0) return;
+    // Disable drag during live sweep — same reason as wheel above
+    if (_ivChart.status === "running") return;
+    if (!_ivChart.curves.some(c => c.points.length)) return;
+    _ivDrag = { startX: e.clientX, startY: e.clientY, bounds: _ivGetCurrentBounds() };
+    canvas.classList.add("dragging");
+  });
+
+  canvas.addEventListener("mousemove", e => {
+    if (!_ivDrag) return;
+    const pw = canvas.offsetWidth  - 64 - 18;
+    const ph = canvas.offsetHeight - 14 - 44;
+    const b  = _ivDrag.bounds;
+    const dx = -(e.clientX - _ivDrag.startX) / pw * (b.xMax - b.xMin);
+    const dy =  (e.clientY - _ivDrag.startY) / ph * (b.yMax - b.yMin);
+    _ivSetView({ xMin: b.xMin + dx, xMax: b.xMax + dx, yMin: b.yMin + dy, yMax: b.yMax + dy });
+  });
+
+  const endDrag = () => { _ivDrag = null; canvas.classList.remove("dragging"); };
+  canvas.addEventListener("mouseup",    endDrag);
+  canvas.addEventListener("mouseleave", endDrag);
+
+  canvas.addEventListener("dblclick", tsResetZoom);
+}
+
+function tsExportImage() {
+  const c = document.getElementById("iv-canvas");
+  if (!c || !_ivChart.curves.some(cv => cv.points.length)) {
+    toast("No chart data to export", "error"); return;
+  }
+  const prefix = _tsActivePlot === "transfer" ? "transfer_char" : "static_char";
+  const dataUrl = c.toDataURL("image/png");
+  POST("/api/plot/save-image", { filename: prefix, data: dataUrl, output_path: state.outputPath || "" })
+    .then(r => toast(`Saved → ${r.path}`, "ok"))
+    .catch(e => toast("Image save failed: " + e.message, "error"));
+}
+
+function tsExportCSV() {
+  const curves = _ivChart.curves;
+  const cols   = _ivChart.cols;
+  if (!curves.some(cv => cv.points.length)) { toast("No data to export", "error"); return; }
+  const lb         = _plotLabels();
+  const gColName   = (_ivChart.cols[_ivChart.gIdx] || "");
+  const gIsCurrent = gColName.startsWith("i_") || gColName.endsWith("_A");
+  const gCol = (gIsCurrent || curves.some(c => c.ib != null)) ? "I_B_A" : lb.g;
+  const xCol = lb.x;
+  const yCol = lb.y;
+  let csv = `${gCol},${xCol},${yCol}\n`;
+  for (const curve of curves) {
+    const gVal = curve.ib != null ? curve.ib : curve.gateV;
+    for (const pt of curve.points) {
+      csv += `${gVal},${pt.x},${pt.y}\n`;
+    }
+  }
+  const fname = `iv_curve_${new Date().toISOString().slice(0,19).replace(/[T:]/g,"-")}.csv`;
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  const a   = document.createElement("a");
+  a.href     = url;
+  a.download = fname;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  toast(`Saved as ${fname}`, "ok");
+}
+
+function ivChartDraw() {
+  const c = document.getElementById("iv-canvas");
+  if (!c) return;
+  if (!_ivEventsAttached) { _ivChartInitEvents(c); _ivEventsAttached = true; }
+  const dpr = window.devicePixelRatio || 1;
+  const W   = c.offsetWidth;
+  const H   = c.offsetHeight;
+  if (W < 20 || H < 20) return;
+  if (c.width !== Math.round(W * dpr) || c.height !== Math.round(H * dpr)) {
+    c.width  = Math.round(W * dpr);
+    c.height = Math.round(H * dpr);
+  }
+  const ctx = c.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const ML = 64, MR = 18, MT = 14, MB = 44;
+  const pw = W - ML - MR;
+  const ph = H - MT - MB;
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(0,0,0,0.025)";
+  ctx.fillRect(ML, MT, pw, ph);
+
+  const curves = _ivChart.curves;
+  const cols   = _ivChart.cols;
+  const allPts = curves.flatMap(c => c.points);
+
+  if (!allPts.length) {
+    ctx.fillStyle    = "rgba(120,132,154,0.55)";
+    ctx.font         = "12px 'Inter', system-ui";
+    ctx.textAlign    = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(
+      _ivChart.status === "running" ? "Waiting for first measurement…" : "Run the sweep to see the IV curve",
+      ML + pw / 2, MT + ph / 2
+    );
+    return;
+  }
+
+  // Axis bounds: zoomed view, or auto-fit from data
+  let axMin, axMax, ayMin, ayMax;
+  if (_ivChart.view) {
+    ({ xMin: axMin, xMax: axMax, yMin: ayMin, yMax: ayMax } = _ivChart.view);
+  } else {
+    let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
+    for (const p of allPts) {
+      xMin = Math.min(xMin, p.x); xMax = Math.max(xMax, p.x);
+      yMin = Math.min(yMin, p.y); yMax = Math.max(yMax, p.y);
+    }
+    if (xMin === xMax) { xMin -= 0.5; xMax += 0.5; }
+    if (yMin === yMax) { const d = Math.abs(yMin) * 0.5 || 0.5; yMin -= d; yMax += d; }
+    const xT = _niceTicks(xMin, xMax, 6);
+    const yT = _niceTicks(yMin, yMax, 5);
+    axMin = xT[0]; axMax = xT[xT.length - 1];
+    ayMin = yT[0]; ayMax = yT[yT.length - 1];
+  }
+  const xTicks = _niceTicks(axMin, axMax, 6);
+  const yTicks = _niceTicks(ayMin, ayMax, 5);
+  const xRange = (axMax - axMin) || 1;
+  const yRange = (ayMax - ayMin) || 1;
+  const toX = v => ML + (v - axMin) / xRange * pw;
+  const toY = v => MT + ph - (v - ayMin) / yRange * ph;
+
+  // Grid
+  ctx.strokeStyle = "rgba(150,156,169,0.22)";
+  ctx.lineWidth   = 1;
+  for (const t of xTicks) { const x = toX(t); ctx.beginPath(); ctx.moveTo(x, MT); ctx.lineTo(x, MT + ph); ctx.stroke(); }
+  for (const t of yTicks) { const y = toY(t); ctx.beginPath(); ctx.moveTo(ML, y); ctx.lineTo(ML + pw, y); ctx.stroke(); }
+
+  // Border
+  ctx.strokeStyle = "rgba(120,132,154,0.4)";
+  ctx.lineWidth   = 1;
+  ctx.strokeRect(ML, MT, pw, ph);
+
+  // Tick labels
+  ctx.font         = "10px 'JetBrains Mono', monospace";
+  ctx.fillStyle    = "#78849a";
+  ctx.textAlign    = "center";
+  ctx.textBaseline = "top";
+  for (const t of xTicks) ctx.fillText(_fmtTick(t), toX(t), MT + ph + 5);
+  ctx.textAlign    = "right";
+  ctx.textBaseline = "middle";
+  for (const t of yTicks) ctx.fillText(_fmtTick(t), ML - 5, toY(t));
+
+  // Axis names
+  ctx.font         = "11px 'Inter', system-ui";
+  ctx.fillStyle    = "#48526a";
+  ctx.textAlign    = "center";
+  ctx.textBaseline = "alphabetic";
+  const _devLabels = _plotLabels();
+  // Always use physical quantity labels derived from active plot + device type
+  const xLabel = _devLabels.x;
+  const yLabel = _devLabels.y;
+  ctx.fillText(xLabel, ML + pw / 2, MT + ph + 36);
+  ctx.save();
+  ctx.translate(14, MT + ph / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText(yLabel, 0, 0);
+  ctx.restore();
+
+  // Clip to plot area
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(ML, MT, pw, ph);
+  ctx.clip();
+
+  // Draw each curve
+  for (let ci = 0; ci < curves.length; ci++) {
+    const curve = curves[ci];
+    const pts   = curve.points;
+    const color = _CURVE_COLORS[ci % _CURVE_COLORS.length];
+    if (!pts.length) continue;
+
+    // Line
+    if (pts.length > 1) {
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth   = 1.5;
+      ctx.lineJoin    = "round";
+      ctx.globalAlpha = 0.7;
+      ctx.moveTo(toX(pts[0].x), toY(pts[0].y));
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(toX(pts[i].x), toY(pts[i].y));
+      ctx.stroke();
+    }
+
+    // Dots
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = color;
+    for (const p of pts) {
+      ctx.beginPath();
+      ctx.arc(toX(p.x), toY(p.y), 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Live ring on last point of the active (last) curve
+    if (_ivChart.status === "running" && ci === curves.length - 1) {
+      const last = pts[pts.length - 1];
+      ctx.beginPath();
+      ctx.arc(toX(last.x), toY(last.y), 5.5, 0, Math.PI * 2);
+      ctx.strokeStyle = color;
+      ctx.lineWidth   = 1.5;
+      ctx.globalAlpha = 0.6;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  ctx.restore();
+
+  // Legend (top-right, inside plot area)
+  if (curves.length) {
+    const gLabel   = _ivDevLabels().g;
+    const gColName = (_ivChart.cols[_ivChart.gIdx] || "");
+    const gIsCurr  = gColName.startsWith("i_") || gColName.endsWith("_A");
+    ctx.font = "10px 'JetBrains Mono', monospace";
+    const rowH = 14, pad = 6, swW = 10;
+
+    const makeLbl = cv =>
+      (cv.ib != null) ? `I_B=${_fmtIb(cv.ib)}` :
+      gIsCurr         ? `I_B=${_fmtIb(cv.gateV)}` :
+                        `${gLabel}=${_fmtTick(cv.gateV)}V`;
+
+    // Fit as many rows as the plot height allows
+    const maxRows  = Math.max(1, Math.floor((ph - pad * 2) / rowH));
+    const rows     = Math.min(curves.length, maxRows);
+    let maxW = 0;
+    for (let ci = 0; ci < rows; ci++)
+      maxW = Math.max(maxW, ctx.measureText(makeLbl(curves[ci])).width);
+
+    const boxW = maxW + swW + pad * 3;
+    const boxH = rows * rowH + pad * 2;
+    const bx = ML + pw - boxW - 6;
+    const by = MT + 6;
+
+    ctx.fillStyle = "rgba(205,209,215,0.88)";
+    ctx.beginPath();
+    ctx.roundRect(bx, by, boxW, boxH, 4);
+    ctx.fill();
+
+    for (let ci = 0; ci < rows; ci++) {
+      const color = _CURVE_COLORS[ci % _CURVE_COLORS.length];
+      const ry    = by + pad + ci * rowH;
+      ctx.fillStyle = color;
+      ctx.fillRect(bx + pad, ry + 2, swW, rowH - 5);
+      ctx.fillStyle    = "#1a1d25";
+      ctx.textAlign    = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText(makeLbl(curves[ci]), bx + pad + swW + 5, ry + 1);
+    }
+    if (curves.length > rows) {
+      ctx.fillStyle    = "#78849a";
+      ctx.textBaseline = "top";
+      ctx.fillText(`+${curves.length - rows} more`, bx + pad, by + boxH + 2);
+    }
+  }
+}
+
+function _niceTicks(min, max, count) {
+  if (min === max) { min -= 0.5; max += 0.5; }
+  const range = max - min;
+  const rough = range / Math.max(count - 1, 1);
+  const mag   = Math.pow(10, Math.floor(Math.log10(Math.abs(rough) || 1)));
+  const norm  = rough / mag;
+  let step;
+  if      (norm < 1.5) step = 1;
+  else if (norm < 3.5) step = 2;
+  else if (norm < 7.5) step = 5;
+  else                  step = 10;
+  step *= mag;
+  const ticks = [];
+  let t = Math.floor(min / step) * step;
+  while (t <= max + step * 1e-9) {
+    ticks.push(Math.round(t / step) * step);
+    t += step;
+    if (ticks.length > 30) break;
+  }
+  return ticks;
+}
+
+function _fmtIb(v) {
+  if (v === 0) return "0 mA";
+  const av = Math.abs(v);
+  if (av < 1e-6)  return `${(v * 1e9).toFixed(0)} nA`;
+  if (av < 1e-3)  return `${(v * 1e6).toFixed(1)} µA`;
+  if (av < 1)     return `${(v * 1e3).toFixed(2)} mA`;
+  return `${v.toFixed(3)} A`;
+}
+
+function _fmtTick(v) {
+  if (v === 0) return "0";
+  const av = Math.abs(v);
+  if (av >= 1e4 || av < 1e-2) return v.toExponential(1);
+  if (av >= 100) return v.toFixed(0);
+  if (av >= 10)  return v.toFixed(1);
+  if (av >= 1)   return v.toFixed(2);
+  return v.toFixed(3);
+}
+
+window.addEventListener("resize", () => {
+  if (state.activeTab === "testspec") ivChartDraw();
+});
 
 // ── Init ──────────────────────────────────────────────────────────
 (async () => { await loadWorkbenches(); })();
