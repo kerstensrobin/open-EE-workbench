@@ -36,7 +36,7 @@ python core/nachoVisa.py --fix-udev   # then re-plug USB instruments
 |---|---|
 | **Workbench GUI** | Instrument cards with live controls for scope, PSU, AWG, and DMM. Save / load / reset instrument state snapshots. Unrecognised instruments can be manually assigned a family. |
 | **Automation** | Parametric tests: DC sweep (single / simultaneous / nested), PSU interrupt transient, AC frequency sweep, DMM logger. |
-| **Plot Specific** | BJT / FET characterisation — Static Characteristic (IV Curve) and Transfer Characteristic with live canvas plots. |
+| **Plot Specific** | Purpose-built tests that produce specific, well-defined plots — the kind that appear in a component datasheet. Currently: Static Characteristic (IV Curve) and Transfer Characteristic for BJT / FET. |
 | **Sandbox** | Build arbitrary test sequences with a no-code column-based pipeline editor. |
 | **CLI scripts** | Standalone Python scripts for screenshots, sweeps, and waveform analysis. |
 
@@ -65,7 +65,7 @@ To add a new instrument, add an entry to `core/eewBackbone.json` — no code cha
 | [Getting Started](https://github.com/kerstensrobin/open-EE-workbench/wiki/Getting-Started) | Install, USB permissions, scan, launch |
 | [Workbench and Instruments](https://github.com/kerstensrobin/open-EE-workbench/wiki/Workbench-and-Instruments) | Workbench files, roles, instrument assignment |
 | [Automation Tests](https://github.com/kerstensrobin/open-EE-workbench/wiki/Automation-Tests) | Built-in parametric tests |
-| [Plot Specific](https://github.com/kerstensrobin/open-EE-workbench/wiki/Plot-Specific) | BJT / FET characterisation |
+| [Plot Specific](https://github.com/kerstensrobin/open-EE-workbench/wiki/Plot-Specific) | Datasheet-style plots — IV Curve, Transfer Characteristic, and future tests |
 | [Sandbox](https://github.com/kerstensrobin/open-EE-workbench/wiki/Sandbox) | Custom test builder |
 | [eewBackbone Reference](https://github.com/kerstensrobin/open-EE-workbench/wiki/eewBackbone-Reference) | SCPI database, adding instruments |
 | [CLI Scripts](https://github.com/kerstensrobin/open-EE-workbench/wiki/CLI-Scripts) | nachoVisa.py, setWorkbench.py, standalone scripts |
