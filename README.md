@@ -34,7 +34,7 @@ python core/nachoVisa.py --fix-udev   # then re-plug USB instruments
 
 | | |
 |---|---|
-| **Workbench GUI** | Instrument cards with live controls for scope, PSU, AWG, and DMM. Unrecognised instruments can be manually assigned a family. |
+| **Workbench GUI** | Instrument cards with live controls for scope, PSU, AWG, and DMM. Save / load / reset instrument state snapshots. Unrecognised instruments can be manually assigned a family. |
 | **Automation** | Parametric tests: DC sweep (single / simultaneous / nested), PSU interrupt transient, AC frequency sweep, DMM logger. |
 | **Plot Specific** | BJT / FET characterisation — Static Characteristic (IV Curve) and Transfer Characteristic with live canvas plots. |
 | **Sandbox** | Build arbitrary test sequences with a no-code column-based pipeline editor. |
