@@ -181,6 +181,16 @@
     #instrument-grid {
       display:grid; grid-template-columns:repeat(auto-fill, minmax(340px,1fr)); gap:16px; align-items:start;
     }
+    #report-issue-bar {
+      padding:16px 20px; border-top:1px solid var(--border); display:flex;
+      align-items:center; justify-content:center; flex-shrink:0;
+    }
+    #report-issue-btn {
+      display:inline-flex; align-items:center; gap:7px; background:transparent;
+      color:var(--text-faint); border:1px solid var(--border); border-radius:var(--radius);
+      padding:7px 16px; font:inherit; font-size:12px; cursor:pointer; transition:all .15s;
+    }
+    #report-issue-btn:hover { background:var(--surface3); color:var(--text-dim); border-color:var(--border2); }
 
     /* ── Cards ───────────────────────────────────────────────────── */
     .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; transition:border-color .2s; }
@@ -911,6 +921,15 @@
         </button>
       </div>
       <div id="instrument-grid" class="hidden"></div>
+
+      <div id="report-issue-bar">
+        <button id="report-issue-btn" onclick="reportIssue()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+          </svg>
+          Report issue / Instrument requests
+        </button>
+      </div>
     </div>
 
     <!-- ── Automation tab ─────────────────────────────────────────── -->
@@ -3289,6 +3308,19 @@ function getTestParams(testId) {
     if (el) params[p.id] = p.type==="number" ? parseFloat(el.value) : el.value;
   }
   return params;
+}
+
+async function reportIssue() {
+  const btn = document.getElementById("report-issue-btn");
+  btn.disabled = true;
+  try {
+    await POST("/api/report-issue", {});
+    toast("Opening GitHub — fill in the details and submit", "ok");
+  } catch(e) {
+    toast("Could not open issue page: " + e.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function browseOutputFolder() {

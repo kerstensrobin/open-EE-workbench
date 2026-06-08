@@ -1711,6 +1711,101 @@ def api_open_url():
         return jsonify({"error": str(exc)}), 500
 
 
+@flask_app.route("/api/report-issue", methods=["POST"])
+def api_report_issue():
+    """Build a pre-filled GitHub issue URL from current session state and open it."""
+    import platform
+    import urllib.parse
+
+    instruments = []
+    wb = _state.get("workbench")
+    if wb:
+        for instr in wb.get("instruments", []):
+            instruments.append({
+                "manufacturer": instr.get("manufacturer", ""),
+                "model":        instr.get("model", ""),
+                "serial":       instr.get("serial", ""),
+                "firmware":     instr.get("firmware", ""),
+                "connection":   instr.get("connection", ""),
+                "resource":     instr.get("resource", ""),
+                "family_id":    instr.get("family_id", "unknown"),
+                "type":         instr.get("type", ""),
+            })
+
+    try:
+        pyvisa_ver = pyvisa.__version__ if PYVISA_OK else "not installed"
+    except Exception:
+        pyvisa_ver = "unknown"
+
+    py_ver  = sys.version.split()[0]
+    os_info = platform.platform()
+    wb_name = _state.get("wb_name") or "none"
+    connected = _state.get("connected", False)
+
+    if instruments:
+        rows = ["| # | Manufacturer | Model | Serial | Firmware | Connection | Family ID |",
+                "|---|---|---|---|---|---|---|"]
+        for i, ins in enumerate(instruments, 1):
+            rows.append(
+                f"| {i} | {ins['manufacturer']} | {ins['model']} | {ins['serial']} "
+                f"| {ins['firmware']} | {ins['connection']} | {ins['family_id']} |"
+            )
+        instr_section = "\n".join(rows)
+    else:
+        instr_section = "_No instruments connected at time of report._"
+
+    body = f"""\
+## Description
+
+<!-- Describe what you were trying to do and what went wrong, or which instrument you'd like supported. -->
+
+## Steps to reproduce (if reporting a bug)
+
+1.
+2.
+3.
+
+## Expected behaviour
+
+## Actual behaviour
+
+---
+
+## Session snapshot
+
+**Workbench:** `{wb_name}`
+**Connected:** {connected}
+
+### Instruments
+
+{instr_section}
+
+### System
+
+| | |
+|---|---|
+| OS | `{os_info}` |
+| Python | `{py_ver}` |
+| PyVISA | `{pyvisa_ver}` |
+"""
+
+    first_model = instruments[0]["model"] if instruments else "Instrument"
+    title = f"[bug] {first_model} — <short description>"
+    url = (
+        "https://github.com/kerstensrobin/open-EE-workbench/issues/new"
+        f"?title={urllib.parse.quote(title)}"
+        f"&body={urllib.parse.quote(body)}"
+        "&labels=bug"
+    )
+
+    try:
+        import webbrowser
+        webbrowser.open(url)
+        return jsonify({"status": "ok"})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
 @flask_app.route("/api/open-folder", methods=["POST"])
 def api_open_folder():
     """Open a folder in the system file manager (Linux: xdg-open)."""
