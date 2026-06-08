@@ -53,17 +53,30 @@ python core/nachoVisa.py --debug                   # verbose output
 ### 4. Launch the GUI
 
 ```bash
-python app.py           # opens in a native window
-python app.py --browser # opens in your system browser
+./open-eew                  # Linux / macOS — native window
+./open-eew --browser        # open in system browser instead
+./open-eew gu128desk        # pre-load a named workbench
+open-eew.bat                # Windows
 ```
 
-The GUI shows a card for each instrument in the active workbench. From there you can control outputs, capture screenshots, and run the SCPI console. Two additional tabs are available:
+Or directly with Python from the project folder:
+
+```bash
+python app.py
+python app.py --browser
+```
+
+The GUI shows a card for each instrument in the active workbench. From there you can control outputs, capture screenshots, and run the SCPI console.
+
+Instruments that are not automatically recognised show an **Assign instrument…** button. Hover any recognised instrument card to reveal a **✎** edit button — both open a picker to manually assign a type, vendor, and family. The assignment is saved to the workbench file and takes effect immediately without reconnecting.
+
+Two additional tabs are available:
 
 - **Automation** — generic parametric tests: DC sweep (multi-channel, nested or simultaneous), PSU interrupt transient capture, AC frequency sweep, DMM logger, waveform analysis. Results are saved as CSV to `./results/`.
 - **Plot Specific** — purpose-built transistor characterisation tests with live canvas plots:
   - *Static Characteristic (IV Curve)* — sweeps V_CE / V_DS, parameterised by base current (CC mode) or gate voltage. Plots a family of I_C / I_D curves.
   - *Transfer Characteristic* — sweeps V_BE / V_GS at a fixed collector/drain bias. Plots I_C / I_D vs gate/base voltage.
-  - FET / BJT mode toggle; scroll-to-zoom and drag-to-pan after the run; PNG and CSV export to `./results/`.
+  - FET / BJT mode toggle; Y-axis fixed to 0 – I_limit during sweep for stable display; **⊡ Auto** button to fit to data after the run; scroll-to-zoom and drag-to-pan; PNG and CSV export to `./results/`.
 - **Sandbox** — build custom tests with a column-based pipeline editor. See [Building custom tests](#building-custom-tests) below.
 
 ---
@@ -253,13 +266,13 @@ Saved in `workbenches/<name>.json`. Each entry records:
 | Type | Families |
 |---|---|
 | Oscilloscope | 25 |
-| AWG / Function generator | 14 |
+| AWG / Function generator | 15 |
 | Power supply | 15 |
 | Multimeter | 9 |
 | SMU | 3 |
 | Electronic load | 2 |
 
-**68 families total across 14 vendors:** AIM-TTI, BK Precision, Fluke, GW INSTEK, Hantek, Keithley, Keysight, Korad, OWON, Rigol, Rohde & Schwarz, Siglent, Tektronix, Teledyne.
+**69 families total across 15 vendors:** AIM-TTI, Agilent, BK Precision, Fluke, GW INSTEK, Hantek, Keithley, Keysight, Korad, OWON, Rigol, Rohde & Schwarz, Siglent, Tektronix, Teledyne.
 
 To add a new instrument: add an entry to `core/eewBackbone.json` with `id`, `type`, `patterns` (IDN substrings), and `commands`. No code changes needed — `classify()` picks it up automatically. Families can declare `"inherits": "parent_id"` to reuse a parent's command set with selective overrides.
 
