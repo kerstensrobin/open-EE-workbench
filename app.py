@@ -1039,6 +1039,243 @@ def api_info():
     return jsonify({"nachovisa_path": str(ROOT / "core" / "nachoVisa.py")})
 
 
+# ── Bench state save / load / reset ───────────────────────────────────────────
+
+_STATES_DIR = ROOT / "workbench_states"
+
+
+def _states_dir() -> Path:
+    _STATES_DIR.mkdir(exist_ok=True)
+    return _STATES_DIR
+
+
+def _safe_query(res, fam, op, **kwargs):
+    """Run a backbone query, return stripped string or None on any failure."""
+    try:
+        steps = get_command(fam, op, **kwargs)
+        result = _run_steps(res, steps)
+        return result.strip() if isinstance(result, str) else None
+    except Exception:
+        return None
+
+
+def _capture_psu(res, fam, instr: dict) -> dict:
+    outputs = []
+    for ch in range(1, 5):
+        v = _safe_query(res, fam, "set_voltage",       ch=ch, value="?")
+        i = _safe_query(res, fam, "set_current_limit", ch=ch, value="?")
+        if v is None and i is None:
+            break
+        try: v = round(float(v), 4) if v else 0.0
+        except ValueError: v = 0.0
+        try: i = round(float(i), 4) if i else 0.5
+        except ValueError: i = 0.5
+        outputs.append({"channel": ch, "voltage": v, "current_limit": i, "enabled": False})
+    return {"type": "psu", "model": instr.get("model", ""), "outputs": outputs}
+
+
+def _capture_awg(res, fam, instr: dict) -> dict:
+    channels = []
+    for ch in range(1, 3):
+        func   = _safe_query(res, fam, "set_function",  ch=ch, func="?")
+        freq   = _safe_query(res, fam, "set_frequency", ch=ch, freq="?")
+        amp    = _safe_query(res, fam, "set_amplitude", ch=ch, amp="?")
+        offset = _safe_query(res, fam, "set_offset",    ch=ch, offset="?")
+        if func is None and freq is None:
+            break
+        try: freq   = round(float(freq),   6) if freq   else 1000.0
+        except ValueError: freq = 1000.0
+        try: amp    = round(float(amp),    6) if amp    else 1.0
+        except ValueError: amp = 1.0
+        try: offset = round(float(offset), 6) if offset else 0.0
+        except ValueError: offset = 0.0
+        channels.append({
+            "channel": ch,
+            "function":       (func or "SIN").upper(),
+            "frequency":      freq,
+            "amplitude":      amp,
+            "amplitude_unit": "VPP",
+            "offset":         offset,
+            "enabled":        False,
+        })
+    return {"type": "awg", "model": instr.get("model", ""), "channels": channels}
+
+
+@flask_app.route("/api/bench/states")
+def api_bench_states():
+    states = []
+    for p in sorted(_states_dir().glob("*.json")):
+        try:
+            data = _json.loads(p.read_text(encoding="utf-8"))
+            states.append({
+                "name":     p.stem,
+                "saved_at": data.get("saved_at", ""),
+                "summary":  data.get("summary", ""),
+            })
+        except Exception:
+            pass
+    return jsonify({"states": states})
+
+
+@flask_app.route("/api/bench/state/save", methods=["POST"])
+def api_bench_state_save():
+    d    = request.json or {}
+    name = (d.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "name required"}), 400
+
+    wb = _state.get("workbench")
+    if not wb:
+        return jsonify({"error": "No workbench loaded"}), 400
+
+    instruments = {}
+    summary_parts = []
+    for instr in wb.get("_unique", []):
+        rstr = instr.get("resource", "")
+        res  = _state["resources"].get(rstr)
+        fam  = _state["families"].get(rstr)
+        if not res or not fam:
+            continue
+        itype = instr.get("type", "")
+        if itype == "psu":
+            instruments[rstr] = _capture_psu(res, fam, instr)
+            summary_parts.append(f"PSU {instr.get('model','')}")
+        elif itype == "awg":
+            instruments[rstr] = _capture_awg(res, fam, instr)
+            summary_parts.append(f"AWG {instr.get('model','')}")
+
+    if not instruments:
+        return jsonify({"error": "No supported instruments connected (PSU / AWG)"}), 400
+
+    import datetime
+    payload = {
+        "name":      name,
+        "saved_at":  datetime.datetime.now().isoformat(timespec="seconds"),
+        "summary":   ", ".join(summary_parts),
+        "instruments": instruments,
+    }
+    path = _states_dir() / f"{name}.json"
+    path.write_text(_json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    _log(f"✓ Bench state saved: {name}")
+    return jsonify({"status": "saved", "name": name})
+
+
+@flask_app.route("/api/bench/state/load", methods=["POST"])
+def api_bench_state_load():
+    d    = request.json or {}
+    name = (d.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "name required"}), 400
+
+    path = _states_dir() / f"{name}.json"
+    if not path.exists():
+        return jsonify({"error": f"State {name!r} not found"}), 404
+
+    try:
+        payload = _json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+    applied, skipped = [], []
+    for rstr, cfg in payload.get("instruments", {}).items():
+        res = _state["resources"].get(rstr)
+        fam = _state["families"].get(rstr)
+        if not res or not fam:
+            skipped.append(rstr)
+            continue
+        itype = cfg.get("type", "")
+        try:
+            if itype == "psu":
+                for out in cfg.get("outputs", []):
+                    ch = out["channel"]
+                    _run_steps(res, get_command(fam, "set_voltage",
+                        ch=ch, value=f"{out['voltage']:.4f}"))
+                    _run_steps(res, get_command(fam, "set_current_limit",
+                        ch=ch, value=f"{out['current_limit']:.4f}"))
+                    cmd = "output_on" if out.get("enabled") else "output_off"
+                    try: _run_steps(res, get_command(fam, cmd, ch=ch))
+                    except KeyError: pass
+                applied.append(rstr)
+            elif itype == "awg":
+                for ch_cfg in cfg.get("channels", []):
+                    ch = ch_cfg["channel"]
+                    try:
+                        _run_steps(res, get_command(fam, "apply",
+                            ch=ch, func=ch_cfg.get("function", "SIN"),
+                            freq=ch_cfg.get("frequency", 1000),
+                            amp=ch_cfg.get("amplitude", 1.0),
+                            offset=ch_cfg.get("offset", 0.0)))
+                    except KeyError:
+                        # apply not available — set params individually
+                        for op, kw in [
+                            ("set_function",  {"func":   ch_cfg.get("function", "SIN")}),
+                            ("set_frequency", {"freq":   ch_cfg.get("frequency", 1000)}),
+                            ("set_amplitude", {"amp":    ch_cfg.get("amplitude", 1.0)}),
+                            ("set_offset",    {"offset": ch_cfg.get("offset", 0.0)}),
+                        ]:
+                            try: _run_steps(res, get_command(fam, op, ch=ch, **kw))
+                            except KeyError: pass
+                    cmd = "output_on" if ch_cfg.get("enabled") else "output_off"
+                    try: _run_steps(res, get_command(fam, cmd, ch=ch))
+                    except KeyError: pass
+                applied.append(rstr)
+        except Exception as exc:
+            _log(f"⚠ state load {rstr}: {exc}")
+            skipped.append(rstr)
+
+    _log(f"✓ Bench state loaded: {name} ({len(applied)} applied, {len(skipped)} skipped)")
+    return jsonify({"status": "loaded", "applied": len(applied), "skipped": len(skipped)})
+
+
+@flask_app.route("/api/bench/state/delete", methods=["POST"])
+def api_bench_state_delete():
+    name = ((request.json or {}).get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "name required"}), 400
+    path = _states_dir() / f"{name}.json"
+    if path.exists():
+        path.unlink()
+    return jsonify({"status": "deleted"})
+
+
+@flask_app.route("/api/bench/reset", methods=["POST"])
+def api_bench_reset():
+    wb = _state.get("workbench")
+    if not wb:
+        return jsonify({"error": "No workbench loaded"}), 400
+    count = 0
+    for instr in wb.get("_unique", []):
+        rstr = instr.get("resource", "")
+        res  = _state["resources"].get(rstr)
+        fam  = _state["families"].get(rstr)
+        if not res or not fam:
+            continue
+        itype = instr.get("type", "")
+        try:
+            if itype == "psu":
+                for ch in range(1, 5):
+                    try:
+                        _run_steps(res, get_command(fam, "set_voltage",       ch=ch, value="0.0"))
+                        _run_steps(res, get_command(fam, "set_current_limit", ch=ch, value="0.1"))
+                        _run_steps(res, get_command(fam, "output_off",        ch=ch))
+                    except KeyError:
+                        break
+                count += 1
+            elif itype == "awg":
+                for ch in range(1, 3):
+                    try:
+                        _run_steps(res, get_command(fam, "output_off", ch=ch))
+                    except KeyError:
+                        break
+                try: _run_steps(res, get_command(fam, "reset"))
+                except KeyError: pass
+                count += 1
+        except Exception as exc:
+            _log(f"⚠ reset {rstr}: {exc}")
+    _log(f"✓ Bench reset ({count} instrument(s))")
+    return jsonify({"status": "reset", "count": count})
+
+
 _TYPE_TO_ROLE = {
     "scope": "scope", "psu": "psu", "awg": "generator",
     "dmm": "dmm", "load": "load", "smu": "smu",
