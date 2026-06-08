@@ -6,6 +6,8 @@ Built on PyVISA and PyVISA-py, with SCPI dialect coverage sourced from manufactu
 
 > Forever a work in progress.
 
+📖 **[Full documentation on the Wiki](https://github.com/kerstensrobin/open-EE-workbench/wiki)**
+
 ## Getting started
 
 ### 1. Install
