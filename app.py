@@ -1034,6 +1034,85 @@ def api_scan_save():
         return jsonify({"error": str(exc)}), 500
 
 
+@flask_app.route("/api/info")
+def api_info():
+    return jsonify({"nachovisa_path": str(ROOT / "core" / "nachoVisa.py")})
+
+
+_TYPE_TO_ROLE = {
+    "scope": "scope", "psu": "psu", "awg": "generator",
+    "dmm": "dmm", "load": "load", "smu": "smu",
+}
+
+
+@flask_app.route("/api/families")
+def api_families():
+    try:
+        from eewBackbone import _load
+        families = [
+            {
+                "id":     f["id"],
+                "vendor": f.get("vendor", "Unknown"),
+                "series": f.get("series", f["id"]),
+                "type":   f.get("type", "unknown"),
+            }
+            for f in _load()["families"]
+        ]
+        return jsonify({"families": families})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@flask_app.route("/api/workbench/assign", methods=["POST"])
+def api_assign_family():
+    d         = request.json or {}
+    resource  = (d.get("resource") or "").strip()
+    family_id = (d.get("family_id") or "").strip()
+    if not resource or not family_id:
+        return jsonify({"error": "resource and family_id required"}), 400
+    try:
+        idx = _family_index()
+        if family_id not in idx:
+            return jsonify({"error": f"Unknown family: {family_id}"}), 404
+        raw_fam  = idx[family_id]
+        new_type = raw_fam.get("type", "unknown")
+        new_role = (d.get("role") or "").strip() or _TYPE_TO_ROLE.get(new_type, new_type)
+
+        wb = _state.get("workbench")
+        if not wb:
+            return jsonify({"error": "No workbench loaded"}), 400
+
+        updated = None
+        for instr in wb.get("instruments", []):
+            if instr.get("resource") == resource:
+                instr.update(family_id=family_id, type=new_type, role=new_role)
+                updated = instr
+        for instr in wb.get("_unique", []):
+            if instr.get("resource") == resource:
+                instr.update(family_id=family_id, type=new_type, role=new_role)
+
+        if updated is None:
+            return jsonify({"error": "Instrument not found in workbench"}), 404
+
+        # Resolve and cache the family immediately so controls work without reconnect
+        resolved = _resolve_family(raw_fam)
+        with _lock:
+            _state["families"][resource] = resolved
+
+        # Persist to workbench file
+        wb_name = _state.get("wb_name")
+        if wb_name:
+            from workbench import WORKBENCH_DIR, _safe_name
+            path = os.path.join(WORKBENCH_DIR, f"{_safe_name(wb_name)}.json")
+            payload = {k: v for k, v in wb.items() if not k.startswith("_")}
+            with open(path, "w", encoding="utf-8") as f:
+                _json.dump(payload, f, indent=2, ensure_ascii=False)
+
+        return jsonify({"status": "ok", "instrument": updated})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
 # ── Automation ────────────────────────────────────────────────────────────────
 _auto_stop    = threading.Event()
 _auto_pause   = threading.Event()   # set = paused; runners call _pause_point()
@@ -1611,6 +1690,8 @@ def api_automation_run():
                         handle["fam"], "output_off", ch=cfg["ch"]))
                 except Exception:
                     pass
+                if v == 0:
+                    return  # output off = 0 A; some PSUs reject set_current 0
                 try:
                     _run_steps(handle["res"], get_command(
                         handle["fam"], "set_current_limit",

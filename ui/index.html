@@ -186,6 +186,9 @@
     .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; transition:border-color .2s; }
     .card:hover { border-color:var(--border2); }
     .card-header { display:flex; align-items:center; gap:10px; padding:12px 16px; background:var(--surface2); border-bottom:1px solid var(--border); }
+    .card-edit-btn { padding:2px 5px; font-size:10px; opacity:0; transition:opacity .15s; flex-shrink:0; }
+    .card:hover .card-edit-btn { opacity:0.55; }
+    .card-edit-btn:hover { opacity:1 !important; }
     .card-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
     .card-icon.scope { background:rgba(26,86,196,.14); color:var(--accent); }
     .card-icon.psu   { background:rgba(21,128,61,.14); color:var(--green); }
@@ -316,6 +319,15 @@
     .spinner { width:12px; height:12px; border:2px solid rgba(255,255,255,.2); border-top-color:currentColor; border-radius:50%; animation:spin .7s linear infinite; flex-shrink:0; }
     @keyframes spin { to{transform:rotate(360deg)} }
 
+    /* ── Assign modal ───────────────────────────────────────────── */
+    .assign-section { display:flex; flex-direction:column; gap:5px; }
+    .assign-lbl { font-size:11px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.06em; }
+    .assign-pills { display:flex; flex-wrap:wrap; gap:6px; }
+    .assign-pill { padding:5px 13px; border-radius:20px; border:1px solid var(--border2); background:var(--surface3); color:var(--text-dim); font-size:12px; cursor:pointer; transition:all .12s; }
+    .assign-pill:hover { border-color:var(--accent); color:var(--text); }
+    .assign-pill.active { border-color:var(--accent); background:rgba(26,86,196,.12); color:var(--accent); font-weight:600; }
+    .assign-sel { width:100%; background:var(--surface3); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font:inherit; font-size:12px; padding:6px 10px; outline:none; transition:border-color .12s; }
+    .assign-sel:focus { border-color:var(--accent); }
     /* ── Scan modal ──────────────────────────────────────────────── */
     .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.65); backdrop-filter:blur(4px); z-index:500; display:flex; align-items:center; justify-content:center; animation:fade-in .15s ease; }
     @keyframes fade-in { from{opacity:0} to{opacity:1} }
@@ -434,7 +446,7 @@
     }
     .test-card-title { font-weight:600; font-size:13px; color:var(--text); }
     .test-card-desc  { font-size:11px; color:var(--text-dim); margin-top:1px; }
-    .test-card-body  { padding:14px 16px; display:flex; flex-direction:column; gap:10px; }
+    .test-card-body  { padding:10px 16px; display:flex; flex-direction:column; gap:10px; }
 
     /* test parameters */
     .test-params { display:flex; flex-direction:column; gap:7px; }
@@ -591,8 +603,9 @@
       content:''; position:absolute; bottom:-1px; left:0; right:0;
       height:2px; background:var(--accent); border-radius:1px 1px 0 0;
     }
-    /* card directly under the sub-tab bar has no top radius */
-    .ts-subtab-bar + .test-card { border-radius:0 var(--radius-lg) var(--radius-lg) var(--radius-lg); }
+    /* tabbed card: subtab bar sits flush on top of whichever config card is active */
+    .ts-tabbed-card { display:flex; flex-direction:column; }
+    .ts-tabbed-card .test-card { border-radius:0 var(--radius-lg) var(--radius-lg) var(--radius-lg); }
     .ts-config-grid {
       display:grid; grid-template-columns:1fr 1fr; gap:8px 16px;
     }
@@ -1008,6 +1021,8 @@
 
       <div id="ts-layout" class="hidden">
 
+        <!-- Tabbed card: sub-tab strip + switchable config cards -->
+        <div class="ts-tabbed-card">
         <!-- Sub-tab strip + FET/BJT toggle -->
         <div class="ts-subtab-bar">
           <div class="ts-subtabs">
@@ -1211,6 +1226,46 @@
               <span>Curve accuracy depends on the instruments used. For reliable results, a calibrated SMU is recommended.</span>
             </div>
 
+            <!-- Drain / Collector (fixed bias) -->
+            <div class="psi-card">
+              <div class="psi-card-hdr psi-card-hdr-psu" id="tc-hdr-drain">Drain / Collector — bias</div>
+              <div class="ts-config-grid">
+                <div class="test-param-row ts-config-span2">
+                  <span class="test-param-label">Source</span>
+                  <div class="test-param-input-wrap">
+                    <select class="test-param-input sel" id="tc-drain-src"></select>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Channel</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="tc-drain-ch" value="1" min="1" max="4" step="1" oninput="tsSyncTcMeterCh()">
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">I Limit</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="tc-drain-ilim" value="0.5" step="0.1" min="0">
+                    <span class="test-param-unit">A</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label" id="tc-drain-v-label">V_CE</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="tc-drain-vce" value="5" step="0.5" min="0">
+                    <span class="test-param-unit">V</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Settle</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="tc-drain-settle" value="0.1" step="0.05" min="0.005">
+                    <span class="test-param-unit">s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- Gate / Base (inner, swept = X axis) -->
             <div class="psi-card">
               <div class="psi-card-hdr" id="tc-hdr-gate" style="color:var(--green);">Gate / Base — sweep</div>
@@ -1265,46 +1320,6 @@
               </div>
             </div>
 
-            <!-- Drain / Collector (fixed bias) -->
-            <div class="psi-card">
-              <div class="psi-card-hdr psi-card-hdr-psu" id="tc-hdr-drain">Drain / Collector — bias</div>
-              <div class="ts-config-grid">
-                <div class="test-param-row ts-config-span2">
-                  <span class="test-param-label">Source</span>
-                  <div class="test-param-input-wrap">
-                    <select class="test-param-input sel" id="tc-drain-src"></select>
-                  </div>
-                </div>
-                <div class="test-param-row">
-                  <span class="test-param-label">Channel</span>
-                  <div class="test-param-input-wrap">
-                    <input class="test-param-input" type="number" id="tc-drain-ch" value="1" min="1" max="4" step="1" oninput="tsSyncTcMeterCh()">
-                  </div>
-                </div>
-                <div class="test-param-row">
-                  <span class="test-param-label">I Limit</span>
-                  <div class="test-param-input-wrap">
-                    <input class="test-param-input" type="number" id="tc-drain-ilim" value="0.5" step="0.1" min="0">
-                    <span class="test-param-unit">A</span>
-                  </div>
-                </div>
-                <div class="test-param-row">
-                  <span class="test-param-label" id="tc-drain-v-label">V_CE</span>
-                  <div class="test-param-input-wrap">
-                    <input class="test-param-input" type="number" id="tc-drain-vce" value="5" step="0.5" min="0">
-                    <span class="test-param-unit">V</span>
-                  </div>
-                </div>
-                <div class="test-param-row">
-                  <span class="test-param-label">Settle</span>
-                  <div class="test-param-input-wrap">
-                    <input class="test-param-input" type="number" id="tc-drain-settle" value="0.1" step="0.05" min="0.005">
-                    <span class="test-param-unit">s</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <!-- Current Measurement -->
             <div class="psi-card">
               <div class="psi-card-hdr psi-card-hdr-scope">Current Measurement</div>
@@ -1333,7 +1348,8 @@
               <button class="btn btn-danger hidden" id="tc-stop-btn" onclick="stopTest()">■ Stop</button>
             </div>
           </div>
-        </div>
+        </div><!-- /ts-tc-card -->
+        </div><!-- /ts-tabbed-card -->
 
         <!-- Live chart panel -->
         <div id="ts-chart-panel">
@@ -1346,7 +1362,8 @@
               X <select class="ts-axis-sel" id="ts-x-sel" onchange="tsUpdateAxes()"></select>
               Y <select class="ts-axis-sel" id="ts-y-sel" onchange="tsUpdateAxes()"></select>
             </div>
-            <button class="btn btn-ghost" id="ts-zoom-reset-btn" style="font-size:11px;display:none;" onclick="tsResetZoom()">↺ Fit</button>
+            <button class="btn btn-ghost" id="ts-autoscale-btn"  style="font-size:11px;display:none;" onclick="tsAutoScaleChart()">⊡ Auto</button>
+            <button class="btn btn-ghost" id="ts-zoom-reset-btn" style="font-size:11px;display:none;" onclick="tsResetZoom()">↺ Reset</button>
             <button class="btn btn-ghost" style="font-size:11px;" onclick="tsClearChart()">Clear</button>
           </div>
           <canvas id="iv-canvas"></canvas>
@@ -1374,6 +1391,50 @@
 </div>
 
 <div id="toast-container"></div>
+
+<!-- ── Assign instrument modal ─────────────────────────────────── -->
+<div id="assign-modal" class="modal-overlay hidden">
+  <div class="modal" style="width:min(480px,95vw);">
+    <div class="modal-header">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+      </svg>
+      <span class="modal-title">Assign Instrument</span>
+      <button class="btn btn-ghost" style="padding:2px 7px;font-size:13px;" onclick="closeAssignModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:11px;color:var(--text-dim);font-family:var(--mono);word-break:break-all;" id="assign-resource-lbl"></div>
+
+      <div class="assign-section">
+        <div class="assign-lbl">Type</div>
+        <div id="assign-type-pills" class="assign-pills"></div>
+      </div>
+
+      <div class="assign-section">
+        <div class="assign-lbl">Vendor</div>
+        <select id="assign-vendor-sel" class="assign-sel" onchange="assignOnVendorChange()">
+          <option value="">— select type first —</option>
+        </select>
+      </div>
+
+      <div class="assign-section">
+        <div class="assign-lbl">Family / Model</div>
+        <select id="assign-family-sel" class="assign-sel" onchange="assignOnFamilyChange()">
+          <option value="">— select vendor first —</option>
+        </select>
+      </div>
+
+      <div class="assign-section">
+        <div class="assign-lbl">Role <span style="font-weight:400;color:var(--text-dim);font-size:10px;">(optional override)</span></div>
+        <input id="assign-role-inp" class="assign-sel" type="text" placeholder="auto" style="font-family:var(--mono);">
+      </div>
+    </div>
+    <div class="modal-footer" style="justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="closeAssignModal()">Cancel</button>
+      <button class="btn btn-primary" id="assign-confirm-btn" onclick="confirmAssign()" disabled>Assign</button>
+    </div>
+  </div>
+</div>
 
 <!-- ── Scan modal ─────────────────────────────────────────────────── -->
 <div id="scan-modal" class="modal-overlay hidden">
@@ -2009,6 +2070,7 @@ function buildScopeCard(instr) {
         <div class="card-title">Oscilloscope</div>
         <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
       </div>
+      <button class="btn btn-ghost card-edit-btn" title="Edit assignment" data-resource="${escHtml(instr.resource)}" data-family="${escHtml(instr.family_id||'')}" onclick="openAssignModal(this.dataset.resource,this.dataset.family)">✎</button>
       <div class="card-status-dot"></div>
     </div>
     <div class="card-body scope-controls">
@@ -2187,6 +2249,7 @@ function buildPSUCard(instr) {
         <div class="card-title">Power Supply</div>
         <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
       </div>
+      <button class="btn btn-ghost card-edit-btn" title="Edit assignment" data-resource="${escHtml(instr.resource)}" data-family="${escHtml(instr.family_id||'')}" onclick="openAssignModal(this.dataset.resource,this.dataset.family)">✎</button>
       <div class="card-status-dot"></div>
     </div>
     <div class="card-body">
@@ -2273,6 +2336,7 @@ function buildAWGCard(instr) {
         <div class="card-title">Waveform Generator</div>
         <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
       </div>
+      <button class="btn btn-ghost card-edit-btn" title="Edit assignment" data-resource="${escHtml(instr.resource)}" data-family="${escHtml(instr.family_id||'')}" onclick="openAssignModal(this.dataset.resource,this.dataset.family)">✎</button>
       <div class="card-status-dot"></div>
     </div>
     <div class="card-body awg-body">
@@ -2360,6 +2424,7 @@ function buildDMMCard(instr) {
         <div class="card-title">Multimeter</div>
         <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
       </div>
+      <button class="btn btn-ghost card-edit-btn" title="Edit assignment" data-resource="${escHtml(instr.resource)}" data-family="${escHtml(instr.family_id||'')}" onclick="openAssignModal(this.dataset.resource,this.dataset.family)">✎</button>
       <div class="card-status-dot"></div>
     </div>
     <div class="card-body dmm-body">
@@ -2399,6 +2464,7 @@ function dmmToggleContinuous(btn) {
 function buildGenericCard(instr) {
   const div=document.createElement("div");
   div.className="card"; div.dataset.type=instr.type||"unknown"; div.dataset.model=instr.model||"";
+  const hasFamily = !!instr.family_id;
   div.innerHTML=`
     <div class="card-header">
       <div class="card-icon scope" style="background:var(--surface4)">?</div>
@@ -2409,9 +2475,125 @@ function buildGenericCard(instr) {
       <div class="card-status-dot"></div>
     </div>
     <div class="card-body">
-      <p style="color:var(--text-dim);font-size:12px;">No control panel for type <code>${escHtml(instr.type||"")}</code>.</p>
+      ${hasFamily
+        ? `<p style="color:var(--text-dim);font-size:12px;">No control panel for type <code>${escHtml(instr.type||"")}</code>.</p>`
+        : `<p style="color:var(--text-dim);font-size:12px;margin-bottom:10px;">Instrument not recognised — assign a family to enable controls.</p>`
+      }
+      <button class="btn btn-ghost" style="font-size:11px;" data-resource="${escHtml(instr.resource)}" data-family="${escHtml(instr.family_id||'')}" onclick="openAssignModal(this.dataset.resource,this.dataset.family)">
+        ✎ ${hasFamily ? "Re-assign…" : "Assign instrument…"}
+      </button>
     </div>`;
   return div;
+}
+
+// ── Assign instrument modal ─────────────────────────────────────────
+let _assignResource = null;
+let _allFamilies    = [];
+
+const _TYPE_LABELS = { scope:"Scope", psu:"PSU", awg:"AWG / FGen", dmm:"DMM", load:"Load", smu:"SMU" };
+
+async function openAssignModal(resource, currentFamilyId = '') {
+  _assignResource = resource;
+  document.getElementById("assign-resource-lbl").textContent = resource;
+  document.getElementById("assign-type-pills").innerHTML     = "";
+  document.getElementById("assign-vendor-sel").innerHTML     = '<option value="">— select type first —</option>';
+  document.getElementById("assign-family-sel").innerHTML     = '<option value="">— select vendor first —</option>';
+  document.getElementById("assign-role-inp").value           = "";
+  document.getElementById("assign-confirm-btn").disabled     = true;
+
+  if (!_allFamilies.length) {
+    try {
+      const r = await GET("/api/families");
+      _allFamilies = r.families || [];
+    } catch(e) { toast("Could not load families: " + e.message, "error"); return; }
+  }
+
+  const types = [...new Set(_allFamilies.map(f => f.type))].sort();
+  const pills = document.getElementById("assign-type-pills");
+  for (const t of types) {
+    const b = document.createElement("button");
+    b.className    = "assign-pill";
+    b.textContent  = _TYPE_LABELS[t] || t;
+    b.dataset.type = t;
+    b.onclick = () => assignOnTypeSelect(t);
+    pills.appendChild(b);
+  }
+
+  document.getElementById("assign-modal").classList.remove("hidden");
+
+  // Pre-select current assignment if provided
+  if (currentFamilyId) {
+    const cur = _allFamilies.find(f => f.id === currentFamilyId);
+    if (cur) {
+      assignOnTypeSelect(cur.type);
+      document.getElementById("assign-vendor-sel").value = cur.vendor;
+      assignOnVendorChange();
+      document.getElementById("assign-family-sel").value = currentFamilyId;
+      assignOnFamilyChange();
+    }
+  }
+}
+
+function closeAssignModal() {
+  document.getElementById("assign-modal").classList.add("hidden");
+}
+
+function assignOnTypeSelect(type) {
+  document.querySelectorAll(".assign-pill").forEach(b =>
+    b.classList.toggle("active", b.dataset.type === type));
+
+  const vendors = [...new Set(
+    _allFamilies.filter(f => f.type === type).map(f => f.vendor)
+  )].sort();
+  const vSel = document.getElementById("assign-vendor-sel");
+  vSel.innerHTML = '<option value="">— select vendor —</option>'
+    + vendors.map(v => `<option value="${escHtml(v)}">${escHtml(v)}</option>`).join("");
+  document.getElementById("assign-family-sel").innerHTML = '<option value="">— select vendor first —</option>';
+  document.getElementById("assign-role-inp").placeholder = _defaultRole(type);
+  document.getElementById("assign-confirm-btn").disabled = true;
+}
+
+function assignOnVendorChange() {
+  const type   = document.querySelector(".assign-pill.active")?.dataset.type;
+  const vendor = document.getElementById("assign-vendor-sel").value;
+  if (!type || !vendor) return;
+
+  const families = _allFamilies.filter(f => f.type === type && f.vendor === vendor);
+  const fSel = document.getElementById("assign-family-sel");
+  fSel.innerHTML = '<option value="">— select model —</option>'
+    + families.map(f => `<option value="${escHtml(f.id)}">${escHtml(f.series)}</option>`).join("");
+  document.getElementById("assign-confirm-btn").disabled = true;
+}
+
+function assignOnFamilyChange() {
+  document.getElementById("assign-confirm-btn").disabled =
+    !document.getElementById("assign-family-sel").value;
+}
+
+function _defaultRole(type) {
+  return { scope:"scope", psu:"psu", awg:"generator", dmm:"dmm", load:"load", smu:"smu" }[type] || type;
+}
+
+async function confirmAssign() {
+  const resource  = _assignResource;
+  const family_id = document.getElementById("assign-family-sel").value;
+  const role      = document.getElementById("assign-role-inp").value.trim() || undefined;
+  if (!resource || !family_id) return;
+
+  const btn = document.getElementById("assign-confirm-btn");
+  btn.disabled = true; btn.textContent = "Assigning…";
+  try {
+    await POST("/api/workbench/assign", { resource, family_id, role });
+    closeAssignModal();
+    toast("Instrument assigned.", "success");
+    // Rebuild the instrument grid with updated workbench data
+    const wbName = state.workbench?.name || $wbSelect.value;
+    if (wbName) await onWorkbenchSelect(wbName);
+  } catch(e) {
+    toast("Assign failed: " + e.message, "error");
+  } finally {
+    btn.disabled = false; btn.textContent = "Assign";
+  }
 }
 
 // ── Keyboard shortcuts ─────────────────────────────────────────────
@@ -3326,11 +3508,16 @@ function buildScanInstrRow(instr,live) {
   return div;
 }
 
-function fixUdev() {
+async function fixUdev() {
   const out = document.getElementById("scan-udev-result");
   out.classList.remove("hidden");
   out.style.color = "var(--text-dim)";
-  out.textContent = "Run in your terminal:\n\npython core/nachoVisa.py --fix-udev\n\nThen replug your USB instruments.";
+  let path = "core/nachoVisa.py";
+  try {
+    const r = await fetch("/api/info");
+    if (r.ok) path = (await r.json()).nachovisa_path;
+  } catch (_) {}
+  out.textContent = `Run in your terminal:\n\npython ${path} --fix-udev\n\nThen replug your USB instruments.`;
 }
 
 async function saveScanWorkbench() {
@@ -4544,7 +4731,10 @@ const _ivChart = {
   yIdx:         2,     // current measurement — Y axis
   ibIdx:        -1,    // column index of measured I_B; -1 = not present
   status:       "idle",
-  view:         null,  // null = auto-fit; {xMin,xMax,yMin,yMax} = zoomed
+  view:         null,  // null = fixed 0..iLim range; {xMin,xMax,yMin,yMax} = zoomed/auto
+  iLim:         null,  // drain/collector current limit (A) — Y axis ceiling
+  xStart:       0,     // drain/gate sweep start — X axis floor
+  xLim:         null,  // drain/gate sweep stop  — X axis ceiling
   devType:      "bjt", // "fet" | "bjt" — controls axis/legend labels
   gateMode:     "cc",  // "cc" | "cv" — only meaningful when devType === "bjt"
 };
@@ -4666,6 +4856,15 @@ function tsRunIVCurve() {
   state.autoRunning = true;
   state.autoTestId  = "iv_curve";
 
+  // Drain (inner / CH0) — read first so iLim/xLim are set before chart reset
+  const drainSrc    = document.getElementById("iv-drain-src")?.value   || "";
+  const drainCh     = parseInt(document.getElementById("iv-drain-ch")?.value    || "1");
+  const drainVStart = parseFloat(document.getElementById("iv-drain-vstart")?.value || "0");
+  const drainVStop  = parseFloat(document.getElementById("iv-drain-vstop")?.value  || "10");
+  const drainVStep  = parseFloat(document.getElementById("iv-drain-vstep")?.value  || "0.2");
+  const drainILim   = parseFloat(document.getElementById("iv-drain-ilim")?.value   || "0.5");
+  const drainSettle = parseFloat(document.getElementById("iv-drain-settle")?.value || "0.05");
+
   // Reset chart
   _ivChart.curves       = [];
   _ivChart.currentGateV = null;
@@ -4676,7 +4875,11 @@ function tsRunIVCurve() {
   _ivChart.ibIdx        = -1;
   _ivChart.status       = "running";
   _ivChart.view         = null;
+  _ivChart.iLim         = drainILim;
+  _ivChart.xStart       = drainVStart;
+  _ivChart.xLim         = drainVStop;
   document.getElementById("ts-zoom-reset-btn").style.display = "none";
+  document.getElementById("ts-autoscale-btn").style.display  = "";
   document.getElementById("ts-axis-row").style.display = "none";
   document.getElementById("ts-chart-footer").textContent = "Running…";
   ivChartDraw();
@@ -4687,15 +4890,6 @@ function tsRunIVCurve() {
   if (prog) prog.classList.add("visible");
   document.getElementById("ts-prog-fill").style.width = "0%";
   document.getElementById("ts-prog-label").textContent = "Starting…";
-
-  // Drain (inner / CH0)
-  const drainSrc    = document.getElementById("iv-drain-src")?.value   || "";
-  const drainCh     = parseInt(document.getElementById("iv-drain-ch")?.value    || "1");
-  const drainVStart = parseFloat(document.getElementById("iv-drain-vstart")?.value || "0");
-  const drainVStop  = parseFloat(document.getElementById("iv-drain-vstop")?.value  || "10");
-  const drainVStep  = parseFloat(document.getElementById("iv-drain-vstep")?.value  || "0.2");
-  const drainILim   = parseFloat(document.getElementById("iv-drain-ilim")?.value   || "0.5");
-  const drainSettle = parseFloat(document.getElementById("iv-drain-settle")?.value || "0.05");
 
   // Gate (outer / CH1)
   const gateSrc    = document.getElementById("iv-gate-src")?.value   || "";
@@ -4800,21 +4994,7 @@ function tsRunTransfer() {
   state.autoRunning = true;
   state.autoTestId  = "transfer";
 
-  _ivChart.curves = []; _ivChart.currentGateV = null; _ivChart.cols = [];
-  _ivChart.gIdx = 0; _ivChart.xIdx = 1; _ivChart.yIdx = 2; _ivChart.ibIdx = -1;
-  _ivChart.status = "running"; _ivChart.view = null;
-  document.getElementById("ts-zoom-reset-btn").style.display = "none";
-  document.getElementById("ts-axis-row").style.display = "none";
-  document.getElementById("ts-chart-footer").textContent = "Running…";
-  ivChartDraw();
-
-  document.getElementById("tc-run-btn").classList.add("hidden");
-  document.getElementById("tc-stop-btn").classList.remove("hidden");
-  const prog = document.getElementById("tc-prog");
-  if (prog) prog.classList.add("visible");
-  document.getElementById("tc-prog-fill").style.width = "0%";
-  document.getElementById("tc-prog-label").textContent = "Starting…";
-
+  // Read params first so iLim/xLim are set before chart reset
   // Gate / Base — CH0, inner (swept = x-axis)
   const gateSrc    = document.getElementById("tc-gate-src")?.value   || "";
   const gateCh     = parseInt(document.getElementById("tc-gate-ch")?.value    || "1");
@@ -4830,6 +5010,25 @@ function tsRunTransfer() {
   const drainVce    = parseFloat(document.getElementById("tc-drain-vce")?.value    || "5");
   const drainILim   = parseFloat(document.getElementById("tc-drain-ilim")?.value   || "0.5");
   const drainSettle = parseFloat(document.getElementById("tc-drain-settle")?.value || "0.1");
+
+  _ivChart.curves = []; _ivChart.currentGateV = null; _ivChart.cols = [];
+  _ivChart.gIdx = 0; _ivChart.xIdx = 1; _ivChart.yIdx = 2; _ivChart.ibIdx = -1;
+  _ivChart.status = "running"; _ivChart.view = null;
+  _ivChart.iLim   = drainILim;
+  _ivChart.xStart = gateVStart;
+  _ivChart.xLim   = gateVStop;
+  document.getElementById("ts-zoom-reset-btn").style.display = "none";
+  document.getElementById("ts-autoscale-btn").style.display  = "";
+  document.getElementById("ts-axis-row").style.display = "none";
+  document.getElementById("ts-chart-footer").textContent = "Running…";
+  ivChartDraw();
+
+  document.getElementById("tc-run-btn").classList.add("hidden");
+  document.getElementById("tc-stop-btn").classList.remove("hidden");
+  const prog = document.getElementById("tc-prog");
+  if (prog) prog.classList.add("visible");
+  document.getElementById("tc-prog-fill").style.width = "0%";
+  document.getElementById("tc-prog-label").textContent = "Starting…";
 
   const mtrVal = document.getElementById("tc-meter")?.value  || "psu";
   const mtrCh  = parseInt(document.getElementById("tc-meter-ch")?.value || "2");
@@ -4925,7 +5124,11 @@ function tsClearChart() {
   _ivChart.ibIdx        = -1;
   _ivChart.status       = "idle";
   _ivChart.view         = null;
+  _ivChart.iLim         = null;
+  _ivChart.xStart       = 0;
+  _ivChart.xLim         = null;
   document.getElementById("ts-zoom-reset-btn").style.display = "none";
+  document.getElementById("ts-autoscale-btn").style.display  = "none";
   const row = document.getElementById("ts-axis-row");
   if (row) row.style.display = "none";
   const footer = document.getElementById("ts-chart-footer");
@@ -4955,9 +5158,9 @@ function ivSetDevType(type) {
   // Update Transfer Characteristic card headers
   const tcLb = (_PLOT_LABELS.transfer[type] || _PLOT_LABELS.transfer.bjt);
   const tcHdrD = document.getElementById("tc-hdr-drain");
-  if (tcHdrD) tcHdrD.textContent = `${tcLb.drain} / ${tcLb.drain === "Collector" ? "Collector" : "Drain"} — fixed values`;
+  if (tcHdrD) tcHdrD.textContent = `${tcLb.drain} — bias`;
   const tcHdrG = document.getElementById("tc-hdr-gate");
-  if (tcHdrG) tcHdrG.textContent = `${tcLb.gate} / ${tcLb.gate === "Base" ? "Base" : "Gate"} — sweep`;
+  if (tcHdrG) tcHdrG.textContent = `${tcLb.gate} — sweep`;
   // Update TC gate defaults for FET (wider sweep range)
   const tcGateStop = document.getElementById("tc-gate-vstop");
   if (tcGateStop) tcGateStop.value = type === "fet" ? "5" : "0.8";
@@ -5015,16 +5218,9 @@ function tsResetZoom() {
   ivChartDraw();
 }
 
-function _ivSetView(v) {
-  _ivChart.view = v;
-  document.getElementById("ts-zoom-reset-btn").style.display = v ? "" : "none";
-  ivChartDraw();
-}
-
-function _ivGetCurrentBounds() {
-  if (_ivChart.view) return { ..._ivChart.view };
+function tsAutoScaleChart() {
   const allPts = _ivChart.curves.flatMap(c => c.points);
-  if (!allPts.length) return { xMin: 0, xMax: 1, yMin: 0, yMax: 1 };
+  if (!allPts.length) return;
   let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
   for (const p of allPts) {
     xMin = Math.min(xMin, p.x); xMax = Math.max(xMax, p.x);
@@ -5034,6 +5230,24 @@ function _ivGetCurrentBounds() {
   if (yMin === yMax) { const d = Math.abs(yMin) * 0.5 || 0.5; yMin -= d; yMax += d; }
   const xT = _niceTicks(xMin, xMax, 6);
   const yT = _niceTicks(yMin, yMax, 5);
+  _ivSetView({ xMin: xT[0], xMax: xT[xT.length - 1], yMin: yT[0], yMax: yT[yT.length - 1] });
+}
+
+function _ivSetView(v) {
+  _ivChart.view = v;
+  document.getElementById("ts-zoom-reset-btn").style.display = v ? "" : "none";
+  ivChartDraw();
+}
+
+function _ivGetCurrentBounds() {
+  if (_ivChart.view) return { ..._ivChart.view };
+  // Fixed range: use configured sweep limits (same logic as ivChartDraw)
+  const allPts = _ivChart.curves.flatMap(c => c.points);
+  const xA = _ivChart.xStart ?? 0;
+  const xB = _ivChart.xLim   ?? (allPts.length ? Math.max(...allPts.map(p => p.x)) : 1);
+  const yB = _ivChart.iLim   ?? (allPts.length ? Math.max(...allPts.map(p => p.y)) : 1);
+  const xT = _niceTicks(xA, xB, 6);
+  const yT = _niceTicks(0,  yB, 5);
   return { xMin: xT[0], xMax: xT[xT.length - 1], yMin: yT[0], yMax: yT[yT.length - 1] };
 }
 
@@ -5171,20 +5385,16 @@ function ivChartDraw() {
     return;
   }
 
-  // Axis bounds: zoomed view, or auto-fit from data
+  // Axis bounds: zoomed/auto-fit view, or fixed 0..I_limit range
   let axMin, axMax, ayMin, ayMax;
   if (_ivChart.view) {
     ({ xMin: axMin, xMax: axMax, yMin: ayMin, yMax: ayMax } = _ivChart.view);
   } else {
-    let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
-    for (const p of allPts) {
-      xMin = Math.min(xMin, p.x); xMax = Math.max(xMax, p.x);
-      yMin = Math.min(yMin, p.y); yMax = Math.max(yMax, p.y);
-    }
-    if (xMin === xMax) { xMin -= 0.5; xMax += 0.5; }
-    if (yMin === yMax) { const d = Math.abs(yMin) * 0.5 || 0.5; yMin -= d; yMax += d; }
-    const xT = _niceTicks(xMin, xMax, 6);
-    const yT = _niceTicks(yMin, yMax, 5);
+    const xA = _ivChart.xStart ?? 0;
+    const xB = _ivChart.xLim   ?? (allPts.length ? Math.max(...allPts.map(p => p.x)) : 1);
+    const yB = _ivChart.iLim   ?? (allPts.length ? Math.max(...allPts.map(p => p.y)) : 1);
+    const xT = _niceTicks(xA, xB, 6);
+    const yT = _niceTicks(0,  yB, 5);
     axMin = xT[0]; axMax = xT[xT.length - 1];
     ayMin = yT[0]; ayMax = yT[yT.length - 1];
   }

@@ -812,6 +812,42 @@
       ]
     },
     {
+      "id": "agilent_33220a",
+      "vendor": "Agilent",
+      "series": "33220A / 33250A Waveform Generator (Agilent / HP)",
+      "type": "awg",
+      "patterns": [
+        "33220A",
+        "33250A"
+      ],
+      "commands": {
+        "reset": [
+          "*RST",
+          "*CLS"
+        ],
+        "apply": "APPL:{func} {freq},{amp},{offset}",
+        "set_function": {
+          "write": "FUNC {func}",
+          "query": "FUNC?"
+        },
+        "set_frequency": {
+          "write": "FREQ {freq}",
+          "query": "FREQ?"
+        },
+        "set_amplitude": {
+          "write": "VOLT {amp}",
+          "query": "VOLT?"
+        },
+        "set_amplitude_unit": "VOLT:UNIT {unit}",
+        "set_offset": {
+          "write": "VOLT:OFFS {offset}",
+          "query": "VOLT:OFFS?"
+        },
+        "output_on": "OUTP ON",
+        "output_off": "OUTP OFF"
+      }
+    },
+    {
       "id": "rigol_dg800",
       "vendor": "Rigol",
       "series": "DG800 / DG900 Series Waveform Generator",
@@ -1143,7 +1179,7 @@
     },
     {
       "id": "rs_rtc1000",
-      "vendor": "Rohde&Schwarz",
+      "vendor": "Rohde & Schwarz",
       "series": "RTC1000 Series",
       "type": "scope",
       "inherits": "rs_rtb2000",
@@ -1154,7 +1190,7 @@
     },
     {
       "id": "rs_rte1000",
-      "vendor": "Rohde&Schwarz",
+      "vendor": "Rohde & Schwarz",
       "series": "RTE1000 Series",
       "type": "scope",
       "inherits": "rs_rtb2000",
@@ -1170,7 +1206,7 @@
     },
     {
       "id": "rs_rto1000",
-      "vendor": "Rohde&Schwarz",
+      "vendor": "Rohde & Schwarz",
       "series": "RTO1000 Series",
       "type": "scope",
       "inherits": "rs_rte1000",
@@ -1340,7 +1376,7 @@
     },
     {
       "id": "rs_hmc804x",
-      "vendor": "Rohde&Schwarz",
+      "vendor": "Rohde & Schwarz",
       "series": "HMC8041 / HMC8042 / HMC8043 Power Supply",
       "type": "psu",
       "inherits": "keysight_edu36311a",
@@ -1672,7 +1708,7 @@
     },
     {
       "id": "rs_hmc8012",
-      "vendor": "Rohde&Schwarz",
+      "vendor": "Rohde & Schwarz",
       "series": "HMC8012 Digital Multimeter",
       "type": "dmm",
       "inherits": "keysight_34461a",
