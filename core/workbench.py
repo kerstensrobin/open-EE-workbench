@@ -10,9 +10,9 @@ Typical usage in a test script:
     psu   = open_by_role(rm, wb, "psu")
     dmm   = open_by_role(rm, wb, "dmm")
 
-    psu.dispatch("set_voltage", ch=1, value="5.0")
-    psu.dispatch("output_on", ch=1)
-    reading = dmm.dispatch("measure_vdc")
+    psu.scpi_dispatch("set_voltage", ch=1, value="5.0")
+    psu.scpi_dispatch("output_on", ch=1)
+    reading = dmm.scpi_dispatch("measure_vdc")
 """
 
 import json
@@ -25,35 +25,59 @@ WORKBENCH_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "
 
 
 class Instrument:
-    """A PyVISA resource bundled with its eewBackbone family.
+    """A connected instrument: PyVISA resource + its SCPI command set, kept together.
 
-    Attribute access is proxied to the underlying PyVISA resource, so
-    .write(), .query(), .read_raw(), .timeout etc. all work as normal.
-    Use .dispatch() to send eewBackbone operations instead of building
-    the get_command / loop manually.
+    open_by_role() returns one of these. The two things that previously had to be
+    tracked separately — the open connection and the family dict that says which
+    SCPI strings to send — are now one object.
+
+    Use scpi_dispatch() to send named operations (e.g. "set_voltage", "output_on").
+    The operation names and their SCPI expansions live in core/eewBackbone.json;
+    scpi_dispatch() looks up the right strings, fills in any placeholders, and
+    sends them over the connection.
+
+    All other attribute access (e.g. .write(), .query(), .timeout) is forwarded
+    transparently to the underlying PyVISA resource, so raw SCPI access still works
+    if you need something not covered by eewBackbone.
     """
 
     def __init__(self, resource, family):
+        # Use object.__setattr__ directly here because our own __setattr__ below
+        # would try to forward these to self._resource before it exists.
         object.__setattr__(self, "_resource", resource)
         object.__setattr__(self, "family", family)
 
-    def dispatch(self, operation: str, **kwargs):
-        """Run one eewBackbone operation; return the last query response or None."""
+    def scpi_dispatch(self, operation: str, **kwargs):
+        """Send a named SCPI operation and return the response string, or None.
+
+        operation is a key in eewBackbone.json (e.g. "set_voltage", "measure_vdc").
+        Keyword args fill in placeholders: ch=1, value="5.0", freq=1000, etc.
+
+        Some operations are a single write; others are a write followed by a read,
+        or a sequence of steps. scpi_dispatch handles all of those uniformly and
+        returns whatever the last read produced (or None for write-only operations).
+        """
         result = None
         for action, scpi in get_command(self.family, operation, **kwargs):
             if action == "write":
                 self._resource.write(scpi)
             elif action == "query":
+                # Send the query string and read back the instrument's response.
                 result = self._resource.query(scpi).strip()
             elif action == "raw_query":
+                # Binary read — used for things like oscilloscope screenshots
+                # where the response is raw bytes rather than a text string.
                 self._resource.write(scpi)
                 result = self._resource.read_raw()
         return result
 
     def __getattr__(self, name):
+        # Forward any attribute not defined on Instrument itself to the PyVISA resource.
         return getattr(self._resource, name)
 
     def __setattr__(self, name, value):
+        # Keep _resource and family on this object; forward everything else
+        # (e.g. .timeout, .chunk_size) to the underlying PyVISA resource.
         if name in ("_resource", "family"):
             object.__setattr__(self, name, value)
         else:
@@ -97,10 +121,18 @@ def by_role(wb: dict, role: str) -> dict:
 
 
 def open_by_role(rm, wb: dict, role: str) -> Instrument:
-    """Open the instrument with the given role and return it as an Instrument wrapper."""
+    """Open the instrument with the given role and return it as an Instrument.
+
+    Looks up the instrument entry by role in the workbench JSON, opens the
+    PyVISA connection, and loads its SCPI command set from eewBackbone using
+    the family_id stored in the workbench file. Returns both bundled together
+    as an Instrument so scripts don't have to manage them separately.
+    """
     entry = by_role(wb, role)
     resource = rm.open_resource(entry["resource"])
     resource.timeout = 10000
+    # family_id is stored in the workbench JSON when the bench is scanned,
+    # so we can load the right SCPI command set without querying *IDN? again.
     family = get_family_by_id(entry.get("family_id") or "")
     return Instrument(resource, family)
 
