@@ -4544,6 +4544,14 @@ function sbRender() {
     return mOpts(cur);
   };
 
+  // Set-action param options filtered by instrument type.
+  // Current (CC) is a PSU concept — don't offer it when an AWG, DMM, or scope is selected.
+  const setOpts = (cur, resource) => {
+    const type = ((state.workbench || {})._unique || []).find(i => i.resource === resource)?.type || "";
+    if (type && type !== "psu") return `<option value="voltage" ${cur==="voltage"?"selected":""}>Voltage</option>`;
+    return pOpts(cur);
+  };
+
   let html = "";
 
   // Loop columns
@@ -4617,7 +4625,7 @@ function sbRender() {
                     value="${sa.ch||1}" min="1" max="4" onchange="_sbSetLoopAction(${lp.id},${sa.id},'ch',+this.value)"></div></div>
                 <div class="test-param-row"><span class="test-param-label">Parameter</span>
                   <div class="test-param-input-wrap"><select class="test-param-input sel"
-                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'param',this.value)">${pOpts(sa.param)}</select></div></div>
+                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'param',this.value)">${setOpts(sa.param, sa.instrument)}</select></div></div>
                 <div class="test-param-row"><span class="test-param-label">Value</span>
                   <div class="test-param-input-wrap"><input class="test-param-input" type="text"
                     value="${escHtml(String(sa.value??'0'))}" placeholder="{var} or 0"
@@ -4699,7 +4707,7 @@ function sbRender() {
             value="${ac.ch||1}" min="1" max="4" onchange="_sbSet('action',${ac.id},'ch',+this.value)"></div></div>
         <div class="test-param-row"><span class="test-param-label">Parameter</span>
           <div class="test-param-input-wrap"><select class="test-param-input sel"
-            onchange="_sbSet('action',${ac.id},'param',this.value)">${pOpts(ac.param)}</select></div></div>
+            onchange="_sbSet('action',${ac.id},'param',this.value)">${setOpts(ac.param, ac.instrument)}</select></div></div>
         <div class="test-param-row"><span class="test-param-label">Value</span>
           <div class="test-param-input-wrap"><input class="test-param-input" type="text"
             value="${escHtml(String(ac.value??'0'))}" placeholder="0.001 or {var1}"
