@@ -4527,6 +4527,23 @@ function sbRender() {
     <option value="current" ${cur==="current"?"selected":""}>Current (CC)</option>
     ${extra||""}`;
 
+  const mOpts = (cur) => `
+    <option value="voltage" ${cur==="voltage"?"selected":""}>Voltage (DC)</option>
+    <option value="current" ${cur==="current"?"selected":""}>Current</option>
+    <option value="vac"     ${cur==="vac"    ?"selected":""}>Voltage (AC)</option>
+    <option value="r"       ${cur==="r"      ?"selected":""}>Resistance</option>
+    <option value="r4w"     ${cur==="r4w"    ?"selected":""}>Resistance (4W)</option>`;
+
+  // Measurement param options filtered to what the selected instrument type supports.
+  // PSUs expose voltage and current readback; DMMs and unknowns get the full list.
+  const measOpts = (cur, resource) => {
+    const type = ((state.workbench || {})._unique || []).find(i => i.resource === resource)?.type || "";
+    if (type === "psu") return `
+      <option value="voltage" ${cur==="voltage"?"selected":""}>Voltage</option>
+      <option value="current" ${cur==="current"?"selected":""}>Current</option>`;
+    return mOpts(cur);
+  };
+
   let html = "";
 
   // Loop columns
@@ -4594,7 +4611,7 @@ function sbRender() {
                 <div class="sb-block-title">Set <button class="sb-rm" ${rm}>✕</button></div>
                 <div class="test-param-row"><span class="test-param-label">Instrument</span>
                   <div class="test-param-input-wrap"><select class="test-param-input sel"
-                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'instrument',this.value)">${iOpts(sa.instrument)}</select></div></div>
+                    onchange="_sbSetLoopActionRe(${lp.id},${sa.id},'instrument',this.value)">${iOpts(sa.instrument)}</select></div></div>
                 <div class="test-param-row"><span class="test-param-label">Channel</span>
                   <div class="test-param-input-wrap"><input class="test-param-input" type="number"
                     value="${sa.ch||1}" min="1" max="4" onchange="_sbSetLoopAction(${lp.id},${sa.id},'ch',+this.value)"></div></div>
@@ -4621,13 +4638,13 @@ function sbRender() {
                   <button class="sb-rm" ${rm}>✕</button></div>
                 <div class="test-param-row"><span class="test-param-label">Instrument</span>
                   <div class="test-param-input-wrap"><select class="test-param-input sel"
-                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'instrument',this.value)">${iOpts(sa.instrument)}</select></div></div>
+                    onchange="_sbSetLoopActionRe(${lp.id},${sa.id},'instrument',this.value)">${iOpts(sa.instrument)}</select></div></div>
                 <div class="test-param-row"><span class="test-param-label">Channel</span>
                   <div class="test-param-input-wrap"><input class="test-param-input" type="number"
                     value="${sa.ch||1}" min="1" max="4" onchange="_sbSetLoopAction(${lp.id},${sa.id},'ch',+this.value)"></div></div>
                 <div class="test-param-row"><span class="test-param-label">Parameter</span>
                   <div class="test-param-input-wrap"><select class="test-param-input sel"
-                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'param',this.value)">${mOpts(sa.param)}</select></div></div>
+                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'param',this.value)">${measOpts(sa.param, sa.instrument)}</select></div></div>
                 <div class="test-param-row"><span class="test-param-label">Condition</span>
                   <div class="test-param-input-wrap">
                     <select class="test-param-input sel" style="flex:0 0 auto;width:60px;"
@@ -4669,13 +4686,6 @@ function sbRender() {
   });
 
   // Actions column
-  const mOpts = (cur) => `
-    <option value="voltage" ${cur==="voltage"?"selected":""}>Voltage (DC)</option>
-    <option value="current" ${cur==="current"?"selected":""}>Current</option>
-    <option value="vac"     ${cur==="vac"    ?"selected":""}>Voltage (AC)</option>
-    <option value="r"       ${cur==="r"      ?"selected":""}>Resistance</option>
-    <option value="r4w"     ${cur==="r4w"    ?"selected":""}>Resistance (4W)</option>`;
-
   let actHtml = _sb.actions.map(ac => {
     if (ac.type === "set") return `
       <div class="sb-block sb-block-set">
@@ -4683,7 +4693,7 @@ function sbRender() {
           <button class="sb-rm" onclick="sbRemoveAction(${ac.id})">✕</button></div>
         <div class="test-param-row"><span class="test-param-label">Instrument</span>
           <div class="test-param-input-wrap"><select class="test-param-input sel"
-            onchange="_sbSet('action',${ac.id},'instrument',this.value)">${iOpts(ac.instrument)}</select></div></div>
+            onchange="_sbSetRe('action',${ac.id},'instrument',this.value)">${iOpts(ac.instrument)}</select></div></div>
         <div class="test-param-row"><span class="test-param-label">Channel</span>
           <div class="test-param-input-wrap"><input class="test-param-input" type="number"
             value="${ac.ch||1}" min="1" max="4" onchange="_sbSet('action',${ac.id},'ch',+this.value)"></div></div>
@@ -4709,13 +4719,13 @@ function sbRender() {
             onchange="_sbSet('action',${ac.id},'label',this.value)"></div></div>
         <div class="test-param-row"><span class="test-param-label">Instrument</span>
           <div class="test-param-input-wrap"><select class="test-param-input sel"
-            onchange="_sbSet('action',${ac.id},'instrument',this.value)">${iOpts(ac.instrument)}</select></div></div>
+            onchange="_sbSetRe('action',${ac.id},'instrument',this.value)">${iOpts(ac.instrument)}</select></div></div>
         <div class="test-param-row"><span class="test-param-label">Channel</span>
           <div class="test-param-input-wrap"><input class="test-param-input" type="number"
             value="${ac.ch||1}" min="1" max="4" onchange="_sbSet('action',${ac.id},'ch',+this.value)"></div></div>
         <div class="test-param-row"><span class="test-param-label">Parameter</span>
           <div class="test-param-input-wrap"><select class="test-param-input sel"
-            onchange="_sbSet('action',${ac.id},'param',this.value)">${mOpts(ac.param)}</select></div></div>
+            onchange="_sbSet('action',${ac.id},'param',this.value)">${measOpts(ac.param, ac.instrument)}</select></div></div>
         <div class="test-param-row"><span class="test-param-label">Settle</span>
           <div class="test-param-input-wrap"><input class="test-param-input" type="number"
             value="${ac.settle||0}" min="0" step="0.01" onchange="_sbSet('action',${ac.id},'settle',+this.value)">
@@ -4739,13 +4749,13 @@ function sbRender() {
           <button class="sb-rm" onclick="sbRemoveAction(${ac.id})">✕</button></div>
         <div class="test-param-row"><span class="test-param-label">Instrument</span>
           <div class="test-param-input-wrap"><select class="test-param-input sel"
-            onchange="_sbSet('action',${ac.id},'instrument',this.value)">${iOpts(ac.instrument)}</select></div></div>
+            onchange="_sbSetRe('action',${ac.id},'instrument',this.value)">${iOpts(ac.instrument)}</select></div></div>
         <div class="test-param-row"><span class="test-param-label">Channel</span>
           <div class="test-param-input-wrap"><input class="test-param-input" type="number"
             value="${ac.ch||1}" min="1" max="4" onchange="_sbSet('action',${ac.id},'ch',+this.value)"></div></div>
         <div class="test-param-row"><span class="test-param-label">Parameter</span>
           <div class="test-param-input-wrap"><select class="test-param-input sel"
-            onchange="_sbSet('action',${ac.id},'param',this.value)">${mOpts(ac.param)}</select></div></div>
+            onchange="_sbSet('action',${ac.id},'param',this.value)">${measOpts(ac.param, ac.instrument)}</select></div></div>
         <div class="test-param-row"><span class="test-param-label">Condition</span>
           <div class="test-param-input-wrap">
             <select class="test-param-input sel" style="flex:0 0 auto;width:60px;"
