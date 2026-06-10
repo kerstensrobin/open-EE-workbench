@@ -26,7 +26,7 @@ On Linux, USB instruments need a one-time udev rule:
 python core/nachoVisa.py --fix-udev   # then re-plug USB instruments
 ```
 
-→ See the **[Getting Started](https://github.com/kerstensrobin/open-EE-workbench/wiki/Getting-Started)** wiki page for the full walkthrough.
+→ See the **[Wiki](https://github.com/kerstensrobin/open-EE-workbench/wiki)** for the full walkthrough.
 
 ---
 
@@ -54,7 +54,7 @@ python core/nachoVisa.py --fix-udev   # then re-plug USB instruments
 | Electronic load | 2 |
 
 To add a new instrument, add an entry to `core/eewBackbone.json` — no code changes needed.
-→ **[eewBackbone Reference](https://github.com/kerstensrobin/open-EE-workbench/wiki/eewBackbone-Reference)**
+→ **[eewBackbone](https://github.com/kerstensrobin/open-EE-workbench/wiki/eewBackbone)**
 
 ---
 
@@ -62,13 +62,13 @@ To add a new instrument, add an entry to `core/eewBackbone.json` — no code cha
 
 | Page | |
 |---|---|
-| [Getting Started](https://github.com/kerstensrobin/open-EE-workbench/wiki/Getting-Started) | Install, USB permissions, scan, launch |
+| [eewBackbone](https://github.com/kerstensrobin/open-EE-workbench/wiki/eewBackbone) | SCPI database, adding instruments |
 | [Workbench and Instruments](https://github.com/kerstensrobin/open-EE-workbench/wiki/Workbench-and-Instruments) | Workbench files, roles, instrument assignment |
-| [Automation Tests](https://github.com/kerstensrobin/open-EE-workbench/wiki/Automation-Tests) | Built-in parametric tests |
-| [Plot Specific](https://github.com/kerstensrobin/open-EE-workbench/wiki/Plot-Specific) | Datasheet-style plots — IV Curve, Transfer Characteristic, and future tests |
-| [Sandbox](https://github.com/kerstensrobin/open-EE-workbench/wiki/Sandbox) | Custom test builder |
-| [eewBackbone Reference](https://github.com/kerstensrobin/open-EE-workbench/wiki/eewBackbone-Reference) | SCPI database, adding instruments |
-| [CLI Scripts](https://github.com/kerstensrobin/open-EE-workbench/wiki/CLI-Scripts) | nachoVisa.py, setWorkbench.py, standalone scripts |
+| [CLI](https://github.com/kerstensrobin/open-EE-workbench/wiki/CLI) | nachoVisa.py, setWorkbench.py, standalone scripts |
+| [GUI - Automation](https://github.com/kerstensrobin/open-EE-workbench/wiki/GUI---Automation) | Built-in parametric tests |
+| [GUI - Plot Specific](https://github.com/kerstensrobin/open-EE-workbench/wiki/GUI---Plot-Specific) | Datasheet-style plots — IV Curve, Transfer Characteristic |
+| [GUI - Sandbox](https://github.com/kerstensrobin/open-EE-workbench/wiki/GUI---Sandbox) | Custom test builder |
+| [About Testing](https://github.com/kerstensrobin/open-EE-workbench/wiki/About-Testing) | Engineering context for every test |
 
 ---
 
