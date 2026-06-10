@@ -5,17 +5,59 @@ Typical usage in a test script:
     import pyvisa
     from workbench import load_workbench, open_by_role
 
-    wb = load_workbench()               # loads active workbench
-    rm = pyvisa.ResourceManager("@py")
-    scope = open_by_role(rm, wb, "scope")
-    gen   = open_by_role(rm, wb, "generator")
+    wb    = load_workbench()
+    rm    = pyvisa.ResourceManager("@py")
+    psu   = open_by_role(rm, wb, "psu")
+    dmm   = open_by_role(rm, wb, "dmm")
+
+    psu.dispatch("set_voltage", ch=1, value="5.0")
+    psu.dispatch("output_on", ch=1)
+    reading = dmm.dispatch("measure_vdc")
 """
 
 import json
 import os
 import re
 
+from eewBackbone import get_command, get_family_by_id
+
 WORKBENCH_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "workbenches")
+
+
+class Instrument:
+    """A PyVISA resource bundled with its eewBackbone family.
+
+    Attribute access is proxied to the underlying PyVISA resource, so
+    .write(), .query(), .read_raw(), .timeout etc. all work as normal.
+    Use .dispatch() to send eewBackbone operations instead of building
+    the get_command / loop manually.
+    """
+
+    def __init__(self, resource, family):
+        object.__setattr__(self, "_resource", resource)
+        object.__setattr__(self, "family", family)
+
+    def dispatch(self, operation: str, **kwargs):
+        """Run one eewBackbone operation; return the last query response or None."""
+        result = None
+        for action, scpi in get_command(self.family, operation, **kwargs):
+            if action == "write":
+                self._resource.write(scpi)
+            elif action == "query":
+                result = self._resource.query(scpi).strip()
+            elif action == "raw_query":
+                self._resource.write(scpi)
+                result = self._resource.read_raw()
+        return result
+
+    def __getattr__(self, name):
+        return getattr(self._resource, name)
+
+    def __setattr__(self, name, value):
+        if name in ("_resource", "family"):
+            object.__setattr__(self, name, value)
+        else:
+            setattr(self._resource, name, value)
 
 
 def _safe_name(name: str) -> str:
@@ -54,12 +96,13 @@ def by_role(wb: dict, role: str) -> dict:
     return matches[0]
 
 
-def open_by_role(rm, wb: dict, role: str):
-    """Open and return a pyvisa resource for the instrument with the given role."""
-    instrument = by_role(wb, role)
-    res = rm.open_resource(instrument["resource"])
-    res.timeout = 10000
-    return res
+def open_by_role(rm, wb: dict, role: str) -> Instrument:
+    """Open the instrument with the given role and return it as an Instrument wrapper."""
+    entry = by_role(wb, role)
+    resource = rm.open_resource(entry["resource"])
+    resource.timeout = 10000
+    family = get_family_by_id(entry.get("family_id") or "")
+    return Instrument(resource, family)
 
 
 def set_active(name: str) -> str:

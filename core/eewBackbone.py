@@ -74,6 +74,12 @@ def classify(idn: str) -> dict | None:
     return None
 
 
+def get_family_by_id(family_id: str) -> dict | None:
+    """Return the resolved family dict for a known family_id, or None."""
+    family = _family_index().get(family_id)
+    return _resolve_family(family) if family else None
+
+
 def resolve_command(cmd, **kwargs) -> list[tuple[str, str]]:
     """Resolve a command spec to a list of (action, scpi_string) tuples.
 
