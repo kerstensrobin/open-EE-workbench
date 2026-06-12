@@ -1679,6 +1679,24 @@
       ]
     },
     {
+      "id": "keysight_edu34450a",
+      "vendor": "Keysight",
+      "series": "EDU34450A 5.5-Digit Precision Multimeter",
+      "type": "dmm",
+      "inherits": "keysight_34461a",
+      "patterns": [
+        "EDU34450"
+      ],
+      "overrides": {
+        "measure_vdc":         { "query": ":MEASure:VOLTage:DC? DEF,{resolution}" },
+        "measure_vac":         { "query": ":MEASure:VOLTage:AC? DEF,{resolution}" },
+        "measure_idc":         { "query": ":MEASure:CURRent:DC? DEF,{resolution}" },
+        "measure_iac":         { "query": ":MEASure:CURRent:AC? DEF,{resolution}" },
+        "measure_resistance":  { "query": ":MEASure:RESistance? DEF,{resolution}" },
+        "measure_fresistance": { "query": ":MEASure:FRESistance? DEF,{resolution}" }
+      }
+    },
+    {
       "id": "siglent_sdm",
       "vendor": "Siglent",
       "series": "SDM Series Digital Multimeter",

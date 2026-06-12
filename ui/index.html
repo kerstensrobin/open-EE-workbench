@@ -303,6 +303,25 @@
     .dmm-actions { display:flex; gap:8px; }
     .dmm-actions .btn { flex:1; }
 
+    /* ── DMM Logger custom card ───────────────────────────────────── */
+    .dmml-timing-row { display:flex; gap:14px; align-items:flex-end; margin-bottom:12px; flex-wrap:wrap; }
+    .dmml-dmm-section { margin-bottom:10px; }
+    .dmml-dmm-list { display:flex; flex-direction:column; gap:5px; margin-top:5px; }
+    .dmml-dmm-row { display:flex; align-items:center; gap:8px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:6px 10px; }
+    .dmml-dmm-toggle { width:14px; height:14px; accent-color:var(--amber); cursor:pointer; flex-shrink:0; }
+    .dmml-dmm-label { flex:1; font-size:11px; color:var(--text); font-family:var(--mono); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .dmml-dmm-swatch { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+    .dmml-dmm-mode { background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:var(--radius); padding:3px 6px; font:inherit; font-size:10px; cursor:pointer; outline:none; flex-shrink:0; }
+    .dmml-dmm-mode:focus { border-color:var(--amber); }
+    .dmml-chart-bar { display:flex; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap; }
+    .dmml-chart-toggle { display:flex; border-radius:var(--radius); overflow:hidden; border:1px solid var(--border); }
+    .dmml-chart-toggle-btn { padding:4px 12px; font:inherit; font-size:10px; font-weight:600; background:var(--surface3); color:var(--text-dim); border:none; border-right:1px solid var(--border); cursor:pointer; transition:all .12s; }
+    .dmml-chart-toggle-btn:last-child { border-right:none; }
+    .dmml-chart-toggle-btn.active { background:rgba(180,83,9,.18); color:var(--amber); }
+    .dmml-hist-bins { display:flex; align-items:center; gap:6px; font-size:10px; color:var(--text-dim); margin-left:auto; }
+    .dmml-hist-bins input[type=range] { width:80px; accent-color:var(--amber); cursor:pointer; }
+    #dmml-canvas { display:block; width:100%; height:300px; }
+
     /* ── Log panel ───────────────────────────────────────────────── */
     #log-panel { width:var(--sidebar-w); min-width:var(--sidebar-w); background:var(--surface); border-left:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
     .log-header { padding:10px 14px; display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--border); background:var(--surface2); }
@@ -343,6 +362,17 @@
     .state-item-meta { font-size:10px; color:var(--text-dim); font-family:var(--mono); }
     .state-item-del { padding:1px 6px; font-size:11px; color:var(--red); opacity:0.5; }
     .state-item-del:hover { opacity:1; }
+    /* ── Workbench manage modal ─────────────────────────────────── */
+    .wb-manage-list { display:flex; flex-direction:column; gap:4px; }
+    .wb-manage-row { display:flex; align-items:center; gap:8px; padding:7px 10px; background:var(--surface3); border:1px solid var(--border); border-radius:var(--radius); }
+    .wb-manage-row.active-wb { border-color:rgba(26,86,196,.4); background:rgba(26,86,196,.06); }
+    .wb-active-dot { width:7px; height:7px; border-radius:50%; background:var(--accent); flex-shrink:0; }
+    .wb-active-dot.inactive { background:transparent; }
+    .wb-manage-name { flex:1; font-size:12px; font-family:var(--mono); color:var(--text); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .wb-rename-input { flex:1; background:var(--surface); border:1px solid var(--accent); border-radius:var(--radius); color:var(--text); font:inherit; font-size:12px; font-family:var(--mono); padding:2px 7px; outline:none; }
+    .wb-manage-btn { padding:2px 8px; font-size:11px; border-radius:var(--radius); border:1px solid var(--border); background:var(--surface4); color:var(--text-dim); cursor:pointer; flex-shrink:0; transition:all .12s; }
+    .wb-manage-btn:hover { border-color:var(--accent); color:var(--accent); }
+    .wb-manage-btn.del:hover { border-color:var(--red); color:var(--red); }
     /* ── Assign modal ───────────────────────────────────────────── */
     .assign-section { display:flex; flex-direction:column; gap:5px; }
     .assign-lbl { font-size:11px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.06em; }
@@ -830,6 +860,8 @@
   <div class="wb-select-wrap">
     <select id="wb-select"><option value="">— select workbench —</option></select>
   </div>
+  <button class="btn btn-ghost" onclick="openWbManageModal()" title="Manage workbenches"
+          style="padding:5px 8px;font-size:13px;line-height:1;">✎</button>
 
   <button class="btn btn-ghost" id="scan-btn" onclick="openScanModal()" style="gap:5px;font-size:12px;">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
@@ -919,6 +951,11 @@
           </svg>
           Reset all
         </button>
+        <span id="demo-badge" class="hidden" style="
+          font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+          padding:3px 9px; border-radius:10px;
+          background:rgba(180,83,9,.15); color:var(--amber);
+          border:1px solid rgba(180,83,9,.35);">DEMO</span>
       </div>
       <div id="instrument-grid" class="hidden"></div>
 
@@ -1469,6 +1506,26 @@
   </div>
 </div>
 
+<!-- ── Workbench manage modal ──────────────────────────────────── -->
+<div id="wb-manage-modal" class="modal-overlay hidden">
+  <div class="modal" style="width:min(420px,95vw);">
+    <div class="modal-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+      </svg>
+      <span class="modal-title">Manage Workbenches</span>
+      <button class="btn btn-ghost" style="padding:2px 7px;font-size:13px;" onclick="closeWbManageModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="wb-manage-list" class="wb-manage-list"></div>
+    </div>
+    <div class="modal-footer" style="justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="closeWbManageModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Assign instrument modal ─────────────────────────────────── -->
 <div id="assign-modal" class="modal-overlay hidden">
   <div class="modal" style="width:min(480px,95vw);">
@@ -1714,11 +1771,14 @@ socket.on("connection_result", ({ connected, instruments }) => {
   state.connected   = connected;
   state.instruments = instruments || [];
   if (connected) {
-    setStatus("connected","Connected");
+    const isDemo = instruments.length > 0 &&
+                   instruments.every(i => (i.resource||"").toUpperCase().startsWith("DEMO::"));
+    document.getElementById("demo-badge")?.classList.toggle("hidden", !isDemo);
+    setStatus("connected", isDemo ? "Connected (demo)" : "Connected");
     $connectBtn.textContent = "Disconnect";
     $connectBtn.className   = "btn btn-danger";
     $connectBtn.disabled    = false;
-    logMsg(`✓ Connected (${instruments.filter(i=>i.ok).length}/${instruments.length} instruments)`,"ok");
+    logMsg(`✓ Connected (${instruments.filter(i=>i.ok).length}/${instruments.length} instruments)${isDemo?" — demo mode":""}`, "ok");
     applyConnectionStatus(instruments);
     refreshAutoTests();
     document.getElementById("bench-state-bar").classList.remove("hidden");
@@ -1741,6 +1801,7 @@ socket.on("disconnected", () => {
   $connectBtn.className   = "btn btn-primary";
   $connectBtn.disabled    = !state.workbench;
   document.getElementById("bench-state-bar").classList.add("hidden");
+  document.getElementById("demo-badge")?.classList.add("hidden");
   resetCardStatus();
   _scopeStopAuto();
   logMsg("Disconnected","warn");
@@ -2657,6 +2718,86 @@ let _allFamilies    = [];
 
 const _TYPE_LABELS = { scope:"Scope", psu:"PSU", awg:"AWG / FGen", dmm:"DMM", load:"Load", smu:"SMU" };
 
+// ── Workbench manage modal ────────────────────────────────────────────
+async function openWbManageModal() {
+  document.getElementById("wb-manage-modal").classList.remove("hidden");
+  await _renderWbManageList();
+}
+
+function closeWbManageModal() {
+  document.getElementById("wb-manage-modal").classList.add("hidden");
+}
+
+async function _renderWbManageList() {
+  const list = document.getElementById("wb-manage-list");
+  try {
+    const { workbenches, active } = await GET("/api/workbenches");
+    if (!workbenches.length) {
+      list.innerHTML = `<p style="color:var(--text-dim);font-size:12px;">No workbenches found.</p>`;
+      return;
+    }
+    list.innerHTML = "";
+    for (const wb of workbenches) {
+      const isActive = wb === active;
+      const row = document.createElement("div");
+      row.className = "wb-manage-row" + (isActive ? " active-wb" : "");
+      row.dataset.wb = wb;
+      row.innerHTML = `
+        <span class="wb-active-dot ${isActive ? "" : "inactive"}" title="${isActive ? "Active" : ""}"></span>
+        <span class="wb-manage-name" title="${escHtml(wb)}">${escHtml(wb)}</span>
+        <button class="wb-manage-btn" onclick="_wbStartRename(this, '${escHtml(wb)}')">Rename</button>
+        <button class="wb-manage-btn del" onclick="_wbDelete('${escHtml(wb)}')">Delete</button>`;
+      list.appendChild(row);
+    }
+  } catch(e) { list.innerHTML = `<p style="color:var(--red);font-size:12px;">${escHtml(e.message)}</p>`; }
+}
+
+function _wbStartRename(btn, name) {
+  const row = btn.closest(".wb-manage-row");
+  const nameSpan = row.querySelector(".wb-manage-name");
+  const input = document.createElement("input");
+  input.className = "wb-rename-input";
+  input.value = name;
+  nameSpan.replaceWith(input);
+  input.focus(); input.select();
+  btn.textContent = "Save";
+  btn.onclick = () => _wbCommitRename(btn, name, input);
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") _wbCommitRename(btn, name, input);
+    if (e.key === "Escape") _renderWbManageList();
+  });
+}
+
+async function _wbCommitRename(btn, oldName, input) {
+  const newName = input.value.trim();
+  if (!newName || newName === oldName) { await _renderWbManageList(); return; }
+  try {
+    const r = await POST(`/api/workbench/${encodeURIComponent(oldName)}/rename`, { new_name: newName });
+    if (r.error) { toast(r.error, "error"); return; }
+    await loadWorkbenches();
+    await _renderWbManageList();
+    toast(`Renamed to "${r.name}"`, "ok");
+  } catch(e) { toast(e.message, "error"); }
+}
+
+async function _wbDelete(name) {
+  if (!confirm(`Delete workbench "${name}"? This cannot be undone.`)) return;
+  try {
+    const r = await POST(`/api/workbench/${encodeURIComponent(name)}/delete`, {});
+    if (r.error) { toast(r.error, "error"); return; }
+    if ($wbSelect.value === name) {
+      $wbSelect.value = "";
+      state.workbench = null;
+      document.getElementById("instrument-grid").classList.add("hidden");
+      document.getElementById("empty-nowb").classList.remove("hidden");
+      document.getElementById("connect-btn").disabled = true;
+    }
+    await loadWorkbenches();
+    await _renderWbManageList();
+    toast(`Deleted "${name}"`, "ok");
+  } catch(e) { toast(e.message, "error"); }
+}
+
 async function openAssignModal(resource, currentFamilyId = '') {
   _assignResource = resource;
   document.getElementById("assign-resource-lbl").textContent = resource;
@@ -2808,7 +2949,7 @@ function refreshAutoTab() {
   layout.style.display = "flex";
   layout.classList.remove("hidden");
 
-  const testKey = state.autoTests.map(t => t.id).join(",");
+  const testKey = state.autoTests.map(t => `${t.id}:${t.available !== false}:${!!t.custom_ui}`).join(",");
   if (_autoBuiltForTests !== testKey) {
     buildTestGrid(state.autoTests);
     _autoBuiltForTests = testKey;
@@ -2841,15 +2982,20 @@ function buildTestGrid(tests) {
   grid.innerHTML = "";
   for (const test of tests) {
     const avail = test.available !== false;
-    const card  = test.custom_ui ? buildDcSweepCard(test) : buildTestCard(test);
-    if (test.custom_ui) {
+    let card;
+    if (!test.custom_ui) {
+      card = buildTestCard(test);
+    } else if (test.id === "dmm_logger") {
+      card = buildDmmLoggerCard(test);
+    } else {
+      card = buildDcSweepCard(test);
       _dcSw.measItems = [
         { kind:"measurement", instrument:"psu", measure:"voltage", instr_ch:1, samples:1, settle:0.1, label:"" },
       ];
     }
     card.classList.add("hidden");
     grid.appendChild(card);
-    if (test.custom_ui) { _dcSwRenderChannels(); _dcSwRenderMeasList(); }
+    if (test.id === "dc_sweep") { _dcSwRenderChannels(); _dcSwRenderMeasList(); }
     if (test.id === "psu_interrupt") _psuInterruptInit(test.id);
 
     // Disable Run button with tooltip when required instruments are not connected
@@ -3343,7 +3489,19 @@ async function runTest(testId) {
   if (state.autoRunning) { toast("A test is already running","error"); return; }
   if (!state.connected)  { toast("Not connected to instruments","error"); return; }
 
-  const params      = testId === "dc_sweep" ? getDcSweepParams() : getTestParams(testId);
+  const params = testId === "dc_sweep"    ? getDcSweepParams()    :
+                 testId === "dmm_logger"  ? getDmmLoggerParams()  :
+                 getTestParams(testId);
+  if (params == null) return;  // builder returned null (validation failure)
+
+  if (testId === "dmm_logger") {
+    _dmmLog.data    = {};
+    _dmmLog.elapsed = [];
+    _dmmLog.cols    = [];
+    _dmmLog.status  = "running";
+    _dmmLogDraw();
+  }
+
   const output_path = state.outputPath || "";
   state.autoRunning = true;
   state.autoTestId  = testId;
@@ -3438,6 +3596,40 @@ socket.on("automation_row", ({ test_id, row, columns, progress }) => {
     if (lblEl) { const n = _ivChart.curves.reduce((s,c) => s+c.points.length, 0); lblEl.textContent = `${n} pts…`; }
     return;
   }
+  if (test_id === "dmm_logger") {
+    // Feed chart state
+    if (_dmmLog.cols.length === 0 && columns?.length) {
+      _dmmLog.cols = columns;
+      _dmmLog.data = {};
+      for (const col of columns.slice(1)) _dmmLog.data[col] = [];
+    }
+    if (row && columns?.length) {
+      _dmmLog.elapsed.push(row[0]);
+      for (let i = 1; i < columns.length; i++) {
+        const lbl = columns[i];
+        if (!_dmmLog.data[lbl]) _dmmLog.data[lbl] = [];
+        _dmmLog.data[lbl].push(row[i]);
+      }
+    }
+    // Progress bar inside the card
+    const fill = document.getElementById("tprog-fill-dmm_logger");
+    if (fill) {
+      if (progress < 0) { fill.style.width = "100%"; fill.style.opacity = "0.35"; }
+      else              { fill.style.width = (progress*100).toFixed(1)+"%"; fill.style.opacity = ""; }
+    }
+    const lbl2 = document.getElementById("tprog-label-dmm_logger");
+    if (lbl2) lbl2.textContent = `${_dmmLog.elapsed.length} rows…`;
+    // Keep standard results panel (for CSV export)
+    if (state.autoRows.length === 0 && columns &&
+        columns.join("\0") !== state.autoCols.join("\0")) {
+      state.autoCols = columns;
+      initResultsPanel(test_id, columns);
+    }
+    state.autoRows.push(row);
+    appendResultRow(row, columns);
+    _dmmLogDraw();
+    return;
+  }
   if (!document.getElementById(`test-card-${test_id}`)) return;
   // On the first row, update columns if the runner determined a different schema
   // (e.g. dc_sweep changes columns based on sweep_mode at runtime)
@@ -3480,6 +3672,19 @@ socket.on("automation_done", ({ test_id, columns, rows, error, csv_path }) => {
       logMsg(`✓ [${test_id}] done (${_ivChart.curves.length} curves, ${_ivTotal} pts)${csv_path ? " → " + csv_path : ""}`, "ok");
     }
     tsTestFinished(error, csv_path);
+    return;
+  }
+  if (test_id === "dmm_logger") {
+    _dmmLog.status = error ? "error" : "done";
+    if (error) {
+      toast("DMM Logger failed: " + error, "error");
+      logMsg(`✗ [dmm_logger] ${error}`, "error");
+    } else {
+      toast(`DMM Logger — ${_dmmLog.elapsed.length} rows`, "ok");
+      logMsg(`✓ [dmm_logger] done (${_dmmLog.elapsed.length} rows)${csv_path ? " → " + csv_path : ""}`, "ok");
+    }
+    _dmmLogDraw();
+    testFinished(test_id, error, csv_path);
     return;
   }
   if (error) {
@@ -4316,6 +4521,460 @@ function dcSwSetMode(mode) {
   _dcSwRenderMeasList();   // refresh trigger dropdowns (options depend on mode)
 }
 
+// ════════════════════════════════════════════════════════════════════
+// ── DMM Logger custom card ───────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════
+
+const _DMM_MODE_LABELS = {
+  vdc:"VDC", vac:"VAC", idc:"IDC", iac:"IAC",
+  r:"Ω 2W", r4w:"Ω 4W", freq:"FREQ", cap:"CAP",
+};
+const _PSU_MODE_LABELS = { psu_v:"Voltage", psu_i:"Current", psu_p:"Power" };
+
+const _dmmLog = {
+  test:     null,
+  dmms:     [],    // [{resource, label, mode, enabled, color}]
+  data:     {},    // label -> [value, ...]
+  elapsed:  [],    // [elapsed_s, ...]
+  cols:     [],
+  view:     "series",  // "series" | "histogram"
+  histBins: 20,
+  status:   "idle",   // "idle" | "running" | "done" | "error"
+};
+
+function buildDmmLoggerCard(test) {
+  _dmmLog.test    = test;
+  _dmmLog.dmms    = (test.dmm_instruments || []).map((ins, i) => ({
+    resource: ins.resource,
+    label:    ins.label,
+    mode:     ins.itype === "psu" ? "psu_v" : "vdc",
+    enabled:  true,
+    color:    _CURVE_COLORS[i % _CURVE_COLORS.length],
+    itype:    ins.itype || "dmm",
+    ch:       ins.ch    || 1,
+  }));
+  _dmmLog.data    = {};
+  _dmmLog.elapsed = [];
+  _dmmLog.cols    = [];
+  _dmmLog.status  = "idle";
+
+  const dmmRows = _dmmLog.dmms.length
+    ? _dmmLog.dmms.map((d, i) => {
+        const modeLabels = d.itype === "psu" ? _PSU_MODE_LABELS : _DMM_MODE_LABELS;
+        const opts = Object.entries(modeLabels).map(([v,l]) =>
+          `<option value="${v}"${v===d.mode?" selected":""}>${l}</option>`
+        ).join("");
+        return `
+      <div class="dmml-dmm-row">
+        <input class="dmml-dmm-toggle" type="checkbox" checked id="dmml-tog-${i}"
+               onchange="_dmmLogToggleDmm(${i}, this.checked)">
+        <span class="dmml-dmm-swatch" style="background:${escHtml(d.color)};"></span>
+        <span class="dmml-dmm-label" title="${escHtml(d.label)}">${escHtml(d.label)}</span>
+        <select class="dmml-dmm-mode" id="dmml-mode-${i}">${opts}</select>
+      </div>`;
+      }).join("")
+    : `<span style="color:var(--text-faint);font-size:11px;padding:4px 0;display:block;">No DMMs or PSUs available</span>`;
+
+  const div = document.createElement("div");
+  div.className = "test-card";
+  div.id        = "test-card-dmm_logger";
+  div.innerHTML = `
+    <div class="test-card-header">
+      <div class="test-card-icon">Ω</div>
+      <div>
+        <div class="test-card-title">${escHtml(test.name)}</div>
+        <div class="test-card-desc">${escHtml(test.description)}</div>
+      </div>
+    </div>
+    <div class="test-card-body">
+
+      <div class="dmml-timing-row">
+        <div>
+          <div class="section-label">Interval</div>
+          <div class="test-param-input-wrap">
+            <input class="test-param-input" type="number" step="any" id="dmml-interval"
+                   value="1.0" min="0.1" style="width:70px;">
+            <span class="test-param-unit">s</span>
+          </div>
+        </div>
+        <div>
+          <div class="section-label">Duration</div>
+          <div class="test-param-input-wrap">
+            <input class="test-param-input" type="number" step="any" id="dmml-duration"
+                   value="60" min="1" style="width:70px;">
+            <span class="test-param-unit">s</span>
+          </div>
+        </div>
+        <div style="align-self:flex-end;padding-bottom:6px;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-dim);cursor:pointer;white-space:nowrap;">
+            <input type="checkbox" id="dmml-infinite" style="accent-color:var(--amber);cursor:pointer;"
+                   onchange="const s=document.getElementById('dmml-duration');s.disabled=this.checked;s.style.opacity=this.checked?'0.35':'1';">
+            ∞
+          </label>
+        </div>
+      </div>
+
+      <div class="dmml-dmm-section">
+        <div class="section-label">Channels</div>
+        <div class="dmml-dmm-list">${dmmRows}</div>
+      </div>
+
+      <div class="dmml-chart-bar">
+        <div class="dmml-chart-toggle">
+          <button class="dmml-chart-toggle-btn active" id="dmml-view-series"
+                  onclick="_dmmLogSetView('series')">Time Series</button>
+          <button class="dmml-chart-toggle-btn" id="dmml-view-hist"
+                  onclick="_dmmLogSetView('histogram')">Histogram</button>
+        </div>
+        <div class="dmml-hist-bins" id="dmml-hist-bins-ctrl" style="display:none;">
+          Bins
+          <input type="range" min="5" max="100" value="20" id="dmml-hist-bins-slider"
+                 oninput="_dmmLogSetBins(this.value)">
+          <span id="dmml-hist-bins-val">20</span>
+        </div>
+        <button class="btn btn-ghost" style="margin-left:auto;font-size:10px;padding:4px 10px;"
+                onclick="_dmmLogExportPng()">↓ PNG</button>
+      </div>
+      <canvas id="dmml-canvas"></canvas>
+
+      <div class="test-progress" id="tprog-dmm_logger">
+        <div class="progress-track"><div class="progress-fill" id="tprog-fill-dmm_logger"></div></div>
+        <div class="progress-label" id="tprog-label-dmm_logger">Ready</div>
+      </div>
+
+      <div class="test-actions">
+        <button class="btn btn-primary" id="trun-dmm_logger"
+                onclick="runTest('dmm_logger')">▶ Run</button>
+        <button class="btn btn-ghost hidden" id="tpause-dmm_logger"
+                onclick="pauseTest('dmm_logger')">⏸ Pause</button>
+        <button class="btn btn-danger hidden" id="tstop-dmm_logger"
+                onclick="stopTest()">■ Stop</button>
+      </div>
+
+    </div>`;
+  return div;
+}
+
+function _dmmLogToggleDmm(i, enabled) {
+  if (_dmmLog.dmms[i]) {
+    _dmmLog.dmms[i].enabled = enabled;
+    _dmmLogDraw();
+  }
+}
+
+function _dmmLogSetView(view) {
+  _dmmLog.view = view;
+  document.getElementById("dmml-view-series")?.classList.toggle("active", view === "series");
+  document.getElementById("dmml-view-hist")?.classList.toggle("active", view === "histogram");
+  const binsCtrl = document.getElementById("dmml-hist-bins-ctrl");
+  if (binsCtrl) binsCtrl.style.display = view === "histogram" ? "flex" : "none";
+  _dmmLogDraw();
+}
+
+function _dmmLogSetBins(val) {
+  _dmmLog.histBins = parseInt(val);
+  const lbl = document.getElementById("dmml-hist-bins-val");
+  if (lbl) lbl.textContent = val;
+  _dmmLogDraw();
+}
+
+function _dmmLogExportPng() {
+  const c = document.getElementById("dmml-canvas");
+  if (!c || !_dmmLog.elapsed.length) { toast("No chart data to export", "error"); return; }
+  const view = _dmmLog.view === "histogram" ? "histogram" : "time_series";
+  POST("/api/plot/save-image", {
+    filename: `dmm_logger_${view}`,
+    data: c.toDataURL("image/png"),
+    output_path: state.outputPath || "",
+  }).then(r => toast(`Saved → ${r.path}`, "ok"))
+    .catch(e => toast("Image save failed: " + e.message, "error"));
+}
+
+function getDmmLoggerParams() {
+  const enabled = _dmmLog.dmms.filter((d, i) => {
+    const tog = document.getElementById(`dmml-tog-${i}`);
+    return tog ? tog.checked : d.enabled;
+  });
+  if (!enabled.length) { toast("Select at least one DMM channel", "error"); return null; }
+
+  return {
+    dmm_resources: enabled.map(d => d.resource).join("|"),
+    dmm_modes:     enabled.map(d => {
+      const idx = _dmmLog.dmms.indexOf(d);
+      const sel = document.getElementById(`dmml-mode-${idx}`);
+      return sel ? sel.value : (d.itype === "psu" ? "psu_v" : "vdc");
+    }).join("|"),
+    dmm_labels:    enabled.map(d => d.label).join("|"),
+    dmm_itypes:    enabled.map(d => d.itype || "dmm").join("|"),
+    dmm_channels:  enabled.map(d => String(d.ch || 1)).join("|"),
+    interval:      parseFloat(document.getElementById("dmml-interval")?.value ?? "1.0"),
+    duration:      document.getElementById("dmml-infinite")?.checked ? 0 : parseFloat(document.getElementById("dmml-duration")?.value ?? "60"),
+  };
+}
+
+// ── DMM logger canvas drawing ─────────────────────────────────────────
+
+function _dmmLogDraw() {
+  const c = document.getElementById("dmml-canvas");
+  if (!c) return;
+  if (_dmmLog.view === "histogram") _dmmLogDrawHistogram(c);
+  else _dmmLogDrawSeries(c);
+}
+
+function _dmmLogSetupCanvas(c) {
+  const dpr = window.devicePixelRatio || 1;
+  const W = c.offsetWidth, H = c.offsetHeight;
+  if (W < 20 || H < 20) return null;
+  if (c.width !== Math.round(W*dpr) || c.height !== Math.round(H*dpr)) {
+    c.width = Math.round(W*dpr);
+    c.height = Math.round(H*dpr);
+  }
+  const ctx = c.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, W, H };
+}
+
+function _dmmLogPlaceholder(ctx, W, H, ML, MR, MT, MB, msg) {
+  ctx.clearRect(0, 0, W, H);
+  const pw = W-ML-MR, ph = H-MT-MB;
+  ctx.fillStyle = "rgba(0,0,0,0.025)";
+  ctx.fillRect(ML, MT, pw, ph);
+  ctx.strokeStyle = "rgba(120,132,154,0.4)"; ctx.lineWidth = 1;
+  ctx.strokeRect(ML, MT, pw, ph);
+  ctx.fillStyle = "rgba(120,132,154,0.55)";
+  ctx.font = "12px 'Inter', system-ui";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(msg, ML + pw/2, MT + ph/2);
+}
+
+function _dmmLogDrawSeries(c) {
+  const setup = _dmmLogSetupCanvas(c);
+  if (!setup) return;
+  const { ctx, W, H } = setup;
+  const ML=64, MR=18, MT=14, MB=44;
+  const pw=W-ML-MR, ph=H-MT-MB;
+
+  const activeDmms = _dmmLog.dmms.filter(d => d.enabled && _dmmLog.data[d.label]?.length);
+  if (!_dmmLog.elapsed.length || !activeDmms.length) {
+    _dmmLogPlaceholder(ctx, W, H, ML, MR, MT, MB,
+      _dmmLog.status === "running" ? "Waiting for first measurement…" : "Run the logger to see live data");
+    return;
+  }
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(0,0,0,0.025)";
+  ctx.fillRect(ML, MT, pw, ph);
+
+  // Axis bounds
+  const xMax = Math.max(..._dmmLog.elapsed, 1);
+  const xTicks = _niceTicks(0, xMax, 6);
+  const axMin = xTicks[0], axMax = xTicks[xTicks.length-1];
+
+  let yMin = Infinity, yMax = -Infinity;
+  for (const d of activeDmms) {
+    for (const v of _dmmLog.data[d.label]) {
+      if (v != null) { yMin = Math.min(yMin, v); yMax = Math.max(yMax, v); }
+    }
+  }
+  if (!isFinite(yMin)) { yMin = 0; yMax = 1; }
+  if (yMin === yMax) { const dd = Math.abs(yMin)*0.05 || 0.001; yMin -= dd; yMax += dd; }
+  const yTicks = _niceTicks(yMin, yMax, 5);
+  const ayMin = yTicks[0], ayMax = yTicks[yTicks.length-1];
+
+  const xR = (axMax - axMin) || 1, yR = (ayMax - ayMin) || 1;
+  const toX = v => ML + (v - axMin) / xR * pw;
+  const toY = v => MT + ph - (v - ayMin) / yR * ph;
+
+  // Grid
+  ctx.strokeStyle = "rgba(150,156,169,0.22)"; ctx.lineWidth = 1;
+  for (const t of xTicks) { const x=toX(t); ctx.beginPath(); ctx.moveTo(x,MT); ctx.lineTo(x,MT+ph); ctx.stroke(); }
+  for (const t of yTicks) { const y=toY(t); ctx.beginPath(); ctx.moveTo(ML,y); ctx.lineTo(ML+pw,y); ctx.stroke(); }
+  ctx.strokeStyle = "rgba(120,132,154,0.4)"; ctx.lineWidth = 1;
+  ctx.strokeRect(ML, MT, pw, ph);
+
+  // Tick labels
+  const yStep = yTicks.length >= 2 ? yTicks[1] - yTicks[0] : 0;
+  ctx.font = "10px 'JetBrains Mono', monospace"; ctx.fillStyle = "#78849a";
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  for (const t of xTicks) ctx.fillText(_fmtTick(t), toX(t), MT+ph+5);
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (const t of yTicks) ctx.fillText(_fmtTick(t, yStep), ML-5, toY(t));
+
+  // Axis labels
+  ctx.font = "11px 'Inter', system-ui"; ctx.fillStyle = "#48526a";
+  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  ctx.fillText("Elapsed (s)", ML+pw/2, MT+ph+36);
+  ctx.save(); ctx.translate(14, MT+ph/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText("Value", 0, 0); ctx.restore();
+
+  // Clip to plot area
+  ctx.save();
+  ctx.beginPath(); ctx.rect(ML, MT, pw, ph); ctx.clip();
+
+  for (const d of activeDmms) {
+    const vals = _dmmLog.data[d.label];
+    const pts  = _dmmLog.elapsed
+      .map((e, i) => ({ x: e, y: vals[i] }))
+      .filter(p => p.y != null);
+    if (!pts.length) continue;
+
+    // Line
+    if (pts.length > 1) {
+      ctx.beginPath();
+      ctx.strokeStyle = d.color; ctx.lineWidth = 1.5; ctx.lineJoin = "round"; ctx.globalAlpha = 0.75;
+      ctx.moveTo(toX(pts[0].x), toY(pts[0].y));
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(toX(pts[i].x), toY(pts[i].y));
+      ctx.stroke();
+    }
+    // Dots
+    ctx.globalAlpha = 1; ctx.fillStyle = d.color;
+    for (const p of pts) { ctx.beginPath(); ctx.arc(toX(p.x), toY(p.y), 2, 0, Math.PI*2); ctx.fill(); }
+    // Live ring
+    if (_dmmLog.status === "running" && pts.length) {
+      const last = pts[pts.length-1];
+      ctx.beginPath(); ctx.arc(toX(last.x), toY(last.y), 5.5, 0, Math.PI*2);
+      ctx.strokeStyle = d.color; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.6; ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+  ctx.restore();
+
+  // Legend
+  if (activeDmms.length > 1) {
+    ctx.font = "10px 'JetBrains Mono', monospace";
+    const rowH=14, pad=6, swW=10;
+    let maxW = 0;
+    for (const d of activeDmms) maxW = Math.max(maxW, ctx.measureText(d.label).width);
+    const boxW=maxW+swW+pad*3, boxH=activeDmms.length*rowH+pad*2;
+    const bx=ML+pw-boxW-6, by=MT+6;
+    ctx.fillStyle = "rgba(205,209,215,0.88)";
+    ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 4); ctx.fill();
+    activeDmms.forEach((d, ci) => {
+      const ry = by+pad+ci*rowH;
+      ctx.fillStyle = d.color; ctx.fillRect(bx+pad, ry+2, swW, rowH-5);
+      ctx.fillStyle = "#1a1d25"; ctx.textAlign = "left"; ctx.textBaseline = "top";
+      ctx.fillText(d.label, bx+pad+swW+5, ry+1);
+    });
+  }
+}
+
+function _dmmLogDrawHistogram(c) {
+  const setup = _dmmLogSetupCanvas(c);
+  if (!setup) return;
+  const { ctx, W, H } = setup;
+  const ML=64, MR=18, MT=14, MB=44;
+  const pw=W-ML-MR, ph=H-MT-MB;
+
+  const activeDmms = _dmmLog.dmms.filter(d => d.enabled && _dmmLog.data[d.label]?.length);
+  if (!activeDmms.length || !_dmmLog.elapsed.length) {
+    _dmmLogPlaceholder(ctx, W, H, ML, MR, MT, MB, "Run the logger to see histogram");
+    return;
+  }
+
+  const numBins = _dmmLog.histBins;
+
+  // Value range across all active series
+  let vMin = Infinity, vMax = -Infinity;
+  for (const d of activeDmms) {
+    for (const v of _dmmLog.data[d.label]) {
+      if (v != null) { vMin = Math.min(vMin, v); vMax = Math.max(vMax, v); }
+    }
+  }
+  if (!isFinite(vMin)) return;
+  if (vMin === vMax) { const dd = Math.abs(vMin)*0.01 || 1e-9; vMin -= dd; vMax += dd; }
+  const binW = (vMax - vMin) / numBins;
+
+  // Build histograms
+  const hists = activeDmms.map(d => {
+    const counts = new Array(numBins).fill(0);
+    for (const v of _dmmLog.data[d.label]) {
+      if (v == null) continue;
+      let b = Math.floor((v - vMin) / binW);
+      b = Math.max(0, Math.min(numBins-1, b));
+      counts[b]++;
+    }
+    return { d, counts };
+  });
+
+  const maxCount = Math.max(...hists.flatMap(h => h.counts), 1);
+  const yTicks   = _niceTicks(0, maxCount, 5);
+  const xTicks   = _niceTicks(vMin, vMax, 6);
+  const ayMax    = yTicks[yTicks.length-1];
+  const axMin    = xTicks[0], axMax = xTicks[xTicks.length-1];
+  const xR       = (axMax - axMin) || 1;
+
+  const toX = v => ML + (v - axMin) / xR * pw;
+  const toY = v => MT + ph - (v / ayMax) * ph;
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(0,0,0,0.025)";
+  ctx.fillRect(ML, MT, pw, ph);
+
+  // Grid
+  ctx.strokeStyle = "rgba(150,156,169,0.22)"; ctx.lineWidth = 1;
+  for (const t of xTicks) { const x=toX(t); ctx.beginPath(); ctx.moveTo(x,MT); ctx.lineTo(x,MT+ph); ctx.stroke(); }
+  for (const t of yTicks) { const y=toY(t); ctx.beginPath(); ctx.moveTo(ML,y); ctx.lineTo(ML+pw,y); ctx.stroke(); }
+  ctx.strokeStyle = "rgba(120,132,154,0.4)"; ctx.lineWidth = 1;
+  ctx.strokeRect(ML, MT, pw, ph);
+
+  // Tick labels
+  const xStep = xTicks.length >= 2 ? xTicks[1] - xTicks[0] : 0;
+  ctx.font = "10px 'JetBrains Mono', monospace"; ctx.fillStyle = "#78849a";
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  for (const t of xTicks) ctx.fillText(_fmtTick(t, xStep), toX(t), MT+ph+5);
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (const t of yTicks) ctx.fillText(String(Math.round(t)), ML-5, toY(t));
+
+  // Axis labels
+  ctx.font = "11px 'Inter', system-ui"; ctx.fillStyle = "#48526a";
+  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  ctx.fillText("Value", ML+pw/2, MT+ph+36);
+  ctx.save(); ctx.translate(14, MT+ph/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText("Count", 0, 0); ctx.restore();
+
+  // Clip
+  ctx.save();
+  ctx.beginPath(); ctx.rect(ML, MT, pw, ph); ctx.clip();
+
+  const pxBinW = pw / numBins;
+  const alpha  = activeDmms.length > 1 ? 0.5 : 0.7;
+
+  for (const { d, counts } of hists) {
+    for (let b = 0; b < numBins; b++) {
+      if (!counts[b]) continue;
+      const bx  = toX(vMin + b * binW);
+      const bh  = (counts[b] / ayMax) * ph;
+      ctx.fillStyle   = d.color;
+      ctx.globalAlpha = alpha;
+      ctx.fillRect(bx, MT+ph-bh, Math.max(pxBinW-1, 1), bh);
+      ctx.globalAlpha = 0.85;
+      ctx.strokeStyle = d.color; ctx.lineWidth = 0.8;
+      ctx.strokeRect(bx, MT+ph-bh, Math.max(pxBinW-1, 1), bh);
+    }
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+
+  // Legend
+  if (activeDmms.length > 1) {
+    ctx.font = "10px 'JetBrains Mono', monospace";
+    const rowH=14, pad=6, swW=10;
+    let maxW = 0;
+    for (const d of activeDmms) maxW = Math.max(maxW, ctx.measureText(d.label).width);
+    const boxW=maxW+swW+pad*3, boxH=activeDmms.length*rowH+pad*2;
+    const bx=ML+pw-boxW-6, by=MT+6;
+    ctx.fillStyle = "rgba(205,209,215,0.88)";
+    ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 4); ctx.fill();
+    activeDmms.forEach((d, ci) => {
+      const ry = by+pad+ci*rowH;
+      ctx.fillStyle = d.color; ctx.fillRect(bx+pad, ry+2, swW, rowH-5);
+      ctx.fillStyle = "#1a1d25"; ctx.textAlign = "left"; ctx.textBaseline = "top";
+      ctx.fillText(d.label, bx+pad+swW+5, ry+1);
+    });
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
 // ── Build the full DC Sweep card DOM ────────────────────────────────
 function buildDcSweepCard(test) {
   _dcSw.test      = test;
@@ -4462,7 +5121,7 @@ function sbAddLoopAction(loopId, type) {
   const lp = _sb.loops.find(l => l.id === loopId);
   if (!lp) return;
   const id = _sbId();
-  if (type === "set")      lp.step_actions.push({ id, type, label:"Set",  instrument:"", ch:1, param:"voltage", value:"0", settle:0 });
+  if (type === "set")      lp.step_actions.push({ id, type, label:"Set",  instrument:"", ch:1, param:"set_voltage", mode:"single", value:"0", settle:0.1 });
   if (type === "wait")     lp.step_actions.push({ id, type, label:"Wait", duration:0.1 });
   if (type === "wait_for") lp.step_actions.push({ id, type, label:"Wait for state",
     instrument:"", ch:1, param:"voltage", condition:">=", target:0, tolerance:0.5,
@@ -4494,7 +5153,7 @@ function sbRemoveLoop(id) {
 
 function sbAddAction(type) {
   const id = _sbId();
-  if (type === "set")      _sb.actions.push({ id, type, label:"Set",  instrument:"", ch:1, param:"voltage", value:"0", settle:0 });
+  if (type === "set")      _sb.actions.push({ id, type, label:"Set",  instrument:"", ch:1, param:"set_voltage", mode:"single", value:"0", settle:0.1 });
   if (type === "measure")  _sb.actions.push({ id, type, label:"value", instrument:"", ch:1, param:"voltage", settle:0, samples:1 });
   if (type === "wait")     _sb.actions.push({ id, type, label:"Wait", duration:0.1 });
   if (type === "wait_for") _sb.actions.push({ id, type, label:"Wait for state",
@@ -4512,6 +5171,20 @@ function _sbSet(scope, id, key, val) {
   const arr = scope === "loop" ? _sb.loops : _sb.actions;
   const obj = arr.find(x => x.id === id);
   if (obj) obj[key] = val;
+}
+
+// For Set blocks: changing instrument also resets param to the first available op.
+function _sbSetInstrAndParam(scope, id, resource) {
+  _sbSet(scope, id, 'instrument', resource);
+  const ops = ((state.workbench||{})._unique||[]).find(i=>i.resource===resource)?.write_ops||[];
+  if (ops.length) _sbSet(scope, id, 'param', ops[0].op);
+  sbRender();
+}
+function _sbSetLoopActionInstrAndParam(loopId, actionId, resource) {
+  _sbSetLoopAction(loopId, actionId, 'instrument', resource);
+  const ops = ((state.workbench||{})._unique||[]).find(i=>i.resource===resource)?.write_ops||[];
+  if (ops.length) _sbSetLoopAction(loopId, actionId, 'param', ops[0].op);
+  sbRender();
 }
 
 function _sbSetRe(scope, id, key, val) { _sbSet(scope, id, key, val); sbRender(); }
@@ -4544,12 +5217,13 @@ function sbRender() {
     return mOpts(cur);
   };
 
-  // Set-action param options filtered by instrument type.
-  // Current (CC) is a PSU concept — don't offer it when an AWG, DMM, or scope is selected.
+  // Set-action param options: read write_ops from the instrument's eewBackbone family.
+  // Falls back to PSU voltage/current if the instrument has no family or isn't loaded yet.
   const setOpts = (cur, resource) => {
-    const type = ((state.workbench || {})._unique || []).find(i => i.resource === resource)?.type || "";
-    if (type && type !== "psu") return `<option value="voltage" ${cur==="voltage"?"selected":""}>Voltage</option>`;
-    return pOpts(cur);
+    const instr = ((state.workbench || {})._unique || []).find(i => i.resource === resource);
+    const ops   = instr?.write_ops || [];
+    if (ops.length === 0) return pOpts(cur);
+    return ops.map(o => `<option value="${escHtml(o.op)}" ${cur===o.op?"selected":""}>${escHtml(o.label)}</option>`).join("");
   };
 
   let html = "";
@@ -4614,23 +5288,45 @@ function sbRender() {
 
           ${(lp.step_actions||[]).map(sa => {
             const rm = `onclick="sbRemoveLoopAction(${lp.id},${sa.id})"`;
-            if (sa.type === "set") return `
+            if (sa.type === "set") { const saMode = sa.mode||"single"; return `
               <div class="sb-block sb-block-set">
-                <div class="sb-block-title">Set <button class="sb-rm" ${rm}>✕</button></div>
+                <div class="sb-block-title">Set
+                  <select class="test-param-input sel" style="font-size:10px;padding:1px 4px;height:auto;width:auto;margin-left:4px;"
+                    onchange="_sbSetLoopActionRe(${lp.id},${sa.id},'mode',this.value)">
+                    <option value="single" ${saMode==="single"?"selected":""}>Single</option>
+                    <option value="sweep"  ${saMode==="sweep" ?"selected":""}>Sweep</option>
+                  </select>
+                  <button class="sb-rm" ${rm}>✕</button></div>
                 <div class="test-param-row"><span class="test-param-label">Instrument</span>
                   <div class="test-param-input-wrap"><select class="test-param-input sel"
-                    onchange="_sbSetLoopActionRe(${lp.id},${sa.id},'instrument',this.value)">${iOpts(sa.instrument)}</select></div></div>
+                    onchange="_sbSetLoopActionInstrAndParam(${lp.id},${sa.id},this.value)">${iOpts(sa.instrument)}</select></div></div>
                 <div class="test-param-row"><span class="test-param-label">Channel</span>
                   <div class="test-param-input-wrap"><input class="test-param-input" type="number"
                     value="${sa.ch||1}" min="1" max="4" onchange="_sbSetLoopAction(${lp.id},${sa.id},'ch',+this.value)"></div></div>
                 <div class="test-param-row"><span class="test-param-label">Parameter</span>
                   <div class="test-param-input-wrap"><select class="test-param-input sel"
                     onchange="_sbSetLoopAction(${lp.id},${sa.id},'param',this.value)">${setOpts(sa.param, sa.instrument)}</select></div></div>
+                ${saMode === "sweep" ? `
+                <div class="test-param-row"><span class="test-param-label">Start</span>
+                  <div class="test-param-input-wrap"><input class="test-param-input" type="number"
+                    value="${sa.start??0}" onchange="_sbSetLoopAction(${lp.id},${sa.id},'start',+this.value)"></div></div>
+                <div class="test-param-row"><span class="test-param-label">Stop</span>
+                  <div class="test-param-input-wrap"><input class="test-param-input" type="number"
+                    value="${sa.stop??1}" onchange="_sbSetLoopAction(${lp.id},${sa.id},'stop',+this.value)"></div></div>
+                <div class="test-param-row"><span class="test-param-label">Step</span>
+                  <div class="test-param-input-wrap"><input class="test-param-input" type="number"
+                    value="${sa.step??0.1}" min="0.0001" onchange="_sbSetLoopAction(${lp.id},${sa.id},'step',+this.value)"></div></div>
+                ` : `
                 <div class="test-param-row"><span class="test-param-label">Value</span>
                   <div class="test-param-input-wrap"><input class="test-param-input" type="text"
                     value="${escHtml(String(sa.value??'0'))}" placeholder="{var} or 0"
                     onchange="_sbSetLoopAction(${lp.id},${sa.id},'value',this.value)"></div></div>
-              </div>`;
+                `}
+                <div class="test-param-row"><span class="test-param-label">Settle</span>
+                  <div class="test-param-input-wrap"><input class="test-param-input" type="number"
+                    value="${sa.settle??0.1}" min="0" step="0.01" onchange="_sbSetLoopAction(${lp.id},${sa.id},'settle',+this.value)">
+                    <span class="test-param-unit">s</span></div></div>
+              </div>`; }
             if (sa.type === "wait") return `
               <div class="sb-block sb-block-wait">
                 <div class="sb-block-title">Wait <button class="sb-rm" ${rm}>✕</button></div>
@@ -4695,28 +5391,45 @@ function sbRender() {
 
   // Actions column
   let actHtml = _sb.actions.map(ac => {
-    if (ac.type === "set") return `
+    if (ac.type === "set") { const acMode = ac.mode||"single"; return `
       <div class="sb-block sb-block-set">
         <div class="sb-block-title">Set
+          <select class="test-param-input sel" style="font-size:10px;padding:1px 4px;height:auto;width:auto;margin-left:4px;"
+            onchange="_sbSetRe('action',${ac.id},'mode',this.value)">
+            <option value="single" ${acMode==="single"?"selected":""}>Single</option>
+            <option value="sweep"  ${acMode==="sweep" ?"selected":""}>Sweep</option>
+          </select>
           <button class="sb-rm" onclick="sbRemoveAction(${ac.id})">✕</button></div>
         <div class="test-param-row"><span class="test-param-label">Instrument</span>
           <div class="test-param-input-wrap"><select class="test-param-input sel"
-            onchange="_sbSetRe('action',${ac.id},'instrument',this.value)">${iOpts(ac.instrument)}</select></div></div>
+            onchange="_sbSetInstrAndParam('action',${ac.id},this.value)">${iOpts(ac.instrument)}</select></div></div>
         <div class="test-param-row"><span class="test-param-label">Channel</span>
           <div class="test-param-input-wrap"><input class="test-param-input" type="number"
             value="${ac.ch||1}" min="1" max="4" onchange="_sbSet('action',${ac.id},'ch',+this.value)"></div></div>
         <div class="test-param-row"><span class="test-param-label">Parameter</span>
           <div class="test-param-input-wrap"><select class="test-param-input sel"
             onchange="_sbSet('action',${ac.id},'param',this.value)">${setOpts(ac.param, ac.instrument)}</select></div></div>
+        ${acMode === "sweep" ? `
+        <div class="test-param-row"><span class="test-param-label">Start</span>
+          <div class="test-param-input-wrap"><input class="test-param-input" type="number"
+            value="${ac.start??0}" onchange="_sbSet('action',${ac.id},'start',+this.value)"></div></div>
+        <div class="test-param-row"><span class="test-param-label">Stop</span>
+          <div class="test-param-input-wrap"><input class="test-param-input" type="number"
+            value="${ac.stop??1}" onchange="_sbSet('action',${ac.id},'stop',+this.value)"></div></div>
+        <div class="test-param-row"><span class="test-param-label">Step</span>
+          <div class="test-param-input-wrap"><input class="test-param-input" type="number"
+            value="${ac.step??0.1}" min="0.0001" onchange="_sbSet('action',${ac.id},'step',+this.value)"></div></div>
+        ` : `
         <div class="test-param-row"><span class="test-param-label">Value</span>
           <div class="test-param-input-wrap"><input class="test-param-input" type="text"
             value="${escHtml(String(ac.value??'0'))}" placeholder="0.001 or {var1}"
             onchange="_sbSet('action',${ac.id},'value',this.value)"></div></div>
+        `}
         <div class="test-param-row"><span class="test-param-label">Settle</span>
           <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-            value="${ac.settle||0}" min="0" step="0.01" onchange="_sbSet('action',${ac.id},'settle',+this.value)">
+            value="${ac.settle??0.1}" min="0" step="0.01" onchange="_sbSet('action',${ac.id},'settle',+this.value)">
             <span class="test-param-unit">s</span></div></div>
-      </div>`;
+      </div>`; }
     if (ac.type === "measure") return `
       <div class="sb-block sb-block-meas">
         <div class="sb-block-title">Measure
@@ -5766,9 +6479,16 @@ function _fmtIb(v) {
   return `${v.toFixed(3)} A`;
 }
 
-function _fmtTick(v) {
-  if (v === 0) return "0";
+function _fmtTick(v, step) {
+  if (v === 0 && !step) return "0";
   const av = Math.abs(v);
+  if (step) {
+    const as = Math.abs(step);
+    if (av >= 1e6 || (av > 0 && av < 1e-6)) return v.toExponential(2);
+    const mag = as > 0 ? Math.floor(Math.log10(as)) : Math.floor(Math.log10(av || 1));
+    const dec = Math.max(0, -mag + 1);
+    return v.toFixed(Math.min(dec, 9));
+  }
   if (av >= 1e4 || av < 1e-2) return v.toExponential(1);
   if (av >= 100) return v.toFixed(0);
   if (av >= 10)  return v.toFixed(1);
@@ -5778,6 +6498,7 @@ function _fmtTick(v) {
 
 window.addEventListener("resize", () => {
   if (state.activeTab === "testspec") ivChartDraw();
+  if (state.selectedTestId === "dmm_logger") _dmmLogDraw();
 });
 
 // ── Init ──────────────────────────────────────────────────────────

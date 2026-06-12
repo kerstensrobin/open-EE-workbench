@@ -106,6 +106,7 @@ def get_command(family: dict, operation: str, **kwargs) -> list[tuple[str, str]]
 
     Raises KeyError if the operation is not defined for this family.
     """
+    kwargs.setdefault("resolution", "SLOW")
     cmd = family.get("commands", {}).get(operation)
     if cmd is None:
         raise KeyError(

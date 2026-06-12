@@ -17,6 +17,7 @@ import atexit
 import itertools
 import json as _json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -120,6 +121,160 @@ if PYVISA_OK:
 # USBTMC.read() accumulates all chunks and returns the full image in one call.
 _SCREENSHOT_CHUNK_SIZE = 2 * 1024 * 1024   # 2 MB
 
+# ── Demo resource ─────────────────────────────────────────────────────────────
+import math as _math
+import random as _random
+import struct as _struct
+
+
+def _make_demo_bmp() -> bytes:
+    """Minimal 64×64 grey BMP — returned by DemoResource.read_raw() (screenshots)."""
+    w, h = 64, 64
+    row_pad  = (4 - (w * 3) % 4) % 4
+    row_size = w * 3 + row_pad
+    pix_size = row_size * h
+    bfh = _struct.pack("<2sIHHI", b"BM", 14 + 40 + pix_size, 0, 0, 14 + 40)
+    bih = _struct.pack("<IiiHHIIiiII", 40, w, h, 1, 24, 0, pix_size, 0, 0, 0, 0)
+    row = b"\x30\x30\x38" * w + b"\x00" * row_pad   # dark-grey row
+    return bfh + bih + row * h
+
+
+_DEMO_BMP = _make_demo_bmp()
+
+
+class DemoResource:
+    """
+    Drop-in fake VISA resource for offline demos and UI testing.
+    `write()` tracks set-points; `query()` returns semi-realistic noisy values.
+    Resource strings begin with DEMO:: to identify them.
+    """
+
+    def __init__(self, resource_name: str, idn: str, instr_type: str, slot: int = 0):
+        self._resource_name  = resource_name
+        self._idn            = idn
+        self._type           = instr_type
+        self._slot           = slot          # used to de-correlate multiple DMMs
+        self._visa_lock      = threading.Lock()
+        self._sp: dict       = {}            # set-points written via write()
+        self.timeout         = 8000
+        self.chunk_size      = _SCREENSHOT_CHUNK_SIZE
+        self.read_termination  = "\n"
+        self.write_termination = "\n"
+
+    # pyvisa interface ---------------------------------------------------
+
+    def write(self, scpi: str):
+        s = scpi.upper()
+        try:
+            tok = scpi.split()
+            val = float(tok[-1]) if tok else 0.0
+            if "VOLT" in s and "MEAS" not in s:
+                self._sp["voltage"] = val
+            elif "CURR" in s and "MEAS" not in s and "LIM" in s:
+                self._sp["i_limit"] = val
+            elif "FREQ" in s:
+                self._sp["freq"] = val
+            elif "AMPL" in s or ("VOLT" in s and "AWG" in self._type.upper()):
+                self._sp["amplitude"] = val
+        except (ValueError, IndexError):
+            pass
+
+    def query(self, scpi: str) -> str:
+        if "*IDN?" in scpi.upper():
+            return self._idn
+        return self._fake_value(scpi) + "\n"
+
+    def read_raw(self) -> bytes:
+        return _DEMO_BMP
+
+    def close(self):
+        pass
+
+    # internals ----------------------------------------------------------
+
+    def _fake_value(self, scpi: str) -> str:
+        t  = time.time()
+        s  = scpi.upper()
+        sl = self._slot
+        tp = self._type   # "scope" | "psu" | "awg" | "dmm" | ...
+        # slow drifts — each slot and instrument type gets a different phase
+        def slow(amp, period, phase=0.0):
+            return amp * _math.sin(t * 2 * _math.pi / period + phase + sl * 1.3)
+        def noise(sigma):
+            return _random.gauss(0, sigma)
+
+        # ── PSU / AWG set-point readback (SOURce queries, no MEAS) ───────
+        if "VOLT" in s and "?" in s and "MEAS" not in s:
+            sp = self._sp.get("voltage", 5.0 + sl * 0.3)
+            return f"{sp + slow(0.02, 30) + noise(0.001):.6f}"
+        if "CURR" in s and "?" in s and "MEAS" not in s:
+            sp = self._sp.get("i_limit", 0.5)
+            return f"{sp:.6f}"
+
+        # ── PSU output measurements (:MEASure:VOLTage? / :MEASure:CURRent?) ─
+        if tp == "psu" and "MEAS" in s and "VOLT" in s:
+            sp = self._sp.get("voltage", 5.0 + sl * 0.3)
+            return f"{sp + slow(0.015, 28) + noise(0.001):.6f}"
+        if tp == "psu" and "MEAS" in s and "CURR" in s:
+            return f"{0.150 + slow(0.03, 20, 1.1) + noise(0.0005):.6f}"
+
+        # ── Scope measurements ───────────────────────────────────────────
+        if "VPP" in s:
+            amp = self._sp.get("amplitude", 1.0)
+            return f"{amp * 2 + slow(0.04, 25) + noise(0.003):.6f}"
+        if "VMAX" in s:
+            return f"{1.02 + slow(0.02, 22) + noise(0.002):.6f}"
+        if "VMIN" in s:
+            return f"{-1.02 + slow(0.02, 22, 2.5) + noise(0.002):.6f}"
+        if "VAVG" in s or "MEAN" in s:
+            return f"{0.0 + slow(0.005, 40) + noise(0.001):.6f}"
+        if "RMS" in s or "VRMS" in s:
+            return f"{0.354 + slow(0.01, 18) + noise(0.001):.6f}"
+        if "PERIOD" in s and "?" in s:
+            freq = self._sp.get("freq", 1000.0)
+            return f"{1.0 / freq:.8e}"
+        if "FREQ" in s and "?" in s:
+            freq = self._sp.get("freq", 1000.0)
+            return f"{freq + slow(freq * 0.001, 15) + noise(freq * 0.0001):.4f}"
+        if "DUTY" in s or "DCYC" in s:
+            return f"{50.0 + slow(0.5, 35) + noise(0.05):.4f}"
+        if "RISE" in s or "FALL" in s:
+            return f"{1.2e-6 + noise(5e-8):.4e}"
+        if "OVER" in s:
+            return f"{2.5 + noise(0.2):.4f}"
+        if "PRESHOOT" in s:
+            return f"{1.1 + noise(0.15):.4f}"
+        if "WIDT" in s or "NWID" in s or "PWID" in s:
+            freq = self._sp.get("freq", 1000.0)
+            return f"{0.5 / freq:.6e}"
+
+        # ── DMM measurements (any remaining MEAS+VOLT or explicit DC/AC) ─
+        if "MEAS" in s and "VOLT" in s:
+            # Each slot gets a distinct baseline for interesting multi-DMM plots
+            bases = [3.300, 5.000, 1.800, 12.000]
+            base  = bases[sl % len(bases)]
+            return f"{base + slow(base * 0.01, 60 + sl * 15) + noise(base * 0.0003):.7f}"
+        if "MEAS" in s and "CURR" in s:
+            return f"{0.0821 + slow(0.005, 45) + noise(0.0001):.7f}"
+        if "RES" in s or "OHM" in s or ("MEAS" in s and "FRES" in s):
+            return f"{9985.0 + slow(5, 40) + noise(0.3):.5f}"
+        if "CAP" in s:
+            return f"{100e-9 + slow(1e-9, 50) + noise(5e-12):.6e}"
+        if "FREQ" in s:
+            return f"{50.012 + slow(0.002, 30) + noise(0.001):.5f}"
+        if "CONT" in s:
+            return "0.000"
+        if "DIOD" in s:
+            return f"{0.650 + noise(0.002):.4f}"
+
+        # ── Generic scope/instrument status ─────────────────────────────
+        if "DISP" in s:
+            return "1"
+        if "TIM" in s and "?" in s:
+            return "0.001"
+
+        return "+0.0"
+
 from flask import Flask, jsonify, request, send_from_directory
 from flask_socketio import SocketIO
 
@@ -146,6 +301,34 @@ _poller_idle.set()   # no poller running initially
 
 
 # ── SCPI helpers ──────────────────────────────────────────────────────────────
+def _extract_value_key(cmd_spec) -> str:
+    """Return the first non-ch placeholder name from a command spec, or 'value'."""
+    if isinstance(cmd_spec, str):
+        keys = [k for k in re.findall(r'\{(\w+)\}', cmd_spec) if k != 'ch']
+        return keys[0] if keys else 'value'
+    if isinstance(cmd_spec, dict):
+        src = cmd_spec.get('write') or next(iter(cmd_spec.values()), '')
+        return _extract_value_key(src)
+    if isinstance(cmd_spec, list):
+        for item in cmd_spec:
+            k = _extract_value_key(item)
+            if k != 'value':
+                return k
+    return 'value'
+
+
+def _write_ops_for_family(family: dict) -> list:
+    """Return [{op, label, key}] for all set_* operations in a resolved family."""
+    ops = []
+    for op_name, cmd_spec in family.get('commands', {}).items():
+        if not op_name.startswith('set_'):
+            continue
+        key   = _extract_value_key(cmd_spec)
+        label = op_name[4:].replace('_', ' ').title()  # "set_frequency" → "Frequency"
+        ops.append({'op': op_name, 'label': label, 'key': key})
+    return ops
+
+
 def _family_for(entry: dict):
     if not HELPERS_OK:
         return None
@@ -276,6 +459,39 @@ def api_workbenches():
     return jsonify({"workbenches": names, "active": active_name()})
 
 
+@flask_app.route("/api/workbench/<name>/rename", methods=["POST"])
+def api_rename_workbench(name: str):
+    from workbench import _safe_name, WORKBENCH_DIR as WD
+    new_name = _safe_name((request.json or {}).get("new_name", "").strip())
+    if not new_name:
+        return jsonify({"error": "new_name required"}), 400
+    src = pathlib.Path(WD) / f"{_safe_name(name)}.json"
+    dst = pathlib.Path(WD) / f"{new_name}.json"
+    if not src.exists():
+        return jsonify({"error": f"Workbench {name!r} not found"}), 404
+    if dst.exists():
+        return jsonify({"error": f"A workbench named {new_name!r} already exists"}), 409
+    src.rename(dst)
+    active_link = Path(WD) / "active.json"
+    if active_link.is_symlink() and active_link.readlink() == Path(f"{_safe_name(name)}.json"):
+        active_link.unlink()
+        active_link.symlink_to(f"{new_name}.json")
+    return jsonify({"status": "renamed", "name": new_name})
+
+
+@flask_app.route("/api/workbench/<name>/delete", methods=["POST"])
+def api_delete_workbench(name: str):
+    from workbench import _safe_name, WORKBENCH_DIR as WD
+    path = Path(WD) / f"{_safe_name(name)}.json"
+    if not path.exists():
+        return jsonify({"error": f"Workbench {name!r} not found"}), 404
+    path.unlink()
+    active_link = Path(WD) / "active.json"
+    if active_link.is_symlink() and active_link.readlink() == Path(f"{_safe_name(name)}.json"):
+        active_link.unlink()
+    return jsonify({"status": "deleted"})
+
+
 @flask_app.route("/api/workbench/<name>")
 def api_load_workbench(name: str):
     try:
@@ -288,6 +504,8 @@ def api_load_workbench(name: str):
         key = (instr.get("serial", ""), instr.get("type", ""))
         if key not in seen:
             seen.add(key)
+            family = _family_for(instr)
+            instr["write_ops"] = _write_ops_for_family(family) if family else []
             unique.append(instr)
     wb["_unique"] = unique
 
@@ -301,22 +519,42 @@ def api_load_workbench(name: str):
 # ── Connection ────────────────────────────────────────────────────────────────
 @flask_app.route("/api/connect", methods=["POST"])
 def api_connect():
-    if not PYVISA_OK:
-        return jsonify({"error": "pyvisa not available — demo mode only"}), 503
-
     wb = _state.get("workbench")
     if not wb:
         return jsonify({"error": "No workbench loaded"}), 400
 
+    # Allow connecting a demo workbench even without pyvisa installed
+    is_demo = all(
+        instr.get("resource", "").upper().startswith("DEMO::")
+        for instr in wb.get("_unique", [])
+    )
+    if not PYVISA_OK and not is_demo:
+        return jsonify({"error": "pyvisa not available — demo mode only"}), 503
+
     def _do():
-        rm = pyvisa.ResourceManager("@py")
+        rm            = None
         raw_results: dict = {}
+        demo_slot_ctr = {}   # instr_type -> count (for per-slot noise de-correlation)
 
         for instr in wb.get("_unique", []):
             rstr = instr.get("resource", "")
             if not rstr or rstr in raw_results:
                 continue
+
+            if rstr.upper().startswith("DEMO::"):
+                # Create a DemoResource — no real hardware needed
+                itype = instr.get("type", "unknown")
+                slot  = demo_slot_ctr.get(itype, 0)
+                demo_slot_ctr[itype] = slot + 1
+                idn   = instr.get("idn", f"DEMO,{instr.get('model','DEMO')},SN000000,1.0")
+                res   = DemoResource(rstr, idn, itype, slot)
+                raw_results[rstr] = (res, idn, None)
+                _log(f"✓  {instr['model']}  →  {idn}  [demo]")
+                continue
+
             try:
+                if rm is None:
+                    rm = pyvisa.ResourceManager("@py")
                 res = rm.open_resource(rstr)
                 res.timeout = 8000
                 res._visa_lock = threading.Lock()  # serialise concurrent VISA ops
@@ -830,6 +1068,16 @@ DMM_OPS = {
     "freq": "measure_frequency",     "cont": "measure_continuity",
     "diode":"measure_diode",         "cap":  "measure_capacitance",
 }
+PSU_LOGGER_OPS = {
+    "psu_v": "measure_voltage",
+    "psu_i": "measure_current",
+    "psu_p": "measure_power",
+}
+def _res_for_interval(interval: float) -> str:
+    """Return EDU34450A resolution keyword for a given measurement interval."""
+    if interval < 0.5:  return "FAST"
+    if interval < 2.0:  return "MED"
+    return "SLOW"
 
 
 @flask_app.route("/api/dmm/measure", methods=["POST"])
@@ -1499,19 +1747,46 @@ def _suggest_tests() -> list:
             "has_scope": has_scope,
         })
 
-    if "dmm" in types:
+    if "dmm" in types or "psu" in types:
+        all_instr_all   = wb.get("_unique", [])
+        psu_list_l      = [i for i in all_instr_all if i.get("type") == "psu"]
+        dmm_instr_opts  = [
+            {"resource": i["resource"], "label": i.get("model", f"DMM{n+1}"),
+             "model": i.get("model", "DMM"), "itype": "dmm"}
+            for n, i in enumerate(all_instr_all)
+            if i.get("type") == "dmm" and i.get("resource")
+        ]
+        for psu_instr in psu_list_l:
+            res_key  = psu_instr.get("resource", "")
+            psu_res  = _state["resources"].get(res_key)
+            psu_fam  = _state["families"].get(res_key)
+            model    = psu_instr.get("model", "PSU")
+            num_ch   = 1
+            if psu_res and psu_fam:
+                # Probe channel count by querying measure_voltage on ch 1..4
+                for ch in range(1, 5):
+                    try:
+                        r = _safe_query(psu_res, psu_fam, "measure_voltage", ch=ch)
+                        if r is None:
+                            break
+                        num_ch = ch
+                    except Exception:
+                        break
+            for ch in range(1, num_ch + 1):
+                ch_label = f"{model} Ch{ch}" if num_ch > 1 else model
+                dmm_instr_opts.append({
+                    "resource": res_key, "label": ch_label,
+                    "model": model,      "itype": "psu", "ch": ch,
+                })
         tests.append({
-            "id":          "dmm_logger",
-            "name":        "DMM Logger",
-            "description": "Log DMM measurements at a fixed interval",
-            "requires":    ["dmm"],
-            "params": [
-                {"id": "mode",        "label": "Mode",        "unit": "",    "default": "vdc", "type": "select",
-                 "options": ["vdc", "vac", "idc", "iac", "r", "r4w", "freq", "cap"]},
-                {"id": "interval",    "label": "Interval",    "unit": "s",   "default": 1.0,   "type": "number"},
-                {"id": "num_samples", "label": "Samples",     "unit": "",    "default": 60,    "type": "number"},
-            ],
-            "columns": ["elapsed_s", "value"],
+            "id":               "dmm_logger",
+            "name":             "DMM Logger",
+            "description":      "Log measurements from DMMs and PSUs at a fixed interval",
+            "requires":         ["dmm"],
+            "custom_ui":        True,
+            "dmm_instruments":  dmm_instr_opts,
+            "params":           [],
+            "columns":          ["elapsed_s"],
         })
 
     if "scope" in types:
@@ -2502,37 +2777,100 @@ def api_automation_run():
         _done(rows, cols)
 
     def _run_dmm_logger():
-        mode        = str(params.get("mode",       "vdc"))
-        interval    = float(params.get("interval",  1.0))
-        num_samples = int(params.get("num_samples", 60))
+        interval = float(params.get("interval", 1.0))
+        duration = float(params.get("duration", 60.0))
+        infinite = duration <= 0
 
-        dmm_res, dmm_fam = _find_instrument("dmm")
-        if dmm_res is None:
-            _done([], [], "DMM not connected"); return
+        # Multi-channel config: pipe-separated resource strings, modes, labels, itypes, channels
+        res_str   = str(params.get("dmm_resources", "")).strip()
+        mode_str  = str(params.get("dmm_modes",     "vdc")).strip()
+        label_str = str(params.get("dmm_labels",    "")).strip()
+        itype_str = str(params.get("dmm_itypes",    "")).strip()
+        ch_str    = str(params.get("dmm_channels",  "")).strip()
 
-        op = DMM_OPS.get(mode)
-        if not op:
-            _done([], [], f"Unknown mode {mode!r}"); return
+        resources = [r.strip() for r in res_str.split("|")   if r.strip()]
+        modes     = [m.strip() for m in mode_str.split("|")  if m.strip()]
+        labels    = [l.strip() for l in label_str.split("|") if l.strip()]
+        itypes    = [t.strip() for t in itype_str.split("|") if t.strip()]
+        ch_nums   = [int(c)    for c in ch_str.split("|")    if c.strip()]
 
-        cols = ["elapsed_s", "value"]
+        # Fall back to the first DMM if no config provided (backwards-compat)
+        if not resources:
+            wb_fb = _state.get("workbench", {})
+            for instr in wb_fb.get("_unique", []):
+                if instr.get("type") == "dmm" and _state["resources"].get(instr.get("resource", "")):
+                    resources = [instr["resource"]]
+                    break
+            if not resources:
+                _done([], [], "DMM not connected"); return
+            modes  = [str(params.get("mode", "vdc"))]
+            labels = ["DMM"]
+            itypes = ["dmm"]
+            ch_nums = [1]
+
+        handles = []
+        for i, res_name in enumerate(resources):
+            mode  = modes[i]  if i < len(modes)  else "vdc"
+            label = labels[i] if i < len(labels) else f"CH{i+1}"
+            itype = itypes[i] if i < len(itypes) else "dmm"
+            ch    = ch_nums[i] if i < len(ch_nums) else 1
+            op    = PSU_LOGGER_OPS.get(mode) if itype == "psu" else DMM_OPS.get(mode)
+            if not op:
+                continue
+            res = _state["resources"].get(res_name)
+            fam = _state["families"].get(res_name)
+            if res is None or fam is None:
+                continue
+            handles.append({"res": res, "fam": fam, "op": op,
+                            "label": label, "ch": ch, "itype": itype, "mode_key": mode})
+
+        if not handles:
+            _done([], [], "No valid channels configured"); return
+
+        cols = ["elapsed_s"] + [h["label"] for h in handles]
         rows = []
-        _emit_progress(f"DMM logger: {num_samples} × {mode} at {interval}s interval")
+        n_ch  = len(handles)
+        resolution = _res_for_interval(interval)
+        n_desc = "∞" if infinite else f"{duration:.3g}s"
+        _emit_progress(
+            f"DMM logger: {n_desc} @ {interval:.2g}s interval, "
+            f"{n_ch} channel{'s' if n_ch > 1 else ''}, res={resolution}"
+        )
 
         t0 = time.time()
-        for i in range(num_samples):
+        i = 0
+        while True:
+            iter_t = time.time()
             if _auto_stop.is_set():
                 _emit_progress("Stopped by user"); break
-            try:
-                raw = _run_steps(dmm_res, get_command(dmm_fam, op))
-                val = round(float(raw), 8) if raw is not None else None
-                elapsed = round(time.time() - t0, 3)
-                row = [elapsed, val]
-                rows.append(row)
-                sio.emit("automation_row", {"test_id": test_id, "row": row, "columns": cols,
-                                            "progress": (i + 1) / num_samples})
-            except Exception as exc:
-                _log(f"[auto] sample {i+1} error: {exc}")
-            _auto_stop.wait(timeout=interval)
+            vals = []
+            for h in handles:
+                try:
+                    res_kw = resolution if h["itype"] == "dmm" else "SLOW"
+                    raw = _run_steps(h["res"], get_command(h["fam"], h["op"],
+                                                           ch=h["ch"], resolution=res_kw))
+                    val = round(float(raw), 8) if raw is not None else None
+                except Exception as exc:
+                    _log(f"[auto] DMM sample {i+1} {h['label']}: {exc}")
+                    val = None
+                vals.append(val)
+            elapsed = round(time.time() - t0, 3)
+            row = [elapsed] + vals
+            rows.append(row)
+            progress = -1 if infinite else min(elapsed / duration, 1.0)
+            sio.emit("automation_row", {
+                "test_id": test_id, "row": row, "columns": cols,
+                "progress": progress,
+            })
+            i += 1
+            if not infinite and (time.time() - t0) >= duration:
+                break
+            remaining = interval - (time.time() - iter_t)
+            deadline = time.time() + remaining
+            while time.time() < deadline:
+                if _auto_stop.is_set():
+                    break
+                time.sleep(min(0.05, deadline - time.time()))
 
         _done(rows, cols)
 
@@ -3305,24 +3643,39 @@ def api_automation_run():
             if t == "wait":
                 time.sleep(float(ac.get("duration", 0.1)))
             elif t == "set" and res:
-                raw = str(ac.get("value", "0"))
-                for var, val in var_map.items():
-                    raw = raw.replace("{" + var + "}", str(val))
-                try:
-                    v, ch, par = float(raw), int(ac.get("ch", 1)), ac.get("param", "voltage")
-                    if par == "current":
-                        try: _run_steps(res, get_command(fam, "output_off", ch=ch))
-                        except Exception: pass
-                        _run_steps(res, get_command(fam, "set_current_limit",
-                            ch=ch, value=f"{v:.6f}"))
-                        _run_steps(res, get_command(fam, "output_on", ch=ch))
-                    else:
-                        _run_steps(res, get_command(fam, "set_voltage",
-                            ch=ch, value=f"{v:.6f}"))
-                    s = float(ac.get("settle", 0))
-                    if s > 0: time.sleep(s)
-                except Exception as exc:
-                    _log(f"[sandbox] set: {exc}")
+                ch, par = int(ac.get("ch", 1)), ac.get("param", "voltage")
+                settle  = float(ac.get("settle", 0))
+                if ac.get("mode") == "sweep":
+                    a, b = float(ac.get("start", 0)), float(ac.get("stop", 1))
+                    s    = abs(float(ac.get("step", 0.1))) or 0.1
+                    n, d = round(abs(b - a) / s), (1 if b >= a else -1)
+                    vals = [round(a + k * d * s, 10) for k in range(n + 1)]
+                else:
+                    raw = str(ac.get("value", "0"))
+                    for var, val in var_map.items():
+                        raw = raw.replace("{" + var + "}", str(val))
+                    try:    vals = [float(raw)]
+                    except Exception: vals = []
+                for v in vals:
+                    try:
+                        if par == "set_current_limit":
+                            # CC mode: cycle output off→set→on for a clean transition
+                            try: _run_steps(res, get_command(fam, "output_off", ch=ch))
+                            except Exception: pass
+                            _run_steps(res, get_command(fam, "set_current_limit",
+                                ch=ch, value=f"{float(v):.6f}"))
+                            _run_steps(res, get_command(fam, "output_on", ch=ch))
+                        else:
+                            cmd_spec = fam.get("commands", {}).get(par)
+                            kw       = _extract_value_key(cmd_spec) if cmd_spec else "value"
+                            # string-valued params (function, unit, mode) stay as text;
+                            # everything else is formatted as a float
+                            try:    fmt = f"{float(v):.6g}"
+                            except (ValueError, TypeError): fmt = str(v).upper()
+                            _run_steps(res, get_command(fam, par, ch=ch, **{kw: fmt}))
+                        if settle > 0: time.sleep(settle)
+                    except Exception as exc:
+                        _log(f"[sandbox] set: {exc}")
             elif t == "wait_for" and res:
                 op       = _MEAS_OPS.get(ac.get("param", "voltage"), "measure_voltage")
                 ch       = int(ac.get("ch", 1))
