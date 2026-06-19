@@ -16,6 +16,7 @@ import argparse
 import atexit
 import itertools
 import json as _json
+import logging
 import os
 import re
 import subprocess
@@ -291,6 +292,7 @@ _state: dict = {
     "rm":          None,   # pyvisa ResourceManager
     "resources":   {},     # resource_str -> pyvisa resource
     "families":    {},     # resource_str -> resolved family dict
+    "psu_channels": {},    # resource_str -> int (number of output channels, probed at connect)
     "connected":   False,
 }
 _lock         = threading.Lock()
@@ -342,13 +344,17 @@ def _family_for(entry: dict):
         return None
 
 
-def _run_steps(resource, steps: list) -> object:
+def _run_steps(resource, steps: list, role: str = None, quiet: bool = False) -> object:
     result = None
     for action, scpi in steps:
         if action == "write":
             resource.write(scpi)
+            if not quiet:
+                sio.emit("scpi_traffic", {"role": role, "cmd": scpi, "result": None})
         elif action == "query":
             result = resource.query(scpi).strip()
+            if not quiet:
+                sio.emit("scpi_traffic", {"role": role, "cmd": scpi, "result": result})
         elif action == "raw_query":
             resource.write(scpi)
             # Use a large chunk_size so USBTMC.read() accumulates the full
@@ -361,15 +367,18 @@ def _run_steps(resource, steps: list) -> object:
                 if orig_chunk is not None:
                     try: resource.chunk_size = orig_chunk
                     except Exception: pass
+            if not quiet:
+                sio.emit("scpi_traffic", {"role": role, "cmd": scpi,
+                                          "result": f"<{len(result)} bytes>"})
     return result
 
 
-def _op(resource, family, operation: str, **kwargs):
+def _op(resource, family, operation: str, role: str = None, **kwargs):
     if resource is None or family is None:
         return None
     try:
         steps = get_command(family, operation, **kwargs)
-        result = _run_steps(resource, steps)
+        result = _run_steps(resource, steps, role=role)
         writes = [s for a, s in steps if a in ("write", "query")]
         sio.emit("log", {"msg": "→  " + "  |  ".join(writes[:2])})
         return result
@@ -397,7 +406,7 @@ def _scope_enable_measures(scope_res, scope_fam, op_ch_pairs: list):
     """
     # Phase 1 — clear existing displayed items
     try:
-        _run_steps(scope_res, get_command(scope_fam, "measure_clear_all"))
+        _run_steps(scope_res, get_command(scope_fam, "measure_clear_all"), role="scope")
         time.sleep(0.1)
     except KeyError:
         pass          # command not in this family — fine
@@ -410,7 +419,7 @@ def _scope_enable_measures(scope_res, scope_fam, op_ch_pairs: list):
             steps = get_command(scope_fam, op, ch=ch)
             write_only = [(a, s) for a, s in steps if a == "write"]
             if write_only:
-                _run_steps(scope_res, write_only)
+                _run_steps(scope_res, write_only, role="scope")
         except KeyError:
             pass
         except Exception as exc:
@@ -428,7 +437,7 @@ def _scope_query_only(scope_res, scope_fam, op: str, ch: int):
         query_steps = [(a, s) for a, s in steps if a in ("query", "raw_query")]
         if not query_steps:
             return None
-        raw = _run_steps(scope_res, query_steps)
+        raw = _run_steps(scope_res, query_steps, role="scope")
         if raw is None:
             return None
         v = float(raw)
@@ -607,6 +616,30 @@ def api_connect():
             _state["families"]  = {k: v for k, v in families.items() if v}
             _state["connected"] = bool(_state["resources"])
 
+        # Probe PSU channel counts once here so _suggest_tests() can read from
+        # _state without making live VISA queries on every automation tab refresh.
+        psu_ch_cache = {}
+        for instr in wb.get("_unique", []):
+            if instr.get("type") != "psu":
+                continue
+            rstr     = instr.get("resource", "")
+            psu_res  = _state["resources"].get(rstr)
+            psu_fam  = _state["families"].get(rstr)
+            if not psu_res or not psu_fam:
+                continue
+            num_ch = 0
+            for ch in range(1, 5):
+                try:
+                    r = _safe_query(psu_res, psu_fam, "measure_voltage", ch=ch)
+                    if r is None:
+                        break
+                    num_ch = ch
+                except Exception:
+                    break
+            psu_ch_cache[rstr] = max(num_ch, 1)
+        with _lock:
+            _state["psu_channels"] = psu_ch_cache
+
         instruments_out = []
         for instr in wb.get("_unique", []):
             rstr = instr.get("resource", "")
@@ -649,7 +682,7 @@ def api_disconnect():
         if _state["rm"]:
             try: _state["rm"].close()
             except: pass
-        _state.update(rm=None, resources={}, connected=False)
+        _state.update(rm=None, resources={}, psu_channels={}, connected=False)
     sio.emit("disconnected", {})
     return jsonify({"status": "disconnected"})
 
@@ -696,7 +729,7 @@ _SCOPE_MEASURES = {
 def api_scope(cmd: str):
     if cmd not in ("run", "stop", "single", "autoscale"):
         return jsonify({"error": "unknown command"}), 400
-    _executor.submit(lambda: _op(*_find_instrument("scope"), cmd))
+    _executor.submit(lambda: _op(*_find_instrument("scope"), cmd, role="scope"))
     return jsonify({"status": "ok"})
 
 
@@ -714,7 +747,7 @@ def api_scope_measure():
         if res is None:
             sio.emit("scope_measurement", {"error": "No scope connected"}); return
         try:
-            raw = _run_steps(res, get_command(fam, meas, ch=ch))
+            raw = _run_steps(res, get_command(fam, meas, ch=ch), role="scope")
             val = float(raw) if raw is not None else None
             label, unit = _SCOPE_MEASURES[meas]
             sio.emit("scope_measurement",
@@ -732,10 +765,19 @@ def api_scope_measure():
 
 @flask_app.route("/api/scope/measure_batch", methods=["POST"])
 def api_scope_measure_batch():
-    """Run a list of measurements sequentially with a configurable inter-command delay."""
-    d            = request.json or {}
-    items        = d.get("measurements", [])   # [{op, ch}, ...]
-    delay_s      = max(0, min(int(d.get("delay_ms", 50)), 2000)) / 1000.0
+    """Run a list of measurements sequentially.
+
+    setup=True  → call _scope_enable_measures first (clears display items and
+                  re-registers each one).  Required on first call and whenever
+                  the measurement list changes or overflows the scope's on-screen
+                  slot limit.
+    setup=False → skip the enable step and only send the query for each item.
+                  Safe as long as the scope still has those items registered.
+    """
+    d       = request.json or {}
+    items   = d.get("measurements", [])   # [{op, ch}, ...]
+    delay_s = max(0, min(int(d.get("delay_ms", 50)), 2000)) / 1000.0
+    setup   = bool(d.get("setup", True))
 
     def _do():
         res, fam = _find_instrument("scope")
@@ -743,27 +785,22 @@ def api_scope_measure_batch():
             sio.emit("log", {"msg": "⚠ No scope connected"})
             sio.emit("scope_measurement_batch_done", {})
             return
-        for idx, m in enumerate(items):
+
+        valid = [(m.get("op", ""), int(m.get("ch", 1)))
+                 for m in items if m.get("op", "") in _SCOPE_MEASURES]
+
+        if setup:
+            _scope_enable_measures(res, fam, valid)
+
+        for idx, (op, ch) in enumerate(valid):
             if idx > 0 and delay_s > 0:
                 time.sleep(delay_s)
-            op = m.get("op", "")
-            ch = int(m.get("ch", 1))
-            if op not in _SCOPE_MEASURES:
-                continue
-            try:
-                raw = _run_steps(res, get_command(fam, op, ch=ch))
-                val = float(raw) if raw is not None else None
-                label, unit = _SCOPE_MEASURES[op]
-                sio.emit("scope_measurement",
-                         {"measurement": op, "label": label, "unit": unit,
-                          "ch": ch, "value": val})
-            except KeyError:
-                sio.emit("scope_measurement",
-                         {"measurement": op, "ch": ch,
-                          "error": f"{op!r} not supported on this scope"})
-            except Exception as exc:
-                sio.emit("scope_measurement",
-                         {"measurement": op, "ch": ch, "error": str(exc)})
+            label, unit = _SCOPE_MEASURES[op]
+            val = _scope_query_only(res, fam, op, ch)
+            sio.emit("scope_measurement",
+                     {"measurement": op, "label": label, "unit": unit,
+                      "ch": ch, "value": val})
+
         sio.emit("scope_measurement_batch_done", {})
 
     _executor.submit(_do)
@@ -802,7 +839,7 @@ def api_screenshot():
             # instead of blocking until the next triggered acquisition.
             scope_stopped = False
             try:
-                _run_steps(res, get_command(fam, "stop"))
+                _run_steps(res, get_command(fam, "stop"), role="scope")
                 scope_stopped = True
                 time.sleep(0.1)     # let display latch the frozen frame
             except Exception:
@@ -842,7 +879,7 @@ def api_screenshot():
                 # Always resume acquisition after the capture attempt
                 if scope_stopped:
                     try:
-                        _run_steps(res, get_command(fam, "run"))
+                        _run_steps(res, get_command(fam, "run"), role="scope")
                     except Exception:
                         pass
 
@@ -897,7 +934,7 @@ def api_scope_set():
             sio.emit("log", {"msg": "⚠ No scope connected"}); return
         try:
             steps = get_command(fam, op, **kw)
-            _run_steps(res, steps)
+            _run_steps(res, steps, role="scope")
             writes = [s for a, s in steps if a in ("write", "query")]
             if writes:
                 sio.emit("log", {"msg": "→  " + "  |  ".join(writes[:2])})
@@ -979,10 +1016,12 @@ def api_scpi():
                 if "?" in cmd:
                     result = res.query(cmd).strip()
                     sio.emit("scpi_result", {"role": role, "cmd": cmd, "result": result})
+                    sio.emit("scpi_traffic", {"role": role, "cmd": cmd, "result": result})
                     _log(f"[SCPI/{role}] {cmd}  →  {result}")
                 else:
                     res.write(cmd)
                     sio.emit("scpi_result", {"role": role, "cmd": cmd, "result": None})
+                    sio.emit("scpi_traffic", {"role": role, "cmd": cmd, "result": None})
                     _log(f"[SCPI/{role}] {cmd}")
         except Exception as exc:
             sio.emit("scpi_result", {"role": role, "cmd": cmd, "error": str(exc)})
@@ -1002,7 +1041,7 @@ def api_psu_set():
     for key, (op, kw) in op_map.items():
         if key in d:
             val = f"{float(d[key]):.4f}"
-            _executor.submit(lambda o=op, v=val: _op(*_find_instrument("psu"), o, ch=ch, **{kw: v}))
+            _executor.submit(lambda o=op, v=val: _op(*_find_instrument("psu"), o, role="psu", ch=ch, **{kw: v}))
     return jsonify({"status": "ok"})
 
 
@@ -1011,13 +1050,13 @@ def api_psu_output():
     d   = request.json or {}
     ch  = int(d.get("ch", 1))
     on  = bool(d.get("state", False))
-    _executor.submit(lambda: _op(*_find_instrument("psu"), "output_on" if on else "output_off", ch=ch))
+    _executor.submit(lambda: _op(*_find_instrument("psu"), "output_on" if on else "output_off", role="psu", ch=ch))
     return jsonify({"status": "ok"})
 
 
 @flask_app.route("/api/psu/reset", methods=["POST"])
 def api_psu_reset():
-    _executor.submit(lambda: _op(*_find_instrument("psu"), "reset"))
+    _executor.submit(lambda: _op(*_find_instrument("psu"), "reset", role="psu"))
     return jsonify({"status": "ok"})
 
 
@@ -1037,9 +1076,9 @@ def api_awg_apply():
         ]
         for key, scpi_op, kw_fn in ops:
             if key in d:
-                _op(res, fam, scpi_op, ch=ch, **kw_fn(d[key]))
+                _op(res, fam, scpi_op, role="awg", ch=ch, **kw_fn(d[key]))
         if "amplitude" in d:
-            _op(res, fam, "set_amplitude_unit", ch=ch, unit="VPP")
+            _op(res, fam, "set_amplitude_unit", role="awg", ch=ch, unit="VPP")
 
     _executor.submit(_do)
     return jsonify({"status": "ok"})
@@ -1050,13 +1089,13 @@ def api_awg_output():
     d  = request.json or {}
     ch = int(d.get("ch", 1))
     on = bool(d.get("state", False))
-    _executor.submit(lambda: _op(*_find_instrument("awg"), "output_on" if on else "output_off", ch=ch))
+    _executor.submit(lambda: _op(*_find_instrument("awg"), "output_on" if on else "output_off", role="awg", ch=ch))
     return jsonify({"status": "ok"})
 
 
 @flask_app.route("/api/awg/reset", methods=["POST"])
 def api_awg_reset():
-    _executor.submit(lambda: _op(*_find_instrument("awg"), "reset"))
+    _executor.submit(lambda: _op(*_find_instrument("awg"), "reset", role="awg"))
     return jsonify({"status": "ok"})
 
 
@@ -1091,7 +1130,7 @@ def api_dmm_measure():
         res, fam = _find_instrument("dmm")
         if res is None or fam is None: return
         try:
-            val = float(_run_steps(res, get_command(fam, op)) or "nan")
+            val = float(_run_steps(res, get_command(fam, op), role="dmm") or "nan")
             sio.emit("dmm_reading", {"value": val, "mode": mode})
         except Exception as exc:
             _log(f"[dmm] {exc}")
@@ -1126,7 +1165,7 @@ def _start_polling():
                                             ("measure_current", "i"),
                                             ("measure_power",   "p")]:
                                 try:
-                                    r = _run_steps(res, get_command(fam, op, ch=ch))
+                                    r = _run_steps(res, get_command(fam, op, ch=ch), quiet=True)
                                     if r is not None:
                                         readings[key] = float(r)
                                 except Exception:
@@ -1437,11 +1476,11 @@ def api_bench_state_load():
                 for out in cfg.get("outputs", []):
                     ch = out["channel"]
                     _run_steps(res, get_command(fam, "set_voltage",
-                        ch=ch, value=f"{out['voltage']:.4f}"))
+                        ch=ch, value=f"{out['voltage']:.4f}"), role="psu")
                     _run_steps(res, get_command(fam, "set_current_limit",
-                        ch=ch, value=f"{out['current_limit']:.4f}"))
+                        ch=ch, value=f"{out['current_limit']:.4f}"), role="psu")
                     cmd = "output_on" if out.get("enabled") else "output_off"
-                    try: _run_steps(res, get_command(fam, cmd, ch=ch))
+                    try: _run_steps(res, get_command(fam, cmd, ch=ch), role="psu")
                     except KeyError: pass
                 applied.append(rstr)
             elif itype == "awg":
@@ -1452,7 +1491,7 @@ def api_bench_state_load():
                             ch=ch, func=ch_cfg.get("function", "SIN"),
                             freq=ch_cfg.get("frequency", 1000),
                             amp=ch_cfg.get("amplitude", 1.0),
-                            offset=ch_cfg.get("offset", 0.0)))
+                            offset=ch_cfg.get("offset", 0.0)), role="awg")
                     except KeyError:
                         # apply not available — set params individually
                         for op, kw in [
@@ -1461,10 +1500,10 @@ def api_bench_state_load():
                             ("set_amplitude", {"amp":    ch_cfg.get("amplitude", 1.0)}),
                             ("set_offset",    {"offset": ch_cfg.get("offset", 0.0)}),
                         ]:
-                            try: _run_steps(res, get_command(fam, op, ch=ch, **kw))
+                            try: _run_steps(res, get_command(fam, op, ch=ch, **kw), role="awg")
                             except KeyError: pass
                     cmd = "output_on" if ch_cfg.get("enabled") else "output_off"
-                    try: _run_steps(res, get_command(fam, cmd, ch=ch))
+                    try: _run_steps(res, get_command(fam, cmd, ch=ch), role="awg")
                     except KeyError: pass
                 applied.append(rstr)
         except Exception as exc:
@@ -1758,20 +1797,8 @@ def _suggest_tests() -> list:
         ]
         for psu_instr in psu_list_l:
             res_key  = psu_instr.get("resource", "")
-            psu_res  = _state["resources"].get(res_key)
-            psu_fam  = _state["families"].get(res_key)
             model    = psu_instr.get("model", "PSU")
-            num_ch   = 1
-            if psu_res and psu_fam:
-                # Probe channel count by querying measure_voltage on ch 1..4
-                for ch in range(1, 5):
-                    try:
-                        r = _safe_query(psu_res, psu_fam, "measure_voltage", ch=ch)
-                        if r is None:
-                            break
-                        num_ch = ch
-                    except Exception:
-                        break
+            num_ch   = _state["psu_channels"].get(res_key, 1)
             for ch in range(1, num_ch + 1):
                 ch_label = f"{model} Ch{ch}" if num_ch > 1 else model
                 dmm_instr_opts.append({
@@ -2191,10 +2218,10 @@ def api_automation_run():
 
         # Configure AWG: sine wave, fixed amplitude
         try:
-            _run_steps(awg_res, get_command(awg_fam, "set_function",       ch=1, func="SIN"))
-            _run_steps(awg_res, get_command(awg_fam, "set_amplitude",      ch=1, amp=f"{amplitude:.4f}"))
-            _run_steps(awg_res, get_command(awg_fam, "set_amplitude_unit", ch=1, unit="VPP"))
-            _run_steps(awg_res, get_command(awg_fam, "output_on",          ch=1))
+            _run_steps(awg_res, get_command(awg_fam, "set_function",       ch=1, func="SIN"),  role="awg")
+            _run_steps(awg_res, get_command(awg_fam, "set_amplitude",      ch=1, amp=f"{amplitude:.4f}"), role="awg")
+            _run_steps(awg_res, get_command(awg_fam, "set_amplitude_unit", ch=1, unit="VPP"), role="awg")
+            _run_steps(awg_res, get_command(awg_fam, "output_on",          ch=1),             role="awg")
         except Exception as exc:
             _done([], cols, f"AWG setup failed: {exc}"); return
 
@@ -2204,11 +2231,11 @@ def api_automation_run():
             if _auto_stop.is_set():
                 _emit_progress("Stopped by user"); break
             try:
-                _run_steps(awg_res, get_command(awg_fam, "set_frequency", ch=1, freq=f"{freq:.6g}"))
+                _run_steps(awg_res, get_command(awg_fam, "set_frequency", ch=1, freq=f"{freq:.6g}"), role="awg")
                 time.sleep(settle_time)
-                raw_vpp1 = _run_steps(scope_res, get_command(scope_fam, "measure_vpp",  ch=1))
-                raw_vpp2 = _run_steps(scope_res, get_command(scope_fam, "measure_vpp",  ch=2))
-                raw_freq = _run_steps(scope_res, get_command(scope_fam, "measure_freq", ch=1))
+                raw_vpp1 = _run_steps(scope_res, get_command(scope_fam, "measure_vpp",  ch=1), role="scope")
+                raw_vpp2 = _run_steps(scope_res, get_command(scope_fam, "measure_vpp",  ch=2), role="scope")
+                raw_freq = _run_steps(scope_res, get_command(scope_fam, "measure_freq", ch=1), role="scope")
 
                 def _safe(r):
                     try:
@@ -3895,6 +3922,7 @@ def _on_connect():
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 def _run_server(port: int):
+    logging.getLogger("werkzeug").setLevel(logging.ERROR)
     sio.run(flask_app, host="127.0.0.1", port=port,
             debug=False, use_reloader=False, log_output=False,
             allow_unsafe_werkzeug=True)
@@ -3936,7 +3964,10 @@ def _open_chrome_app(url: str, width: int = 1300, height: int = 840) -> subproce
         "--no-default-browser-check",
         "--no-first-run",
         "--disable-extensions",
-    ])
+        # Skip system keyring (KWallet / GNOME Keyring) — not needed for a
+        # local-only app and suppresses the KWallet-not-found startup warning.
+        "--password-store=basic",
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def _open_qtwebkit(url: str, width: int = 1300, height: int = 840):
@@ -3984,7 +4015,6 @@ def main():
     # 1. Chrome / Brave --app mode: best rendering, real Chromium, no browser UI
     try:
         proc = _open_chrome_app(url)
-        print(f"[app] opened in Chrome app-mode (pid {proc.pid})")
         proc.wait()   # block until user closes the window
         _cleanup()
         return
@@ -3994,7 +4024,6 @@ def main():
     # 2. PyQt5 + QtWebKit: pure Qt, no Chromium sandbox issues
     try:
         from PyQt5.QtWebKitWidgets import QWebView  # noqa: F401 — check availability
-        print("[app] opening with PyQt5 + QtWebKit")
         _open_qtwebkit(url)   # calls sys.exit() → atexit fires _cleanup
         return
     except ImportError:
@@ -4002,7 +4031,6 @@ def main():
 
     # 3. Last resort: system browser
     import webbrowser
-    print(f"[app] no standalone window available — opening browser: {url}")
     webbrowser.open(url)
     try:
         t.join()

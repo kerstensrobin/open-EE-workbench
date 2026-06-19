@@ -1119,6 +1119,7 @@ def main():
 
         instrument_reports = []
         instrument_data = []
+        seen_serials: set[str] = set()
 
         if resources:
             status("Collecting identity information for discovered resources")
@@ -1134,6 +1135,11 @@ def main():
                     inst = rm.open_resource(resource_name)
                     idn = query_identity(inst, resource_name)
                     manufacturer, model, serial, firmware = parse_idn(idn)
+                    if serial and serial in seen_serials:
+                        status(f"Skipping duplicate resource {resource_name} (serial {serial} already recorded)")
+                        continue
+                    if serial:
+                        seen_serials.add(serial)
                     family = _db_classify(idn) if _db_classify else None
                     if family:
                         type_str = f"{family['type']}  ({family['vendor']} {family['series']})"

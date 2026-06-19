@@ -74,4 +74,8 @@ To add a new instrument, add an entry to `core/eewBackbone.json` — no code cha
 
 ---
 
+## Community
+
+Discuss, report issues, or get involved in development on the **[EEVblog forum thread](https://www.eevblog.com/forum/projects/open-ee-workbench-a-cross-compatible-interface-for-your-equipment-489668/)**.
+
 Made with love by [nacho.works](https://nacho.works)
