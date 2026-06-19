@@ -267,8 +267,12 @@
     .psu-readings { display:flex; gap:10px; }
     .psu-reading { flex:1; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:6px 8px; text-align:center; }
     .psu-reading-label { font-size:9px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--text-faint); margin-bottom:3px; }
-    .psu-reading-val { font-family:var(--mono); font-size:13px; font-weight:500; color:var(--text-dim); transition:color .3s; }
+    .psu-reading-val { font-family:var(--mono); font-size:13px; font-weight:500; color:var(--text-dim); }
     .psu-reading-val.live { color:var(--text); }
+    @keyframes psu-val-flash { 0%{color:var(--green);} 100%{color:var(--text);} }
+    .psu-reading-val.flash { animation: psu-val-flash .5s ease-out forwards; }
+    @keyframes psu-live-pulse { 0%,100%{opacity:.25;} 50%{opacity:1;} }
+    .psu-live-dot { width:6px; height:6px; border-radius:50%; background:var(--green); flex-shrink:0; animation: psu-live-pulse 2s ease-in-out infinite; }
     .psu-footer { margin-top:4px; }
 
     /* ── AWG Card ────────────────────────────────────────────────── */
@@ -1865,12 +1869,15 @@ socket.on("disconnected", () => {
 });
 
 socket.on("psu_reading", ({ ch, v, i, p }) => {
-  const vEl = document.getElementById(`psu-v-${ch}`);
-  const iEl = document.getElementById(`psu-i-${ch}`);
-  const pEl = document.getElementById(`psu-p-${ch}`);
-  if (vEl) { vEl.textContent=fmtV(v); vEl.classList.add("live"); }
-  if (iEl) { iEl.textContent=fmtI(i); iEl.classList.add("live"); }
-  if (pEl) { pEl.textContent=fmtW(p); pEl.classList.add("live"); }
+  [[`psu-v-${ch}`, fmtV(v)], [`psu-i-${ch}`, fmtI(i)], [`psu-p-${ch}`, fmtW(p)]].forEach(([id, txt]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = txt;
+    el.classList.add("live");
+    el.classList.remove("flash");
+    void el.offsetWidth;   // restart animation
+    el.classList.add("flash");
+  });
 });
 
 socket.on("dmm_reading", ({ value, mode }) => {
@@ -2456,7 +2463,8 @@ function buildPSUCard(instr) {
             </div>
             <button class="psu-set-btn" onclick="psuSet(${ch})">Set</button>
           </div>
-          <div class="psu-readings">
+          <div class="psu-readings" style="align-items:center;">
+            <span class="psu-live-dot" title="Live readback active"></span>
             <div class="psu-reading"><div class="psu-reading-label">Voltage</div><div class="psu-reading-val" id="psu-v-${ch}">—</div></div>
             <div class="psu-reading"><div class="psu-reading-label">Current</div><div class="psu-reading-val" id="psu-i-${ch}">—</div></div>
             <div class="psu-reading"><div class="psu-reading-label">Power</div><div class="psu-reading-val" id="psu-p-${ch}">—</div></div>
