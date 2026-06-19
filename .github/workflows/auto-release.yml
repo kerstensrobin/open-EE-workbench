@@ -1,0 +1,48 @@
+name: Auto Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history needed to collect commit messages
+
+      - name: Check whether today's release already exists
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v$(date -u +%Y-%m-%d)"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          if gh release view "${TAG}" > /dev/null 2>&1; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Collect commit messages since last release
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          LAST_TAG=$(git tag --sort=-version:refname | head -1)
+          if [ -z "$LAST_TAG" ]; then
+            git log --pretty=format:"- %s" > /tmp/notes.md
+          else
+            git log --pretty=format:"- %s" "${LAST_TAG}..HEAD" > /tmp/notes.md
+          fi
+          [ -s /tmp/notes.md ] || echo "- Maintenance update" > /tmp/notes.md
+
+      - name: Create release
+        if: steps.check.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.check.outputs.tag }}" \
+            --title "${{ steps.check.outputs.tag }}" \
+            --notes-file /tmp/notes.md
