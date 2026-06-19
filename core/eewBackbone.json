@@ -654,7 +654,8 @@
           "query": "MEAS:POW? (@{ch})"
         },
         "local_mode": "SYSTem:LOCal"
-      }
+      },
+      "channels": 3
     },
     {
       "id": "keysight_e36300",
@@ -666,7 +667,8 @@
         "E36311A",
         "E36312A",
         "E36313A"
-      ]
+      ],
+      "channels": 3
     },
     {
       "id": "rigol_dp800",
@@ -719,7 +721,8 @@
         ],
         "remote_mode": ":SYSTem:REMote",
         "local_mode": ":SYSTem:LOCal"
-      }
+      },
+      "channels": 3
     },
     {
       "id": "korad_ka",
@@ -751,7 +754,8 @@
         "status": {
           "query": "STATUS?"
         }
-      }
+      },
+      "channels": 1
     },
     {
       "id": "keysight_edu33211a",
@@ -1319,7 +1323,8 @@
         "E36232A",
         "E36233A",
         "E36234A"
-      ]
+      ],
+      "channels": 4
     },
     {
       "id": "rigol_dp700",
@@ -1332,7 +1337,8 @@
         "DP712",
         "DP721",
         "DP722"
-      ]
+      ],
+      "channels": 2
     },
     {
       "id": "siglent_spd",
@@ -1359,7 +1365,8 @@
           "query": "MEASure:CURRent? CH{ch}"
         },
         "measure_power": null
-      }
+      },
+      "channels": 3
     },
     {
       "id": "gwinstek_gpd",
@@ -1372,7 +1379,8 @@
         "GPD-3303D",
         "GPD-3303S",
         "GPD-4303S"
-      ]
+      ],
+      "channels": 4
     },
     {
       "id": "rs_hmc804x",
@@ -1419,7 +1427,8 @@
           }
         ],
         "measure_power": null
-      }
+      },
+      "channels": 3
     },
     {
       "id": "keithley_2200psu",
@@ -1480,7 +1489,8 @@
         "combine_parallel": "INSTrument:COMbine:PARAllel",
         "combine_track": "INSTrument:COMbine:TRACk",
         "combine_off": "INSTrument:COMbine:OFF"
-      }
+      },
+      "channels": 3
     },
     {
       "id": "owon_odp",
@@ -1511,7 +1521,8 @@
           "query": ":MEASure:CURRent:DC?"
         },
         "measure_power": null
-      }
+      },
+      "channels": 3
     },
     {
       "id": "rigol_dg4000",
@@ -1688,12 +1699,24 @@
         "EDU34450"
       ],
       "overrides": {
-        "measure_vdc":         { "query": ":MEASure:VOLTage:DC? DEF,{resolution}" },
-        "measure_vac":         { "query": ":MEASure:VOLTage:AC? DEF,{resolution}" },
-        "measure_idc":         { "query": ":MEASure:CURRent:DC? DEF,{resolution}" },
-        "measure_iac":         { "query": ":MEASure:CURRent:AC? DEF,{resolution}" },
-        "measure_resistance":  { "query": ":MEASure:RESistance? DEF,{resolution}" },
-        "measure_fresistance": { "query": ":MEASure:FRESistance? DEF,{resolution}" }
+        "measure_vdc": {
+          "query": ":MEASure:VOLTage:DC? DEF,{resolution}"
+        },
+        "measure_vac": {
+          "query": ":MEASure:VOLTage:AC? DEF,{resolution}"
+        },
+        "measure_idc": {
+          "query": ":MEASure:CURRent:DC? DEF,{resolution}"
+        },
+        "measure_iac": {
+          "query": ":MEASure:CURRent:AC? DEF,{resolution}"
+        },
+        "measure_resistance": {
+          "query": ":MEASure:RESistance? DEF,{resolution}"
+        },
+        "measure_fresistance": {
+          "query": ":MEASure:FRESistance? DEF,{resolution}"
+        }
       }
     },
     {
@@ -1964,7 +1987,8 @@
         ],
         "remote_mode": "SYST:REM",
         "local_mode": "SYST:LOC"
-      }
+      },
+      "channels": 1
     },
     {
       "id": "bk_mdl",
@@ -2094,7 +2118,8 @@
         },
         "remote_mode": ":SYSTem:REMote",
         "local_mode": "LOCAL"
-      }
+      },
+      "channels": 1
     },
     {
       "id": "aimtti_pl",
@@ -2108,7 +2133,10 @@
         "PL601"
       ],
       "commands": {
-        "reset": ["*RST", "*CLS"],
+        "reset": [
+          "*RST",
+          "*CLS"
+        ],
         "set_voltage": {
           "write": "V{ch} {value}",
           "query": "V{ch}?"
@@ -2140,7 +2168,8 @@
         "output_off_all": "OPALL 0",
         "clear_trip": "TRIPRST",
         "local_mode": "LOCAL"
-      }
+      },
+      "channels": 1
     },
     {
       "id": "aimtti_tsx",
@@ -2152,7 +2181,10 @@
         "TSX1820P"
       ],
       "commands": {
-        "reset": ["*RST", "*CLS"],
+        "reset": [
+          "*RST",
+          "*CLS"
+        ],
         "set_voltage": {
           "write": "V1 {value}",
           "query": "V1?"
@@ -2182,7 +2214,8 @@
         "save_setup": "*SAV1 {value}",
         "recall_setup": "*RCL1 {value}",
         "local_mode": "LOCAL"
-      }
+      },
+      "channels": 1
     },
     {
       "id": "aimtti_tgf4000",
@@ -2196,7 +2229,10 @@
         "TGF4242"
       ],
       "commands": {
-        "reset": ["*RST", "*CLS"],
+        "reset": [
+          "*RST",
+          "*CLS"
+        ],
         "select_channel": {
           "write": "CHN {ch}",
           "query": "CHN?"
@@ -2288,7 +2324,10 @@
         "measure_secondary": {
           "query": "MEASure:SECondary:LIVEdata?"
         },
-        "clear_protection": ["SYSTem:PROTection:VOLTage:CLEAr", "SYSTem:PROTection:CURRent:CLEAr"]
+        "clear_protection": [
+          "SYSTem:PROTection:VOLTage:CLEAr",
+          "SYSTem:PROTection:CURRent:CLEAr"
+        ]
       }
     }
   ]

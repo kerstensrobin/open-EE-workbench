@@ -300,6 +300,7 @@ _executor     = ThreadPoolExecutor(max_workers=8)
 _poll_stop    = threading.Event()
 _poller_idle  = threading.Event()
 _poller_idle.set()   # no poller running initially
+_psu_ch_cache: dict = {}  # resource → confirmed live channel count
 
 
 # ── SCPI helpers ──────────────────────────────────────────────────────────────
@@ -683,6 +684,7 @@ def api_disconnect():
             try: _state["rm"].close()
             except: pass
         _state.update(rm=None, resources={}, psu_channels={}, connected=False)
+        _psu_ch_cache.clear()
     sio.emit("disconnected", {})
     return jsonify({"status": "disconnected"})
 
@@ -1157,7 +1159,12 @@ def _start_polling():
                         fam  = _state["families"].get(rstr)
                         if res is None or fam is None:
                             continue
-                        for ch in range(1, 5):
+                        # Use the family's declared channel count as the ceiling.
+                        # _psu_ch_cache[rstr] shrinks to the true count after the
+                        # first poll on instruments whose family covers multiple
+                        # models with different channel counts (e.g. DP811/DP832).
+                        max_ch = _psu_ch_cache.get(rstr, fam.get("channels", 4))
+                        for ch in range(1, max_ch + 1):
                             if _poll_stop.is_set():
                                 break
                             readings: dict = {}
@@ -1172,6 +1179,12 @@ def _start_polling():
                                     pass
                             if readings:
                                 sio.emit("psu_reading", {"ch": ch, **readings})
+                            elif ch > 1:
+                                # This channel returned nothing — instrument has
+                                # fewer channels than the family maximum.  Cache
+                                # the true count so we never probe beyond it again.
+                                _psu_ch_cache[rstr] = ch - 1
+                                break
                 _poll_stop.wait(timeout=1.5)
         finally:
             _poller_idle.set()
