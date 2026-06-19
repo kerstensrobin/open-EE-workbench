@@ -345,17 +345,15 @@ def _family_for(entry: dict):
         return None
 
 
-def _run_steps(resource, steps: list, role: str = None, quiet: bool = False) -> object:
+def _run_steps(resource, steps: list, role: str = None, poll: bool = False) -> object:
     result = None
     for action, scpi in steps:
         if action == "write":
             resource.write(scpi)
-            if not quiet:
-                sio.emit("scpi_traffic", {"role": role, "cmd": scpi, "result": None})
+            sio.emit("scpi_traffic", {"role": role, "cmd": scpi, "result": None, "poll": poll})
         elif action == "query":
             result = resource.query(scpi).strip()
-            if not quiet:
-                sio.emit("scpi_traffic", {"role": role, "cmd": scpi, "result": result})
+            sio.emit("scpi_traffic", {"role": role, "cmd": scpi, "result": result, "poll": poll})
         elif action == "raw_query":
             resource.write(scpi)
             # Use a large chunk_size so USBTMC.read() accumulates the full
@@ -368,9 +366,8 @@ def _run_steps(resource, steps: list, role: str = None, quiet: bool = False) -> 
                 if orig_chunk is not None:
                     try: resource.chunk_size = orig_chunk
                     except Exception: pass
-            if not quiet:
-                sio.emit("scpi_traffic", {"role": role, "cmd": scpi,
-                                          "result": f"<{len(result)} bytes>"})
+            sio.emit("scpi_traffic", {"role": role, "cmd": scpi,
+                                      "result": f"<{len(result)} bytes>", "poll": poll})
     return result
 
 
@@ -1172,7 +1169,7 @@ def _start_polling():
                                             ("measure_current", "i"),
                                             ("measure_power",   "p")]:
                                 try:
-                                    r = _run_steps(res, get_command(fam, op, ch=ch), quiet=True)
+                                    r = _run_steps(res, get_command(fam, op, ch=ch), role="psu", poll=True)
                                     if r is not None:
                                         readings[key] = float(r)
                                 except Exception:

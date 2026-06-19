@@ -1484,7 +1484,8 @@
   <aside id="log-panel">
     <div class="log-header">
       <span class="log-header-title">Log</span>
-      <button class="log-verbose-btn" id="log-verbose-btn" title="Show full SCPI traffic">SCPI</button>
+      <button class="log-verbose-btn" id="log-verbose-btn" title="Show SCPI traffic from user actions">SCPI</button>
+      <button class="log-verbose-btn" id="log-poll-btn" title="Show background polling traffic">Poll</button>
       <button class="log-clear-btn" id="log-clear-btn" title="Clear log">✕</button>
     </div>
     <div id="log-body"></div>
@@ -1739,11 +1740,11 @@ function logMsg(msg, cls) {
 document.getElementById("log-clear-btn").onclick = () => { $logBody.innerHTML = ""; };
 
 let verboseScpi = false;
+let verbosePoll = false;
 const $logVerboseBtn = document.getElementById("log-verbose-btn");
-$logVerboseBtn.onclick = () => {
-  verboseScpi = !verboseScpi;
-  $logVerboseBtn.classList.toggle("active", verboseScpi);
-};
+const $logPollBtn    = document.getElementById("log-poll-btn");
+$logVerboseBtn.onclick = () => { verboseScpi = !verboseScpi; $logVerboseBtn.classList.toggle("active", verboseScpi); };
+$logPollBtn.onclick    = () => { verbosePoll = !verbosePoll; $logPollBtn.classList.toggle("active", verbosePoll); };
 
 // ── Log panel resize ───────────────────────────────────────────────
 (function() {
@@ -1815,8 +1816,8 @@ const socket = io({ transports: ["websocket","polling"] });
 socket.on("connect",    () => logMsg("[socket] connected"));
 socket.on("disconnect", () => logMsg("[socket] disconnected","warn"));
 socket.on("log", ({ msg }) => logMsg(msg));
-socket.on("scpi_traffic", ({ role, cmd, result }) => {
-  if (!verboseScpi) return;
+socket.on("scpi_traffic", ({ role, cmd, result, poll }) => {
+  if (poll ? !verbosePoll : !verboseScpi) return;
   const r = role ? `[${role}] ` : "";
   const line = result != null ? `→ ${r}${cmd}  ←  ${result}` : `→ ${r}${cmd}`;
   logMsg(line, "scpi");
