@@ -639,36 +639,42 @@
     .sb-add-chip.loop-chip:hover { border-color:var(--purple); background:rgba(109,40,217,.08); }
     /* Step rows */
     .sb-row {
-      display:flex; align-items:center; gap:8px; padding:7px 10px;
+      display:flex; flex-direction:column;
       background:var(--surface2); border:1px solid var(--border);
-      border-radius:var(--radius); cursor:pointer; transition:all .12s; flex-shrink:0;
+      border-radius:var(--radius); transition:border-color .12s; flex-shrink:0;
       user-select:none;
     }
-    .sb-row:hover { background:var(--surface3); border-color:var(--border2); }
-    .sb-row.sb-active { border-color:var(--accent); background:rgba(26,86,196,.08); }
+    .sb-row:hover { border-color:var(--border2); }
+    .sb-row.sb-active { border-color:var(--accent); }
+    .sb-row.sb-dragging { opacity:.4; }
+    .sb-row.sb-drop-above { border-top:2px solid var(--accent); }
+    .sb-row-hdr {
+      display:flex; align-items:center; gap:8px; padding:7px 10px;
+      cursor:pointer; min-width:0;
+    }
+    .sb-row-hdr:hover { background:var(--surface3); border-radius:var(--radius); }
+    .sb-row.sb-active .sb-row-hdr { background:rgba(26,86,196,.08); border-radius:var(--radius) var(--radius) 0 0; }
+    .sb-drag-handle {
+      font-size:13px; color:var(--text-faint); cursor:grab; flex-shrink:0;
+      line-height:1; padding:0 2px; transition:color .12s;
+    }
+    .sb-drag-handle:hover { color:var(--text-dim); }
+    .sb-drag-handle:active { cursor:grabbing; }
     .sb-pip { width:3px; height:26px; border-radius:2px; flex-shrink:0; }
     .sb-row-type { font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--text-faint); width:44px; flex-shrink:0; }
     .sb-row-lbl { font-size:12px; font-weight:600; color:var(--text); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .sb-row-instr { font-size:10px; color:var(--text-faint); font-family:var(--mono); flex-shrink:0; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .sb-row-del { background:none; border:none; cursor:pointer; color:var(--text-faint); font-size:13px; padding:0 2px; line-height:1; flex-shrink:0; transition:color .12s; }
     .sb-row-del:hover { color:var(--red); }
+    .sb-row-chevron { font-size:9px; color:var(--text-faint); flex-shrink:0; transition:transform .15s; }
+    .sb-row.sb-active .sb-row-chevron { transform:rotate(180deg); color:var(--accent); }
+    .sb-row-cfg {
+      padding:10px 14px 12px 14px; display:flex; flex-direction:column; gap:6px;
+      border-top:1px solid var(--border);
+    }
     /* Bracket SVG column */
     #sb-bracket-col { width:90px; flex-shrink:0; position:relative; overflow:hidden; }
     #sb-bracket-svg { display:block; width:90px; height:100%; overflow:visible; }
-    /* Config panel */
-    #sb-cfg-panel {
-      width:268px; flex-shrink:0; border-left:1px solid var(--border);
-      display:flex; flex-direction:column; background:var(--surface2);
-    }
-    #sb-cfg-panel.hidden { display:none; }
-    .sb-cfg-hdr {
-      display:flex; align-items:center; gap:8px; padding:10px 14px;
-      border-bottom:1px solid var(--border); flex-shrink:0;
-    }
-    .sb-cfg-title { font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--text-dim); flex:1; }
-    .sb-cfg-close { background:none; border:none; cursor:pointer; color:var(--text-faint); font-size:15px; padding:0; line-height:1; transition:color .12s; }
-    .sb-cfg-close:hover { color:var(--red); }
-    .sb-cfg-body { flex:1; overflow-y:auto; padding:10px 14px; display:flex; flex-direction:column; gap:6px; }
     /* Loop chips bar */
     .sb-loops-bar { display:flex; gap:6px; flex-wrap:wrap; }
     .sb-loop-chip {
@@ -1159,14 +1165,6 @@
           <!-- Loop bracket SVG column -->
           <div id="sb-bracket-col">
             <svg id="sb-bracket-svg" xmlns="http://www.w3.org/2000/svg"></svg>
-          </div>
-          <!-- Config panel (hidden until a step is selected) -->
-          <div id="sb-cfg-panel" class="hidden">
-            <div class="sb-cfg-hdr">
-              <span class="sb-cfg-title" id="sb-cfg-title">Config</span>
-              <button class="sb-cfg-close" onclick="sbDeselect()" title="Close">✕</button>
-            </div>
-            <div class="sb-cfg-body" id="sb-cfg-body"></div>
           </div>
         </div>
 
@@ -5315,6 +5313,7 @@ function getDcSweepParams() {
 let _sbIdCtr = 0;
 const _sb = { steps: [], loops: [] };
 let _sbRows = [], _sbCols = [], _sbSel = null;  // _sbSel: selected step id
+let _sbDragId = null, _sbDragFromHandle = false;
 
 function _sbId() { return ++_sbIdCtr; }
 
@@ -5353,6 +5352,43 @@ function sbSelectStep(id) {
   sbRender();
 }
 function sbDeselect() { _sbSel = null; sbRender(); }
+
+// ── Drag-and-drop reorder ────────────────────────────────────────────
+function sbDragStart(e, id) {
+  if (!_sbDragFromHandle) { e.preventDefault(); return; }
+  _sbDragId = id;
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", id);
+  requestAnimationFrame(() => {
+    const el = document.querySelector(`.sb-row[data-sbid="${id}"]`);
+    if (el) el.classList.add("sb-dragging");
+  });
+}
+function sbDragOver(e, id) {
+  if (_sbDragId === null || _sbDragId === id) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  document.querySelectorAll(".sb-row").forEach(r => r.classList.remove("sb-drop-above"));
+  const el = document.querySelector(`.sb-row[data-sbid="${id}"]`);
+  if (el) el.classList.add("sb-drop-above");
+}
+function sbDragEnd() {
+  _sbDragId = null;
+  _sbDragFromHandle = false;
+  document.querySelectorAll(".sb-row").forEach(r =>
+    r.classList.remove("sb-dragging", "sb-drop-above"));
+}
+function sbDrop(e, id) {
+  e.preventDefault();
+  if (_sbDragId === null || _sbDragId === id) { sbDragEnd(); return; }
+  const fromIdx = _sb.steps.findIndex(s => s.id === _sbDragId);
+  const toIdx   = _sb.steps.findIndex(s => s.id === id);
+  if (fromIdx < 0 || toIdx < 0) { sbDragEnd(); return; }
+  const [item] = _sb.steps.splice(fromIdx, 1);
+  _sb.steps.splice(toIdx, 0, item);
+  sbDragEnd();
+  sbRender();
+}
 
 function _sbSetStep(id, key, val) {
   const s = _sb.steps.find(s => s.id === id);
@@ -5414,65 +5450,11 @@ function sbRemoveLoop(id) { _sb.loops = _sb.loops.filter(l => l.id !== id); sbRe
 // ── Render ───────────────────────────────────────────────────────────
 function sbRender() {
   sbRenderList();
-  sbRenderCfg();
   sbRenderLoopChips();
   requestAnimationFrame(sbDrawBrackets);
 }
 
-function sbRenderList() {
-  const el = document.getElementById("sb-steps-list");
-  if (!el) return;
-  if (!_sb.steps.length) {
-    el.innerHTML = `<div style="padding:24px;text-align:center;font-size:12px;color:var(--text-faint);">No steps yet — add some below</div>`;
-    return;
-  }
-  const instrs = _sbInstruments();
-  el.innerHTML = _sb.steps.map((s, idx) => {
-    const color    = _SB_TYPE_COLOR[s.type] || "var(--text-faint)";
-    const typeStr  = _SB_TYPE_LBL[s.type] || s.type.toUpperCase();
-    const instr    = instrs.find(i => i.value === s.instrument);
-    const instrStr = instr ? instr.label + (s.ch ? ` · CH${s.ch}` : "") : "";
-    const active   = _sbSel === s.id ? " sb-active" : "";
-    return `<div class="sb-row${active}" data-sbid="${s.id}" data-sbidx="${idx}" onclick="sbSelectStep(${s.id})">
-      <div class="sb-pip" style="background:${color}"></div>
-      <span class="sb-row-type" style="color:${color}">${typeStr}</span>
-      <span class="sb-row-lbl">${escHtml(s.label || typeStr)}</span>
-      ${instrStr ? `<span class="sb-row-instr">${escHtml(instrStr)}</span>` : ""}
-      <button class="sb-row-del" onclick="event.stopPropagation();sbRemoveStep(${s.id})" title="Remove">✕</button>
-    </div>`;
-  }).join("");
-}
-
-function sbRenderLoopChips() {
-  const area = document.getElementById("sb-loops-area");
-  const bar  = document.getElementById("sb-loops-bar");
-  if (!area || !bar) return;
-  if (!_sb.loops.length) { area.style.display = "none"; return; }
-  area.style.display = "flex";
-  bar.innerHTML = _sb.loops.map((l, i) => {
-    const fi = _sb.steps.findIndex(s => s.id === l.start_id);
-    const ti = _sb.steps.findIndex(s => s.id === l.end_id);
-    const c  = l.condition;
-    const cStr = c.type === "count"
-      ? `×${c.count}`
-      : `${c.type} ${c.param} ${c.op ?? ">="} ${c.target}`;
-    return `<div class="sb-loop-chip">
-      <span>L${i+1}: step ${fi+1}→${ti+1} ${escHtml(cStr)}</span>
-      <button class="sb-loop-del" onclick="sbRemoveLoop(${l.id})" title="Remove">✕</button>
-    </div>`;
-  }).join("");
-}
-
-function sbRenderCfg() {
-  const panel = document.getElementById("sb-cfg-panel");
-  const title = document.getElementById("sb-cfg-title");
-  const body  = document.getElementById("sb-cfg-body");
-  if (!panel) return;
-  const step = _sb.steps.find(s => s.id === _sbSel);
-  if (!step) { panel.classList.add("hidden"); return; }
-  panel.classList.remove("hidden");
-  title.textContent = _SB_TYPE_LBL[step.type] || step.type;
-
+function _sbCfgHtml(step) {
   const instrs = _sbInstruments();
   const iOpts  = (cur) => `<option value="">— select —</option>` +
     instrs.map(i => `<option value="${escHtml(i.value)}"${i.value===cur?" selected":""}>${escHtml(i.label)}</option>`).join("");
@@ -5540,7 +5522,62 @@ function sbRenderCfg() {
     html += row("Timeout",    inp("number", step.timeout||60,    `_sbSetStep(${id},'timeout',+this.value)`,  "min=0 step=30") + `<span class="test-param-unit">s (0=∞)</span>`);
   }
 
-  body.innerHTML = html;
+  return html;
+}
+
+function sbRenderList() {
+  const el = document.getElementById("sb-steps-list");
+  if (!el) return;
+  if (!_sb.steps.length) {
+    el.innerHTML = `<div style="padding:24px;text-align:center;font-size:12px;color:var(--text-faint);">No steps yet — add some below</div>`;
+    return;
+  }
+  const instrs = _sbInstruments();
+  el.innerHTML = _sb.steps.map((s, idx) => {
+    const color    = _SB_TYPE_COLOR[s.type] || "var(--text-faint)";
+    const typeStr  = _SB_TYPE_LBL[s.type] || s.type.toUpperCase();
+    const instr    = instrs.find(i => i.value === s.instrument);
+    const instrStr = instr ? instr.label + (s.ch ? ` · CH${s.ch}` : "") : "";
+    const active   = _sbSel === s.id ? " sb-active" : "";
+    const cfg      = _sbSel === s.id ? `<div class="sb-row-cfg">${_sbCfgHtml(s)}</div>` : "";
+    return `<div class="sb-row${active}" data-sbid="${s.id}" data-sbidx="${idx}"
+        draggable="true"
+        ondragstart="sbDragStart(event,${s.id})"
+        ondragover="sbDragOver(event,${s.id})"
+        ondrop="sbDrop(event,${s.id})"
+        ondragend="sbDragEnd()">
+      <div class="sb-row-hdr" onclick="sbSelectStep(${s.id})">
+        <div class="sb-drag-handle" onmousedown="_sbDragFromHandle=true" onmouseup="_sbDragFromHandle=false" onclick="event.stopPropagation()" title="Drag to reorder">⠿</div>
+        <div class="sb-pip" style="background:${color}"></div>
+        <span class="sb-row-type" style="color:${color}">${typeStr}</span>
+        <span class="sb-row-lbl">${escHtml(s.label || typeStr)}</span>
+        ${instrStr ? `<span class="sb-row-instr">${escHtml(instrStr)}</span>` : ""}
+        <button class="sb-row-del" onclick="event.stopPropagation();sbRemoveStep(${s.id})" title="Remove">✕</button>
+        <span class="sb-row-chevron">▾</span>
+      </div>
+      ${cfg}
+    </div>`;
+  }).join("");
+}
+
+function sbRenderLoopChips() {
+  const area = document.getElementById("sb-loops-area");
+  const bar  = document.getElementById("sb-loops-bar");
+  if (!area || !bar) return;
+  if (!_sb.loops.length) { area.style.display = "none"; return; }
+  area.style.display = "flex";
+  bar.innerHTML = _sb.loops.map((l, i) => {
+    const fi = _sb.steps.findIndex(s => s.id === l.start_id);
+    const ti = _sb.steps.findIndex(s => s.id === l.end_id);
+    const c  = l.condition;
+    const cStr = c.type === "count"
+      ? `×${c.count}`
+      : `${c.type} ${c.param} ${c.op ?? ">="} ${c.target}`;
+    return `<div class="sb-loop-chip">
+      <span>L${i+1}: step ${fi+1}→${ti+1} ${escHtml(cStr)}</span>
+      <button class="sb-loop-del" onclick="sbRemoveLoop(${l.id})" title="Remove">✕</button>
+    </div>`;
+  }).join("");
 }
 
 // ── Loop bracket SVG ─────────────────────────────────────────────────
@@ -5557,11 +5594,13 @@ function sbDrawBrackets() {
 
   if (!_sb.loops.length) { svg.innerHTML = ""; return; }
 
-  // Map step id → mid-Y relative to list container top
+  // Map step id → mid-Y of the header row (ignores expanded config area)
   const listTop = listEl.getBoundingClientRect().top;
   const stepMids = {};
-  listEl.querySelectorAll(".sb-row").forEach(el => {
-    const id = parseInt(el.dataset.sbid);
+  listEl.querySelectorAll(".sb-row-hdr").forEach(el => {
+    const row = el.closest(".sb-row");
+    if (!row) return;
+    const id = parseInt(row.dataset.sbid);
     if (!id) return;
     const r = el.getBoundingClientRect();
     stepMids[id] = r.top - listTop + r.height / 2 + listEl.scrollTop;
