@@ -603,7 +603,7 @@
     .results-tbl tr.new-row td { animation:row-flash .5s ease; }
     @keyframes row-flash { from{background:rgba(26,86,196,.15)} to{background:transparent} }
 
-    /* ── Sandbox tab ────────────────────────────────────────────── */
+    /* ── Sandbox tab (flowchart list view) ──────────────────────── */
     #sandbox-tab { display:none; flex-direction:column; gap:12px; }
     #sandbox-tab.visible { display:flex; }
     .sb-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
@@ -615,51 +615,82 @@
       transition:border-color .15s;
     }
     .sb-name-inp:focus { border-color:var(--accent); }
-    .sb-pipeline {
-      display:flex; overflow-x:auto; gap:0;
-      border:1px solid var(--border); border-radius:var(--radius-lg);
-      background:var(--surface); min-height:360px;
+
+    /* Main area */
+    #sb-main {
+      display:flex; border:1px solid var(--border); border-radius:var(--radius-lg);
+      overflow:hidden; background:var(--surface); min-height:300px;
     }
-    .sb-col {
-      min-width:220px; flex-shrink:0; display:flex; flex-direction:column;
-      border-right:1px solid var(--border);
+    /* Step list column */
+    #sb-steps-col { flex:1; min-width:0; display:flex; flex-direction:column; border-right:1px solid var(--border); }
+    #sb-steps-list { flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:4px; min-height:120px; }
+    /* Add bar */
+    .sb-add-bar {
+      display:flex; gap:5px; flex-wrap:wrap; padding:8px 10px;
+      border-top:1px solid var(--border); background:var(--surface2); flex-shrink:0;
     }
-    .sb-col-actions { flex:1; min-width:240px; border-right:none; }
-    .sb-col-hdr {
-      display:flex; align-items:center; justify-content:space-between;
-      padding:8px 12px; background:var(--surface2);
-      border-bottom:1px solid var(--border);
-      font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
-      color:var(--text-dim); flex-shrink:0;
+    .sb-add-chip {
+      padding:3px 10px; font-size:11px; background:none;
+      border:1px dashed var(--border2); border-radius:20px;
+      color:var(--text-dim); cursor:pointer; transition:all .15s; white-space:nowrap; font:inherit;
     }
-    .sb-col-hdr-remove { background:none; border:none; cursor:pointer; color:var(--text-faint); font-size:14px; line-height:1; padding:0 2px; }
-    .sb-col-hdr-remove:hover { color:var(--red); }
-    .sb-col-body { flex:1; padding:8px; display:flex; flex-direction:column; gap:8px; overflow-y:auto; }
-    .sb-block {
+    .sb-add-chip:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-glow); border-style:solid; }
+    .sb-add-chip.loop-chip { border-color:rgba(109,40,217,.35); color:var(--purple); }
+    .sb-add-chip.loop-chip:hover { border-color:var(--purple); background:rgba(109,40,217,.08); }
+    /* Step rows */
+    .sb-row {
+      display:flex; align-items:center; gap:8px; padding:7px 10px;
       background:var(--surface2); border:1px solid var(--border);
-      border-radius:var(--radius); padding:10px 12px;
-      display:flex; flex-direction:column; gap:5px;
+      border-radius:var(--radius); cursor:pointer; transition:all .12s; flex-shrink:0;
+      user-select:none;
     }
-    .sb-block-loop { border-left:3px solid var(--accent); }
-    .sb-block-set  { border-left:3px solid var(--green); }
-    .sb-block-meas { border-left:3px solid var(--amber); }
-    .sb-block-wait { border-left:3px solid var(--text-faint); }
-    .sb-block-title {
-      display:flex; align-items:center; justify-content:space-between;
-      font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
-      margin-bottom:3px;
+    .sb-row:hover { background:var(--surface3); border-color:var(--border2); }
+    .sb-row.sb-active { border-color:var(--accent); background:rgba(26,86,196,.08); }
+    .sb-pip { width:3px; height:26px; border-radius:2px; flex-shrink:0; }
+    .sb-row-type { font-size:9px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--text-faint); width:44px; flex-shrink:0; }
+    .sb-row-lbl { font-size:12px; font-weight:600; color:var(--text); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .sb-row-instr { font-size:10px; color:var(--text-faint); font-family:var(--mono); flex-shrink:0; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .sb-row-del { background:none; border:none; cursor:pointer; color:var(--text-faint); font-size:13px; padding:0 2px; line-height:1; flex-shrink:0; transition:color .12s; }
+    .sb-row-del:hover { color:var(--red); }
+    /* Bracket SVG column */
+    #sb-bracket-col { width:90px; flex-shrink:0; position:relative; overflow:hidden; }
+    #sb-bracket-svg { display:block; width:90px; height:100%; overflow:visible; }
+    /* Config panel */
+    #sb-cfg-panel {
+      width:268px; flex-shrink:0; border-left:1px solid var(--border);
+      display:flex; flex-direction:column; background:var(--surface2);
     }
-    .sb-block-title span { opacity:.6; font-weight:400; font-size:9px; letter-spacing:.04em; }
-    .sb-rm { background:none; border:none; cursor:pointer; color:var(--text-faint); font-size:13px; padding:0; line-height:1; }
-    .sb-rm:hover { color:var(--red); }
-    .sb-add-btn {
-      width:100%; padding:5px 8px; font-size:11px; background:none;
-      border:1px dashed var(--border2); border-radius:var(--radius);
-      color:var(--text-dim); cursor:pointer; transition:all .15s; text-align:center;
+    #sb-cfg-panel.hidden { display:none; }
+    .sb-cfg-hdr {
+      display:flex; align-items:center; gap:8px; padding:10px 14px;
+      border-bottom:1px solid var(--border); flex-shrink:0;
     }
-    .sb-add-btn:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-glow); }
-    .sb-add-actions { display:flex; gap:5px; flex-wrap:wrap; margin-top:4px; }
-    .sb-add-actions .sb-add-btn { flex:1; min-width:60px; width:auto; }
+    .sb-cfg-title { font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--text-dim); flex:1; }
+    .sb-cfg-close { background:none; border:none; cursor:pointer; color:var(--text-faint); font-size:15px; padding:0; line-height:1; transition:color .12s; }
+    .sb-cfg-close:hover { color:var(--red); }
+    .sb-cfg-body { flex:1; overflow-y:auto; padding:10px 14px; display:flex; flex-direction:column; gap:6px; }
+    /* Loop chips bar */
+    .sb-loops-bar { display:flex; gap:6px; flex-wrap:wrap; }
+    .sb-loop-chip {
+      display:flex; align-items:center; gap:6px; padding:3px 10px 3px 10px;
+      background:rgba(109,40,217,.10); border:1px solid rgba(109,40,217,.3);
+      border-radius:20px; font-size:11px; color:var(--purple); cursor:default;
+    }
+    .sb-loop-del { background:none; border:none; cursor:pointer; color:var(--purple); opacity:.6; font-size:11px; padding:0; line-height:1; transition:opacity .12s, color .12s; }
+    .sb-loop-del:hover { opacity:1; color:var(--red); }
+    /* Add-loop inline form */
+    #sb-loop-form {
+      display:none; gap:6px; align-items:center; flex-wrap:wrap;
+      padding:8px 10px; background:rgba(109,40,217,.07);
+      border:1px solid rgba(109,40,217,.25); border-radius:var(--radius);
+      font-size:11px; color:var(--text-dim);
+    }
+    #sb-loop-form.open { display:flex; }
+    #sb-loop-form select, #sb-loop-form input {
+      background:var(--surface3); border:1px solid var(--border2); color:var(--text);
+      border-radius:var(--radius); font:inherit; font-size:11px; padding:3px 6px; outline:none;
+    }
+    #sb-loop-form select:focus, #sb-loop-form input:focus { border-color:var(--purple); }
     #sb-results-panel { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; }
 
     /* ── Plot Specific tab ───────────────────────────────────────── */
@@ -1111,9 +1142,71 @@
           <button class="btn btn-danger hidden" id="sb-stop-btn" onclick="stopTest()">■ Stop</button>
         </div>
 
-        <!-- Pipeline -->
-        <div id="sb-pipeline" class="sb-pipeline"></div>
-        <button class="btn btn-ghost" style="font-size:11px;align-self:flex-start;" onclick="sbAddLoop()">+ Add Loop</button>
+        <!-- Main 3-column area: step list | brackets | config -->
+        <div id="sb-main">
+          <!-- Step list -->
+          <div id="sb-steps-col">
+            <div id="sb-steps-list"></div>
+            <div class="sb-add-bar">
+              <button class="sb-add-chip" onclick="sbAddStep('set')">+ Set</button>
+              <button class="sb-add-chip" onclick="sbAddStep('measure')">+ Measure</button>
+              <button class="sb-add-chip" onclick="sbAddStep('screenshot')">+ Screenshot</button>
+              <button class="sb-add-chip" onclick="sbAddStep('wait')">+ Wait</button>
+              <button class="sb-add-chip" onclick="sbAddStep('wait_for')">+ Wait for</button>
+              <button class="sb-add-chip loop-chip" onclick="sbOpenLoopForm()">+ Loop</button>
+            </div>
+          </div>
+          <!-- Loop bracket SVG column -->
+          <div id="sb-bracket-col">
+            <svg id="sb-bracket-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+          </div>
+          <!-- Config panel (hidden until a step is selected) -->
+          <div id="sb-cfg-panel" class="hidden">
+            <div class="sb-cfg-hdr">
+              <span class="sb-cfg-title" id="sb-cfg-title">Config</span>
+              <button class="sb-cfg-close" onclick="sbDeselect()" title="Close">✕</button>
+            </div>
+            <div class="sb-cfg-body" id="sb-cfg-body"></div>
+          </div>
+        </div>
+
+        <!-- Loop chips + add-loop form -->
+        <div id="sb-loops-area" style="display:none; flex-direction:column; gap:6px;">
+          <div class="sb-loops-bar" id="sb-loops-bar"></div>
+        </div>
+        <div id="sb-loop-form">
+          <span style="font-weight:600;color:var(--purple);">Loop</span>
+          <span>from step</span>
+          <select id="sb-lf-from" style="width:110px;"></select>
+          <span>to step</span>
+          <select id="sb-lf-to" style="width:110px;"></select>
+          <span>condition:</span>
+          <select id="sb-lf-ctype" onchange="sbLoopFormCondChange()" style="width:100px;">
+            <option value="count">Count</option>
+            <option value="until">Until sensor</option>
+            <option value="while">While sensor</option>
+          </select>
+          <span id="sb-lf-count-wrap">repeat
+            <input id="sb-lf-count" type="number" value="10" min="1" style="width:54px;"> ×
+          </span>
+          <div id="sb-lf-until-wrap" style="display:none;align-items:center;gap:4px;flex-wrap:wrap;">
+            <select id="sb-lf-u-instr" style="width:120px;"></select>
+            <input id="sb-lf-u-ch" type="number" value="1" min="1" max="4" title="Channel" style="width:40px;">
+            <select id="sb-lf-u-param" style="width:90px;">
+              <option value="voltage">Voltage</option>
+              <option value="current">Current</option>
+              <option value="r">Resistance</option>
+            </select>
+            <select id="sb-lf-u-cond" style="width:50px;">
+              <option value=">=">≥</option>
+              <option value="<=">≤</option>
+              <option value="within">±</option>
+            </select>
+            <input id="sb-lf-u-target" type="number" value="0" step="any" style="width:60px;">
+          </div>
+          <button class="btn btn-primary" style="padding:3px 10px;font-size:11px;" onclick="sbConfirmLoop()">Add</button>
+          <button class="btn btn-ghost"   style="padding:3px 8px;font-size:11px;"  onclick="sbCloseLoopForm()">Cancel</button>
+        </div>
 
         <!-- Results -->
         <div id="sb-results-panel" style="display:none;">
@@ -5218,10 +5311,10 @@ function getDcSweepParams() {
   return p;
 }
 
-// ── Sandbox tab ─────────────────────────────────────────────────────
+// ── Sandbox tab (flowchart list view) ────────────────────────────────
 let _sbIdCtr = 0;
-const _sb    = { loops: [], actions: [] };
-let   _sbRows = [], _sbCols = [];
+const _sb = { steps: [], loops: [] };
+let _sbRows = [], _sbCols = [], _sbSel = null;  // _sbSel: selected step id
 
 function _sbId() { return ++_sbIdCtr; }
 
@@ -5231,29 +5324,306 @@ function _sbInstruments() {
     .map(i => ({ value: i.resource, label: `${(i.type||"?").toUpperCase()} · ${i.model || i.manufacturer || "?"}` }));
 }
 
+// ── Step management ──────────────────────────────────────────────────
+const _SB_TYPE_COLOR = { set:"var(--green)", measure:"var(--amber)", screenshot:"var(--purple)", wait:"var(--text-faint)", wait_for:"var(--purple)" };
+const _SB_TYPE_LBL   = { set:"SET", measure:"MEAS", screenshot:"CAM", wait:"WAIT", wait_for:"WAIT FOR" };
+
+function sbAddStep(type) {
+  const id = _sbId();
+  const s = { id, type };
+  if (type === "set")        Object.assign(s, { label:"Set", instrument:"", ch:1, param:"set_voltage", value:"0", settle:0.1 });
+  if (type === "measure")    Object.assign(s, { label:"Voltage", instrument:"", ch:1, param:"voltage", samples:1, settle:0 });
+  if (type === "screenshot") Object.assign(s, { label:"Screenshot" });
+  if (type === "wait")       Object.assign(s, { label:"Wait", duration:1.0 });
+  if (type === "wait_for")   Object.assign(s, { label:"Wait for", instrument:"", ch:1, param:"voltage", condition:">=", target:0, tolerance:0.5, interval:5, timeout:60 });
+  _sb.steps.push(s);
+  _sbSel = id;
+  sbRender();
+}
+
+function sbRemoveStep(id) {
+  _sb.steps = _sb.steps.filter(s => s.id !== id);
+  _sb.loops = _sb.loops.filter(l => l.start_id !== id && l.end_id !== id);
+  if (_sbSel === id) _sbSel = null;
+  sbRender();
+}
+
+function sbSelectStep(id) {
+  _sbSel = (_sbSel === id) ? null : id;
+  sbRender();
+}
+function sbDeselect() { _sbSel = null; sbRender(); }
+
+function _sbSetStep(id, key, val) {
+  const s = _sb.steps.find(s => s.id === id);
+  if (s) s[key] = val;
+}
+function _sbSetStepRe(id, key, val) { _sbSetStep(id, key, val); sbRender(); }
+function _sbStepInstrChange(id, resource) {
+  _sbSetStep(id, "instrument", resource);
+  const instr = ((state.workbench||{})._unique||[]).find(i => i.resource === resource);
+  const ops = instr?.write_ops || [];
+  if (ops.length) _sbSetStep(id, "param", ops[0].op);
+  sbRender();
+}
+
+// ── Loop management ──────────────────────────────────────────────────
+function sbOpenLoopForm() {
+  const steps = _sb.steps;
+  if (steps.length < 2) { toast("Need at least 2 steps to create a loop", "warn"); return; }
+  const opts = steps.map((s,i) => `<option value="${s.id}">${i+1}. ${escHtml(s.label||s.type)}</option>`).join("");
+  document.getElementById("sb-lf-from").innerHTML = opts;
+  document.getElementById("sb-lf-to").innerHTML   = opts;
+  document.getElementById("sb-lf-to").selectedIndex = steps.length - 1;
+  const instrs = _sbInstruments();
+  document.getElementById("sb-lf-u-instr").innerHTML =
+    `<option value="">— instr —</option>` +
+    instrs.map(i => `<option value="${escHtml(i.value)}">${escHtml(i.label)}</option>`).join("");
+  document.getElementById("sb-loop-form").classList.add("open");
+  sbLoopFormCondChange();
+}
+function sbCloseLoopForm() { document.getElementById("sb-loop-form").classList.remove("open"); }
+function sbLoopFormCondChange() {
+  const type = document.getElementById("sb-lf-ctype").value;
+  document.getElementById("sb-lf-count-wrap").style.display = type === "count" ? "" : "none";
+  document.getElementById("sb-lf-until-wrap").style.display = (type === "until" || type === "while") ? "flex" : "none";
+}
+function sbConfirmLoop() {
+  const fromId = parseInt(document.getElementById("sb-lf-from").value);
+  const toId   = parseInt(document.getElementById("sb-lf-to").value);
+  const ctype  = document.getElementById("sb-lf-ctype").value;
+  const fi = _sb.steps.findIndex(s => s.id === fromId);
+  const ti = _sb.steps.findIndex(s => s.id === toId);
+  if (fi < 0 || ti < 0 || fi >= ti) { toast("Start must come before end", "warn"); return; }
+  const cond = { type: ctype };
+  if (ctype === "count") {
+    cond.count = Math.max(1, parseInt(document.getElementById("sb-lf-count").value) || 10);
+  } else {
+    cond.instrument = document.getElementById("sb-lf-u-instr").value;
+    cond.ch         = parseInt(document.getElementById("sb-lf-u-ch").value) || 1;
+    cond.param      = document.getElementById("sb-lf-u-param").value;
+    cond.op         = document.getElementById("sb-lf-u-cond").value;
+    cond.target     = parseFloat(document.getElementById("sb-lf-u-target").value) || 0;
+  }
+  _sb.loops.push({ id: _sbId(), start_id: fromId, end_id: toId, condition: cond });
+  sbCloseLoopForm();
+  sbRender();
+}
+function sbRemoveLoop(id) { _sb.loops = _sb.loops.filter(l => l.id !== id); sbRender(); }
+
+// ── Render ───────────────────────────────────────────────────────────
+function sbRender() {
+  sbRenderList();
+  sbRenderCfg();
+  sbRenderLoopChips();
+  requestAnimationFrame(sbDrawBrackets);
+}
+
+function sbRenderList() {
+  const el = document.getElementById("sb-steps-list");
+  if (!el) return;
+  if (!_sb.steps.length) {
+    el.innerHTML = `<div style="padding:24px;text-align:center;font-size:12px;color:var(--text-faint);">No steps yet — add some below</div>`;
+    return;
+  }
+  const instrs = _sbInstruments();
+  el.innerHTML = _sb.steps.map((s, idx) => {
+    const color    = _SB_TYPE_COLOR[s.type] || "var(--text-faint)";
+    const typeStr  = _SB_TYPE_LBL[s.type] || s.type.toUpperCase();
+    const instr    = instrs.find(i => i.value === s.instrument);
+    const instrStr = instr ? instr.label + (s.ch ? ` · CH${s.ch}` : "") : "";
+    const active   = _sbSel === s.id ? " sb-active" : "";
+    return `<div class="sb-row${active}" data-sbid="${s.id}" data-sbidx="${idx}" onclick="sbSelectStep(${s.id})">
+      <div class="sb-pip" style="background:${color}"></div>
+      <span class="sb-row-type" style="color:${color}">${typeStr}</span>
+      <span class="sb-row-lbl">${escHtml(s.label || typeStr)}</span>
+      ${instrStr ? `<span class="sb-row-instr">${escHtml(instrStr)}</span>` : ""}
+      <button class="sb-row-del" onclick="event.stopPropagation();sbRemoveStep(${s.id})" title="Remove">✕</button>
+    </div>`;
+  }).join("");
+}
+
+function sbRenderLoopChips() {
+  const area = document.getElementById("sb-loops-area");
+  const bar  = document.getElementById("sb-loops-bar");
+  if (!area || !bar) return;
+  if (!_sb.loops.length) { area.style.display = "none"; return; }
+  area.style.display = "flex";
+  bar.innerHTML = _sb.loops.map((l, i) => {
+    const fi = _sb.steps.findIndex(s => s.id === l.start_id);
+    const ti = _sb.steps.findIndex(s => s.id === l.end_id);
+    const c  = l.condition;
+    const cStr = c.type === "count"
+      ? `×${c.count}`
+      : `${c.type} ${c.param} ${c.op ?? ">="} ${c.target}`;
+    return `<div class="sb-loop-chip">
+      <span>L${i+1}: step ${fi+1}→${ti+1} ${escHtml(cStr)}</span>
+      <button class="sb-loop-del" onclick="sbRemoveLoop(${l.id})" title="Remove">✕</button>
+    </div>`;
+  }).join("");
+}
+
+function sbRenderCfg() {
+  const panel = document.getElementById("sb-cfg-panel");
+  const title = document.getElementById("sb-cfg-title");
+  const body  = document.getElementById("sb-cfg-body");
+  if (!panel) return;
+  const step = _sb.steps.find(s => s.id === _sbSel);
+  if (!step) { panel.classList.add("hidden"); return; }
+  panel.classList.remove("hidden");
+  title.textContent = _SB_TYPE_LBL[step.type] || step.type;
+
+  const instrs = _sbInstruments();
+  const iOpts  = (cur) => `<option value="">— select —</option>` +
+    instrs.map(i => `<option value="${escHtml(i.value)}"${i.value===cur?" selected":""}>${escHtml(i.label)}</option>`).join("");
+  const row = (lbl, inner) =>
+    `<div class="test-param-row"><span class="test-param-label">${lbl}</span><div class="test-param-input-wrap">${inner}</div></div>`;
+  const inp = (type, val, cb, xtra="") =>
+    `<input class="test-param-input" type="${type}" value="${escHtml(String(val??''))}" ${xtra} onchange="${cb}">`;
+  const sel = (opts, cb, xtra="") =>
+    `<select class="test-param-input sel" ${xtra} onchange="${cb}">${opts}</select>`;
+
+  const id = step.id;
+  let html = row("Label", inp("text", step.label||"", `_sbSetStep(${id},'label',this.value)`));
+
+  if (step.type === "set") {
+    html += row("Instrument", sel(iOpts(step.instrument), `_sbStepInstrChange(${id},this.value)`));
+    html += row("Channel",    inp("number", step.ch||1,   `_sbSetStep(${id},'ch',+this.value)`, "min=1 max=4"));
+    const instr = instrs.find(i => i.value === step.instrument);
+    const ops   = instr ? ((state.workbench||{})._unique||[]).find(i=>i.resource===instr.value)?.write_ops || [] : [];
+    const pOpts = ops.length
+      ? ops.map(o=>`<option value="${escHtml(o.op)}"${step.param===o.op?" selected":""}>${escHtml(o.label)}</option>`).join("")
+      : `<option value="set_voltage"${step.param==="set_voltage"?" selected":""}>Voltage</option>
+         <option value="set_current_limit"${step.param==="set_current_limit"?" selected":""}>Current limit</option>`;
+    html += row("Parameter", sel(pOpts, `_sbSetStep(${id},'param',this.value)`));
+    html += row("Value",   inp("text",   step.value||"0",  `_sbSetStep(${id},'value',this.value)`, `placeholder="0 or {var}"`));
+    html += row("Settle",  inp("number", step.settle||0,   `_sbSetStep(${id},'settle',+this.value)`, "min=0 step=0.01") + `<span class="test-param-unit">s</span>`);
+  }
+
+  if (step.type === "measure") {
+    html += row("Instrument", sel(iOpts(step.instrument), `_sbSetStepRe(${id},'instrument',this.value)`));
+    html += row("Channel",    inp("number", step.ch||1,   `_sbSetStep(${id},'ch',+this.value)`, "min=1 max=4"));
+    const iType = ((state.workbench||{})._unique||[]).find(i=>i.resource===step.instrument)?.type||"";
+    const mOpts = iType === "psu"
+      ? `<option value="voltage"${step.param==="voltage"?" selected":""}>Voltage</option><option value="current"${step.param==="current"?" selected":""}>Current</option>`
+      : `<option value="voltage"${step.param==="voltage"?" selected":""}>Voltage (DC)</option>
+         <option value="current"${step.param==="current"?" selected":""}>Current</option>
+         <option value="vac"${step.param==="vac"?" selected":""}>Voltage (AC)</option>
+         <option value="r"${step.param==="r"?" selected":""}>Resistance</option>
+         <option value="r4w"${step.param==="r4w"?" selected":""}>Resistance (4W)</option>`;
+    html += row("Parameter", sel(mOpts, `_sbSetStep(${id},'param',this.value)`));
+    html += row("Samples", inp("number", step.samples||1, `_sbSetStep(${id},'samples',+this.value)`, "min=1 max=100"));
+    html += row("Settle",  inp("number", step.settle||0,  `_sbSetStep(${id},'settle',+this.value)`, "min=0 step=0.01") + `<span class="test-param-unit">s</span>`);
+  }
+
+  if (step.type === "wait") {
+    html += row("Duration", inp("number", step.duration||1, `_sbSetStep(${id},'duration',+this.value)`, "min=0.001 step=0.1") + `<span class="test-param-unit">s</span>`);
+  }
+
+  if (step.type === "wait_for") {
+    html += row("Instrument", sel(iOpts(step.instrument), `_sbSetStepRe(${id},'instrument',this.value)`));
+    html += row("Channel",    inp("number", step.ch||1,   `_sbSetStep(${id},'ch',+this.value)`, "min=1 max=4"));
+    const wOpts = `<option value="voltage"${step.param==="voltage"?" selected":""}>Voltage (DC)</option>
+      <option value="current"${step.param==="current"?" selected":""}>Current</option>
+      <option value="vac"${step.param==="vac"?" selected":""}>Voltage (AC)</option>
+      <option value="r"${step.param==="r"?" selected":""}>Resistance</option>`;
+    html += row("Parameter", sel(wOpts, `_sbSetStep(${id},'param',this.value)`));
+    const cOpts = `<option value=">="${step.condition===">="?" selected":""}>≥</option>
+      <option value="<="${step.condition==="<="?" selected":""}>≤</option>
+      <option value="within"${step.condition==="within"?" selected":""}>within ±</option>`;
+    html += row("Condition",
+      sel(cOpts, `_sbSetStepRe(${id},'condition',this.value)`, `style="flex:0 0 auto;width:80px;"`) +
+      inp("number", step.target??0, `_sbSetStep(${id},'target',+this.value)`, "step=any"));
+    if (step.condition === "within")
+      html += row("Tolerance", inp("number", step.tolerance||0.5, `_sbSetStep(${id},'tolerance',+this.value)`, "min=0 step=0.01"));
+    html += row("Poll every", inp("number", step.interval||5,    `_sbSetStep(${id},'interval',+this.value)`, "min=0.5 step=1") + `<span class="test-param-unit">s</span>`);
+    html += row("Timeout",    inp("number", step.timeout||60,    `_sbSetStep(${id},'timeout',+this.value)`,  "min=0 step=30") + `<span class="test-param-unit">s (0=∞)</span>`);
+  }
+
+  body.innerHTML = html;
+}
+
+// ── Loop bracket SVG ─────────────────────────────────────────────────
+function sbDrawBrackets() {
+  const listEl  = document.getElementById("sb-steps-list");
+  const colEl   = document.getElementById("sb-bracket-col");
+  const svg     = document.getElementById("sb-bracket-svg");
+  if (!listEl || !colEl || !svg) return;
+
+  const colH = listEl.scrollHeight || listEl.offsetHeight;
+  svg.setAttribute("height", colH);
+  svg.setAttribute("viewBox", `0 0 90 ${colH}`);
+  colEl.style.height = colH + "px";
+
+  if (!_sb.loops.length) { svg.innerHTML = ""; return; }
+
+  // Map step id → mid-Y relative to list container top
+  const listTop = listEl.getBoundingClientRect().top;
+  const stepMids = {};
+  listEl.querySelectorAll(".sb-row").forEach(el => {
+    const id = parseInt(el.dataset.sbid);
+    if (!id) return;
+    const r = el.getBoundingClientRect();
+    stepMids[id] = r.top - listTop + r.height / 2 + listEl.scrollTop;
+  });
+
+  // Assign each loop to a horizontal track (column), left-to-right for nesting
+  const tracks = [];
+  const loopTrack = _sb.loops.map(loop => {
+    const si = _sb.steps.findIndex(s => s.id === loop.start_id);
+    const ei = _sb.steps.findIndex(s => s.id === loop.end_id);
+    if (si < 0 || ei < 0 || si >= ei) return -1;
+    for (let t = 0; t < 8; t++) {
+      if (!tracks[t]) tracks[t] = [];
+      const clash = tracks[t].some(([a,b]) => !(ei <= a || si >= b));
+      if (!clash) { tracks[t].push([si, ei]); return t; }
+    }
+    return 0;
+  });
+
+  const TRACK_W = 26, LEFT = 14, DOT_R = 5;
+  const COLORS  = ["#1a56c4","#6d28d9","#15803d","#b45309"];
+
+  let out = "";
+  _sb.loops.forEach((loop, li) => {
+    const track = loopTrack[li];
+    if (track < 0) return;
+    const y1 = stepMids[loop.start_id];
+    const y2 = stepMids[loop.end_id];
+    if (y1 == null || y2 == null) return;
+    const x     = LEFT + track * TRACK_W;
+    const color = COLORS[track % COLORS.length];
+    const c     = loop.condition;
+    const label = c.type === "count" ? `×${c.count}` : `${c.type==="while"?"W":"U"}:${c.op||"≥"}${c.target}`;
+    const midY  = (y1 + y2) / 2;
+
+    // Vertical bar + top dot (loop-back target) + bottom dot + arrow pointing up
+    out += `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${color}" stroke-width="2"/>
+<circle cx="${x}" cy="${y1}" r="${DOT_R}" fill="${color}"/>
+<line   x1="${x-10}" y1="${y1}" x2="${x}" y2="${y1}" stroke="${color}" stroke-width="1.5"/>
+<circle cx="${x}" cy="${y2}" r="${DOT_R}" fill="${color}" opacity=".5"/>
+<line   x1="${x-10}" y1="${y2}" x2="${x}" y2="${y2}" stroke="${color}" stroke-width="1.5"/>
+<polygon points="${x},${y1-DOT_R-5} ${x-4},${y1+1} ${x+4},${y1+1}" fill="${color}"/>
+<text x="${x+8}" y="${midY+4}" font-size="9" fill="${color}" font-family="Inter,sans-serif" font-weight="600">${escHtml(label)}</text>`;
+  });
+  svg.innerHTML = out;
+}
+
+// ── Run / save / load / export ────────────────────────────────────────
 function sbRefreshTab() {
   const noWb  = document.getElementById("sb-empty-nowb");
   const layout = document.getElementById("sb-layout");
-  if (!state.workbench) {
-    noWb?.classList.remove("hidden");
-    layout?.classList.add("hidden");
-    return;
-  }
+  if (!state.workbench) { noWb?.classList.remove("hidden"); layout?.classList.add("hidden"); return; }
   noWb?.classList.add("hidden");
   layout?.classList.remove("hidden");
   sbRender();
 }
 
-function sbAddLoop() {
-  const n = _sb.loops.length;
-  _sb.loops.push({ id: _sbId(), var: `var${n+1}`, label: `Sweep ${n+1}`,
-    instrument:"", ch:1, param:"voltage", start:0, stop:5, step:0.5,
-    settle:0.1, i_limit:0.5, v_compliance:5.0,
-    step_actions: [] });
-  sbRender();
-}
+// sbRefreshTab defined above
 
-function sbAddLoopAction(loopId, type) {
+// (old loop/action helpers removed — replaced by new model above)
+
+function _sbOldLoopAction_STUB(loopId, type) {
   const lp = _sb.loops.find(l => l.id === loopId);
   if (!lp) return;
   const id = _sbId();
@@ -5265,68 +5635,11 @@ function sbAddLoopAction(loopId, type) {
   sbRender();
 }
 
-function sbRemoveLoopAction(loopId, actionId) {
-  const lp = _sb.loops.find(l => l.id === loopId);
-  if (lp) lp.step_actions = lp.step_actions.filter(a => a.id !== actionId);
-  sbRender();
-}
+// (old loop-action and action helpers removed — new model above)
 
-function _sbSetLoopAction(loopId, actionId, key, val) {
-  const lp = _sb.loops.find(l => l.id === loopId);
-  if (!lp) return;
-  const ac = lp.step_actions.find(a => a.id === actionId);
-  if (ac) ac[key] = val;
-}
-
-function _sbSetLoopActionRe(loopId, actionId, key, val) {
-  _sbSetLoopAction(loopId, actionId, key, val); sbRender();
-}
-
-function sbRemoveLoop(id) {
-  _sb.loops = _sb.loops.filter(l => l.id !== id);
-  sbRender();
-}
-
-function sbAddAction(type) {
-  const id = _sbId();
-  if (type === "set")      _sb.actions.push({ id, type, label:"Set",  instrument:"", ch:1, param:"set_voltage", mode:"single", value:"0", settle:0.1 });
-  if (type === "measure")  _sb.actions.push({ id, type, label:"value", instrument:"", ch:1, param:"voltage", settle:0, samples:1 });
-  if (type === "wait")     _sb.actions.push({ id, type, label:"Wait", duration:0.1 });
-  if (type === "wait_for") _sb.actions.push({ id, type, label:"Wait for state",
-    instrument:"", ch:1, param:"voltage", condition:">=", target:0, tolerance:0.5,
-    interval:5, timeout:300 });
-  sbRender();
-}
-
-function sbRemoveAction(id) {
-  _sb.actions = _sb.actions.filter(a => a.id !== id);
-  sbRender();
-}
-
-function _sbSet(scope, id, key, val) {
-  const arr = scope === "loop" ? _sb.loops : _sb.actions;
-  const obj = arr.find(x => x.id === id);
-  if (obj) obj[key] = val;
-}
-
-// For Set blocks: changing instrument also resets param to the first available op.
-function _sbSetInstrAndParam(scope, id, resource) {
-  _sbSet(scope, id, 'instrument', resource);
-  const ops = ((state.workbench||{})._unique||[]).find(i=>i.resource===resource)?.write_ops||[];
-  if (ops.length) _sbSet(scope, id, 'param', ops[0].op);
-  sbRender();
-}
-function _sbSetLoopActionInstrAndParam(loopId, actionId, resource) {
-  _sbSetLoopAction(loopId, actionId, 'instrument', resource);
-  const ops = ((state.workbench||{})._unique||[]).find(i=>i.resource===resource)?.write_ops||[];
-  if (ops.length) _sbSetLoopAction(loopId, actionId, 'param', ops[0].op);
-  sbRender();
-}
-
-function _sbSetRe(scope, id, key, val) { _sbSet(scope, id, key, val); sbRender(); }
-
-function sbRender() {
-  const el = document.getElementById("sb-pipeline");
+function _sbOldRender_STUB() {
+  // old sbRender removed — new sbRender is above
+  const el = document.getElementById("sb-pipeline-REMOVED");
   if (!el) return;
   const instrs = _sbInstruments();
   const iOpts  = (cur) => '<option value="">— any —</option>' +
@@ -5658,14 +5971,14 @@ function sbRender() {
       </div>
     </div>`;
 
-  el.innerHTML = html;
+  el.innerHTML = "";  // old sbRender stub body — does nothing
 }
 
 async function sbRun() {
   if (state.autoRunning) { toast("A test is already running", "error"); return; }
   if (!state.connected)  { toast("Not connected to instruments", "error"); return; }
-  if (!_sb.actions.some(a => a.type === "measure")) {
-    toast("Add at least one Measure action", "error"); return;
+  if (!_sb.steps.some(s => s.type === "measure")) {
+    toast("Add at least one Measure step", "error"); return;
   }
   state.autoRunning = true;
   state.autoTestId  = "sandbox";
@@ -5680,7 +5993,7 @@ async function sbRun() {
   document.getElementById("sb-prog-label").textContent = "Starting…";
   POST("/api/automation/run", {
     test_id: "sandbox",
-    params: { sandbox_json: JSON.stringify({ loops: _sb.loops, actions: _sb.actions }) },
+    params: { sandbox_json: JSON.stringify({ steps: _sb.steps, loops: _sb.loops }) },
     output_path: state.outputPath || ""
   }).catch(e => { toast("Failed to start: " + e.message, "error"); sbTestFinished(e.message, null); });
 }
@@ -5701,7 +6014,7 @@ function sbTestFinished(error, csv_path) {
 
 function sbSave() {
   const data  = { name: document.getElementById("sb-name")?.value || "My Custom Test",
-                  loops: _sb.loops, actions: _sb.actions };
+                  steps: _sb.steps, loops: _sb.loops };
   const fname = (data.name.replace(/[^\w-]/g, "_") || "sandbox") + ".json";
   const url   = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type:"application/json" }));
   const a = document.createElement("a"); a.href = url; a.download = fname; a.click();
@@ -5720,8 +6033,8 @@ function sbLoad() {
         const d = JSON.parse(ev.target.result);
         const nameEl = document.getElementById("sb-name");
         if (nameEl) nameEl.value = d.name || "";
-        _sb.loops   = (d.loops   || []).map(l => ({ ...l, id: _sbId() }));
-        _sb.actions = (d.actions || []).map(a => ({ ...a, id: _sbId() }));
+        _sb.steps = (d.steps || []).map(s => ({ ...s, id: _sbId() }));
+        _sb.loops = (d.loops || []).map(l => ({ ...l, id: _sbId() }));
         sbRender();
         toast("Loaded " + (d.name || "test"), "ok");
       } catch(e) { toast("Load failed: " + e.message, "error"); }

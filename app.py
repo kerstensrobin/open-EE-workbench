@@ -3637,13 +3637,23 @@ def api_automation_run():
 
     # ── Sandbox runner ────────────────────────────────────────────────────────
     def _run_sandbox():
-        """Execute a user-designed loop/action graph from the Sandbox tab."""
+        """Execute a user-designed sequence from the Sandbox tab.
+
+        Supports two formats in sandbox_json:
+          New: { steps: [...], loops: [...] }  — sequential flowchart model
+          Old: { loops: [...], actions: [...] } — nested sweep model (legacy)
+        """
         import json as _json
         try:
             sb = _json.loads(params.get("sandbox_json", "{}"))
         except Exception as exc:
             _done([], [], f"Invalid sandbox JSON: {exc}"); return
 
+        # ── New sequential model ──────────────────────────────────────
+        if "steps" in sb:
+            _run_sandbox_sequential(sb); return
+
+        # ── Legacy nested-sweep model ────────────────────────────────
         loops   = sb.get("loops",   [])
         actions = sb.get("actions", [])
         if not any(ac.get("type") == "measure" for ac in actions):
@@ -3858,6 +3868,121 @@ def api_automation_run():
                 except Exception: pass
             _psu_local_mode(loop_h)
         _done(rows, cols)
+
+    def _run_sandbox_sequential(sb):
+        """Execute the new steps-based sandbox format.
+
+        Runs steps in order. Each loop { start_id, end_id, condition } causes
+        a jump back to start_id after end_id executes when the condition is unmet.
+        A result row is emitted each time any loop resets, and once at the end.
+        """
+        steps     = sb.get("steps", [])
+        loops_cfg = sb.get("loops", [])
+
+        meas_cols = [s.get("label") or f"meas_{i+1}"
+                     for i, s in enumerate(steps) if s.get("type") == "measure"]
+        if not meas_cols:
+            _done([], [], "Add at least one Measure step"); return
+
+        def _get_h(rstr):
+            res = _state["resources"].get(rstr)
+            fam = _state["families"].get(rstr)
+            if res is None:
+                res, fam = _find_instrument("dmm")
+            return res, fam
+
+        step_by_id = {s["id"]: (i, s) for i, s in enumerate(steps)}
+        handles    = {s["id"]: _get_h(s.get("instrument", "")) for s in steps}
+
+        _MEAS_OPS = {
+            "voltage": "measure_voltage", "current": "measure_current",
+            "vac": "measure_vac", "r": "measure_r", "r4w": "measure_r4w",
+        }
+        def _sf(v):
+            try: f = float(v); return None if abs(f) > 1e30 else round(f, 6)
+            except Exception: return None
+
+        rows, meas_row = [], {}
+        loop_counters  = {l["id"]: 0 for l in loops_cfg}
+        step_idx, safety = 0, 200_000
+
+        def _flush_row():
+            vals = [meas_row.get(c) for c in meas_cols]
+            rows.append(vals)
+            sio.emit("automation_row", {
+                "test_id": "sandbox", "row": vals, "columns": meas_cols,
+                "progress": -1,
+            })
+            meas_row.clear()
+
+        while step_idx < len(steps) and safety > 0:
+            safety -= 1
+            if _auto_stop.is_set(): break
+            _pause_point()
+
+            s   = steps[step_idx]
+            sid = s.get("id")
+            res, fam = handles.get(sid, (None, None))
+            t   = s.get("type", "")
+
+            if t == "wait":
+                time.sleep(float(s.get("duration", 0)))
+            elif t in ("set", "wait_for") and res:
+                _exec_action(s, res, fam, {})
+            elif t == "measure" and res:
+                op      = _MEAS_OPS.get(s.get("param", "voltage"), "measure_voltage")
+                ch      = int(s.get("ch", 1))
+                settle  = float(s.get("settle", 0))
+                n       = max(1, int(s.get("samples", 1)))
+                if settle > 0: time.sleep(settle)
+                try:
+                    vs  = [_sf(_run_steps(res, get_command(fam, op, ch=ch))) for _ in range(n)]
+                    ns  = [v for v in vs if v is not None]
+                    val = round(sum(ns) / len(ns), 6) if ns else None
+                except Exception: val = None
+                lbl = s.get("label") or f"meas_{step_idx+1}"
+                meas_row[lbl] = val
+            elif t == "screenshot":
+                pass  # TODO
+
+            step_idx += 1
+
+            # Check loops whose end_id matches this step
+            for lc in loops_cfg:
+                if lc.get("end_id") != sid: continue
+                cond  = lc.get("condition", {})
+                ctype = cond.get("type", "count")
+                lc_id = lc["id"]
+
+                should_loop = False
+                if ctype == "count":
+                    loop_counters[lc_id] += 1
+                    if loop_counters[lc_id] < int(cond.get("count", 1)):
+                        should_loop = True
+                    else:
+                        loop_counters[lc_id] = 0
+                elif ctype in ("until", "while") and res:
+                    op_key = _MEAS_OPS.get(cond.get("param", "voltage"), "measure_voltage")
+                    u_ch   = int(cond.get("ch", 1))
+                    try:
+                        v = _sf(_run_steps(res, get_command(fam, op_key, ch=u_ch)))
+                        op_s = cond.get("op", ">=")
+                        tgt  = float(cond.get("target", 0))
+                        met  = ((op_s == ">=" and v is not None and v >= tgt) or
+                                (op_s == "<=" and v is not None and v <= tgt))
+                        should_loop = not met if ctype == "until" else met
+                    except Exception:
+                        should_loop = True
+
+                if should_loop:
+                    if meas_row: _flush_row()
+                    si = step_by_id.get(lc.get("start_id"), (None,))[0]
+                    if si is not None:
+                        step_idx = si
+                    break
+
+        if meas_row: _flush_row()
+        _done(rows, meas_cols)
 
     runners = {
         "ac_frequency_sweep": _run_ac_sweep,
