@@ -637,6 +637,19 @@
     .sb-add-chip:hover { border-color:var(--accent); color:var(--accent); background:var(--accent-glow); border-style:solid; }
     .sb-add-chip.loop-chip { border-color:rgba(109,40,217,.35); color:var(--purple); }
     .sb-add-chip.loop-chip:hover { border-color:var(--purple); background:rgba(109,40,217,.08); }
+    .sb-action-wrap { position:relative; }
+    .sb-action-menu {
+      display:none; position:absolute; bottom:calc(100% + 4px); left:0;
+      background:var(--surface3); border:1px solid var(--border2); border-radius:var(--radius);
+      box-shadow:0 4px 16px rgba(0,0,0,.4); min-width:140px; z-index:50; overflow:hidden;
+    }
+    .sb-action-menu.open { display:block; }
+    .sb-action-item {
+      display:flex; align-items:center; gap:8px; padding:7px 12px;
+      font-size:12px; cursor:pointer; color:var(--text-dim); transition:background .1s;
+      background:none; border:none; width:100%; text-align:left; font:inherit;
+    }
+    .sb-action-item:hover { background:var(--surface4); color:var(--text); }
     /* Step rows */
     .sb-row {
       display:flex; flex-direction:column;
@@ -1156,7 +1169,12 @@
             <div class="sb-add-bar">
               <button class="sb-add-chip" onclick="sbAddStep('set')">+ Set</button>
               <button class="sb-add-chip" onclick="sbAddStep('measure')">+ Measure</button>
-              <button class="sb-add-chip" onclick="sbAddStep('screenshot')">+ Screenshot</button>
+              <div class="sb-action-wrap">
+                <button class="sb-add-chip" onclick="sbToggleActionMenu(event)">+ Action ▾</button>
+                <div class="sb-action-menu" id="sb-action-menu">
+                  <button class="sb-action-item" onclick="sbPickAction('screenshot')">📷 Screenshot</button>
+                </div>
+              </div>
               <button class="sb-add-chip" onclick="sbAddStep('wait')">+ Wait</button>
               <button class="sb-add-chip" onclick="sbAddStep('wait_for')">+ Wait for</button>
               <button class="sb-add-chip loop-chip" onclick="sbOpenLoopForm()">+ Loop</button>
@@ -5402,6 +5420,18 @@ function _sbStepInstrChange(id, resource) {
   if (ops.length) _sbSetStep(id, "param", ops[0].op);
   sbRender();
 }
+
+// ── Action menu ──────────────────────────────────────────────────────
+function sbToggleActionMenu(e) {
+  e.stopPropagation();
+  document.getElementById("sb-action-menu").classList.toggle("open");
+}
+function sbPickAction(subtype) {
+  document.getElementById("sb-action-menu").classList.remove("open");
+  sbAddStep(subtype);
+}
+document.addEventListener("click", () =>
+  document.getElementById("sb-action-menu")?.classList.remove("open"));
 
 // ── Loop management ──────────────────────────────────────────────────
 function sbOpenLoopForm() {
