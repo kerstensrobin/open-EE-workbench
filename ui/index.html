@@ -418,6 +418,29 @@
     /* ── Automation tab ──────────────────────────────────────────── */
     #auto-tab { display:none; flex-direction:column; gap:16px; }
     #auto-tab.visible { display:flex; }
+    /* ── Help menu ──────────────────────────────────────────────── */
+    #help-menu-wrap { position:relative; }
+    #help-btn { padding:5px 10px; font-size:13px; font-weight:600; line-height:1; }
+    #help-dropdown {
+      position:absolute; right:0; top:calc(100% + 6px); z-index:300;
+      background:var(--surface2); border:1px solid var(--border2);
+      border-radius:var(--radius); box-shadow:0 4px 16px rgba(0,0,0,.18);
+      min-width:190px; display:none; flex-direction:column; overflow:hidden;
+    }
+    #help-dropdown.open { display:flex; }
+    .help-item {
+      display:flex; align-items:center; gap:9px; padding:9px 14px;
+      font-size:12px; color:var(--text-dim); cursor:pointer; border:none;
+      background:none; width:100%; text-align:left; font:inherit;
+      transition:background .12s, color .12s; text-decoration:none;
+    }
+    .help-item:hover { background:var(--surface3); color:var(--text); }
+    .help-item:disabled { opacity:.5; cursor:not-allowed; }
+    .help-sep { height:1px; background:var(--border); margin:2px 0; }
+    #update-status {
+      font-size:11px; padding:4px 14px 9px 36px; color:var(--text-faint);
+      display:none; line-height:1.5;
+    }
     /* ── Global output path (navbar) ─────────────────────────────── */
     #nav-outpath {
       display:flex; align-items:center; gap:5px; flex:1; min-width:0; max-width:380px;
@@ -885,6 +908,27 @@
   </div>
 
   <button class="btn btn-primary" id="connect-btn" disabled>Connect</button>
+
+  <div id="help-menu-wrap">
+    <button class="btn btn-ghost" id="help-btn" onclick="toggleHelpMenu()" title="Help">?</button>
+    <div id="help-dropdown">
+      <a class="help-item" href="#" onclick="openUrl('https://github.com/kerstensrobin/open-EE-workbench/wiki');closeHelpMenu();return false;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        </svg>
+        Wiki
+      </a>
+      <div class="help-sep"></div>
+      <button class="help-item" id="check-update-btn" onclick="checkForUpdates()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+        </svg>
+        Check for updates
+      </button>
+      <div id="update-status"></div>
+    </div>
+  </div>
 </nav>
 
 <!-- ── Tab bar ────────────────────────────────────────────────────── -->
@@ -2249,7 +2293,7 @@ function scopeMeasureAll() {
     if ($v) { $v.innerHTML=`<span class="spinner" style="width:10px;height:10px;border-width:2px;"></span>`; $v.classList.remove("dim"); }
   });
   const measurements = items.map(item => ({op:item.dataset.meas, ch:parseInt(item.dataset.ch)}));
-  POST("/api/scope/measure_batch", {measurements, delay_ms:50, setup}).catch(e => {
+  POST("/api/scope/measure_batch", {measurements, delay_ms:50, setup, poll:true}).catch(e => {
     _scopeBatchInFlight = false;
     _scopeNeedsSetup = true;
     _scopeStopAuto();
@@ -2688,7 +2732,7 @@ function dmmToggleContinuous(btn) {
   const on=btn.dataset.on!=="true";
   btn.dataset.on=on; btn.textContent=`Continuous: ${on?"ON":"OFF"}`;
   btn.className=`btn ${on?"btn-green":"btn-ghost"}`;
-  if (on) { _dmmContID=setInterval(()=>POST("/api/dmm/measure",{mode:_dmmMode}).catch(()=>{}),1000); }
+  if (on) { _dmmContID=setInterval(()=>POST("/api/dmm/measure",{mode:_dmmMode,poll:true}).catch(()=>{}),1000); }
   else    { clearInterval(_dmmContID); _dmmContID=null; }
 }
 
@@ -6592,6 +6636,47 @@ window.addEventListener("resize", () => {
   if (state.activeTab === "testspec") ivChartDraw();
   if (state.selectedTestId === "dmm_logger") _dmmLogDraw();
 });
+
+// ── Help menu ────────────────────────────────────────────────────
+function openUrl(url) {
+  fetch('/api/open-url', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({url})});
+}
+function toggleHelpMenu() {
+  document.getElementById('help-dropdown').classList.toggle('open');
+}
+function closeHelpMenu() {
+  document.getElementById('help-dropdown').classList.remove('open');
+}
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('help-menu-wrap');
+  if (wrap && !wrap.contains(e.target)) closeHelpMenu();
+});
+
+async function checkForUpdates() {
+  const btn = document.getElementById('check-update-btn');
+  const status = document.getElementById('update-status');
+  btn.disabled = true;
+  status.style.display = 'block';
+  status.textContent = 'Checking…';
+  try {
+    const r = await fetch('/api/check-update');
+    const d = await r.json();
+    if (d.error && !d.current) {
+      status.textContent = 'Error: ' + d.error;
+    } else if (d.up_to_date) {
+      status.textContent = `✓ Up to date (${d.current})`;
+    } else {
+      const link = d.release_url
+        ? `<a href="#" onclick="openUrl('${d.release_url}');return false;" style="color:var(--accent)">${d.latest}</a>`
+        : d.latest;
+      status.innerHTML = `Update available: ${link}<br><span style="color:var(--text-faint)">Current: ${d.current}</span>`;
+    }
+  } catch (e) {
+    status.textContent = 'Network error';
+  }
+  btn.disabled = false;
+}
 
 // ── Init ──────────────────────────────────────────────────────────
 (async () => { await loadWorkbenches(); refreshAutoTests(); })();

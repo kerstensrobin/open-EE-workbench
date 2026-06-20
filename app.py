@@ -424,7 +424,7 @@ def _scope_enable_measures(scope_res, scope_fam, op_ch_pairs: list):
             _log(f"[scope] enable {op} CH{ch}: {exc}")
 
 
-def _scope_query_only(scope_res, scope_fam, op: str, ch: int):
+def _scope_query_only(scope_res, scope_fam, op: str, ch: int, poll: bool = False):
     """Query a single scope measurement *without* re-sending its enable write.
 
     Call _scope_enable_measures() first, then use this inside the loop.
@@ -435,7 +435,7 @@ def _scope_query_only(scope_res, scope_fam, op: str, ch: int):
         query_steps = [(a, s) for a, s in steps if a in ("query", "raw_query")]
         if not query_steps:
             return None
-        raw = _run_steps(scope_res, query_steps, role="scope")
+        raw = _run_steps(scope_res, query_steps, role="scope", poll=poll)
         if raw is None:
             return None
         v = float(raw)
@@ -777,6 +777,7 @@ def api_scope_measure_batch():
     items   = d.get("measurements", [])   # [{op, ch}, ...]
     delay_s = max(0, min(int(d.get("delay_ms", 50)), 2000)) / 1000.0
     setup   = bool(d.get("setup", True))
+    poll    = bool(d.get("poll", False))
 
     def _do():
         res, fam = _find_instrument("scope")
@@ -795,7 +796,7 @@ def api_scope_measure_batch():
             if idx > 0 and delay_s > 0:
                 time.sleep(delay_s)
             label, unit = _SCOPE_MEASURES[op]
-            val = _scope_query_only(res, fam, op, ch)
+            val = _scope_query_only(res, fam, op, ch, poll=poll)
             sio.emit("scope_measurement",
                      {"measurement": op, "label": label, "unit": unit,
                       "ch": ch, "value": val})
@@ -1120,7 +1121,9 @@ def _res_for_interval(interval: float) -> str:
 
 @flask_app.route("/api/dmm/measure", methods=["POST"])
 def api_dmm_measure():
-    mode = (request.json or {}).get("mode", "vdc")
+    d    = request.json or {}
+    mode = d.get("mode", "vdc")
+    poll = bool(d.get("poll", False))
     op   = DMM_OPS.get(mode)
     if not op:
         return jsonify({"error": f"unknown mode {mode!r}"}), 400
@@ -1129,7 +1132,7 @@ def api_dmm_measure():
         res, fam = _find_instrument("dmm")
         if res is None or fam is None: return
         try:
-            val = float(_run_steps(res, get_command(fam, op), role="dmm") or "nan")
+            val = float(_run_steps(res, get_command(fam, op), role="dmm", poll=poll) or "nan")
             sio.emit("dmm_reading", {"value": val, "mode": mode})
         except Exception as exc:
             _log(f"[dmm] {exc}")
@@ -2007,6 +2010,35 @@ def api_pick_folder():
         return jsonify({"path": result["path"]})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
+
+
+@flask_app.route("/api/check-update", methods=["GET"])
+def api_check_update():
+    import subprocess, urllib.request as _urlreq
+    try:
+        current = subprocess.check_output(
+            ["git", "describe", "--tags", "--always"],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            stderr=subprocess.DEVNULL, text=True,
+        ).strip()
+    except Exception:
+        current = "unknown"
+    try:
+        req = _urlreq.Request(
+            "https://api.github.com/repos/kerstensrobin/open-EE-workbench/releases/latest",
+            headers={"Accept": "application/vnd.github+json",
+                     "User-Agent": "open-EE-workbench"},
+        )
+        with _urlreq.urlopen(req, timeout=8) as resp:
+            data = _json.loads(resp.read())
+        latest = data.get("tag_name", "unknown")
+        release_url = data.get("html_url",
+                               "https://github.com/kerstensrobin/open-EE-workbench/releases")
+        up_to_date = (current == latest) or current.startswith(latest.lstrip("v"))
+        return jsonify({"current": current, "latest": latest,
+                        "up_to_date": up_to_date, "release_url": release_url})
+    except Exception as exc:
+        return jsonify({"current": current, "error": str(exc)})
 
 
 @flask_app.route("/api/open-url", methods=["POST"])
