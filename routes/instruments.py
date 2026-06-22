@@ -442,9 +442,34 @@ def api_awg_read_state():
         if res is None or fam is None:
             return {}
 
-        # Prefer APPL? when available: returns func,freq,amp,offset in
-        # Vpp/V regardless of VOLT:UNIT, avoiding unit-scaling issues.
-        appl_spec = fam.get("commands", {}).get("apply_query")
+        cmds = fam.get("commands", {})
+
+        # Normalize voltage unit to VPP so amplitude queries return Vpp.
+        # GWinstek (and some others) use VOLT:UNIT; APPL? ignores VOLT:UNIT
+        # changes so those families must null apply_query and use AMPL? instead.
+        amp_unit_spec = cmds.get("set_amplitude_unit")
+        if isinstance(amp_unit_spec, dict) and "write" in amp_unit_spec and "query" in amp_unit_spec:
+            # Query first; only write if unit is not already VPP.
+            try:
+                unit_q = amp_unit_spec["query"].format(ch=ch)
+                with _rlock(res):
+                    cur_unit = _run_steps(res, [("query", unit_q)], role="awg")
+                if not cur_unit or cur_unit.strip().upper() != "VPP":
+                    unit_w = amp_unit_spec["write"].format(ch=ch, unit="VPP")
+                    with _rlock(res):
+                        _run_steps(res, [("write", unit_w)], role="awg")
+            except Exception:
+                pass
+        elif isinstance(amp_unit_spec, str) and "{unit}" in amp_unit_spec:
+            try:
+                write_str = amp_unit_spec.format(ch=ch, unit="VPP")
+                with _rlock(res):
+                    _run_steps(res, [("write", write_str)], role="awg")
+            except Exception:
+                pass
+
+        # Prefer APPL? when available: returns func, freq, amp in one shot.
+        appl_spec = cmds.get("apply_query")
         if isinstance(appl_spec, dict) and "query" in appl_spec:
             try:
                 q_str = appl_spec["query"].format(ch=ch)
@@ -462,23 +487,45 @@ def api_awg_read_state():
                                 out[dest] = str(float(vals[idx]))
                             except ValueError:
                                 pass
+                    # GWinstek omits offset from APPL? when it is 0 V;
+                    # always query DCO? separately to guarantee a value.
+                    off_spec = cmds.get("set_offset")
+                    if isinstance(off_spec, dict) and "query" in off_spec:
+                        try:
+                            oq = off_spec["query"].format(ch=ch)
+                            with _rlock(res):
+                                oval = _run_steps(res, [("query", oq)], role="awg")
+                            if oval is not None:
+                                out["offset"] = oval.strip()
+                        except Exception:
+                            pass
                     return out
             except Exception:
                 pass
 
         # Fall back to individual queries (one round-trip per parameter).
+        # GWinstek AMPL? returns peak amplitude (Vpp/2), not Vpp. Detect this by
+        # the presence of a queryable set_amplitude_unit spec (dict with both
+        # write and query), which is currently only added for gwinstek_afg.
+        amp_is_peak = isinstance(amp_unit_spec, dict) and "query" in amp_unit_spec
         out = {}
         for key, op in [("function", "set_function"), ("frequency", "set_frequency"),
                         ("amplitude", "set_amplitude"), ("offset", "set_offset")]:
             try:
-                spec = fam.get("commands", {}).get(op)
+                spec = cmds.get(op)
                 if not isinstance(spec, dict) or "query" not in spec:
                     continue
                 q_str = spec["query"].format(ch=ch)
                 with _rlock(res):
                     val = _run_steps(res, [("query", q_str)], role="awg")
                 if val is not None:
-                    out[key] = val.strip()
+                    v = val.strip()
+                    if key == "amplitude" and amp_is_peak:
+                        try:
+                            v = str(float(v) * 2)
+                        except ValueError:
+                            pass
+                    out[key] = v
             except Exception:
                 pass
         return out

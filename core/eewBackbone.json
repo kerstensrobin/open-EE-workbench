@@ -1161,7 +1161,7 @@
       "vendor": "Tektronix",
       "series": "MDO4000B/C / MSO4000B / DPO4000B Series",
       "type": "scope",
-      "inherits": "tektronix_mso_dpo2000",
+      "inherits": "tektronix_mso4000",
       "patterns": [
         "MSO4014B",
         "MSO4034B",
@@ -1180,6 +1180,27 @@
         "MDO4054C",
         "MDO4104C"
       ]
+    },
+    {
+      "id": "tektronix_mso4000",
+      "vendor": "Tektronix",
+      "series": "MSO4000 / DPO4000 Series",
+      "type": "scope",
+      "inherits": "tektronix_mso_dpo2000",
+      "patterns": [
+        "MSO4104",
+        "DPO4104",
+        "DPO4054",
+        "DPO4034",
+        "DPO4014",
+        "DPO4052",
+        "DPO4032",
+        "DPO4012"
+      ],
+      "overrides": {
+        "autoscale": ":AUTOSet",
+        "channel_label": ":CH{ch}:LABel \"{label}\""
+      }
     },
     {
       "id": "rs_rtc1000",
@@ -1672,7 +1693,13 @@
           "write": "SOUR{ch}:AMPL {amp} VPP",
           "query": "SOUR{ch}:AMPL?"
         },
-        "apply_query": {"query": "SOUR{ch}:APPL?"},
+        "apply_query": {
+          "query": "SOUR{ch}:APPL?"
+        },
+        "set_amplitude_unit": {
+          "write": "SOUR{ch}:VOLT:UNIT {unit}",
+          "query": "SOUR{ch}:VOLT:UNIT?"
+        },
         "set_offset": {
           "write": "SOUR{ch}:DCO {offset}",
           "query": "SOUR{ch}:DCO?"
