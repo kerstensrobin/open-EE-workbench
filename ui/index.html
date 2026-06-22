@@ -2315,8 +2315,8 @@ function _scopeChRowsHTML(nCh, hasLabel=false) {
   for (let i=1;i<=nCh;i++) {
     const cc = chColors[i-1]||"";
     const labelInp = hasLabel
-      ? `<input class="scope-ch-label-inp" type="text" maxlength="4" placeholder="label"
-               title="Channel label (shown on scope display; max 4 chars)"
+      ? `<input class="scope-ch-label-inp" type="text" maxlength="10" placeholder="label"
+               title="Channel label (shown on scope display)"
                onkeydown="if(event.key==='Enter')scopeSetLabel(this,${i})"
                onblur="scopeSetLabel(this,${i})"/>`
       : '';
@@ -2341,7 +2341,7 @@ function _scopeChRowsHTML(nCh, hasLabel=false) {
 }
 
 function scopeSetLabel(inp, ch) {
-  const lbl = inp.value.trim().slice(0, 4);  // DS1000Z max label length is 4 chars
+  const lbl = inp.value.trim().slice(0, 10);
   inp.value = lbl;
   scopeSet('channel_label', {ch, label: lbl});
   scopeSet('labels_on', {});

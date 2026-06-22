@@ -35,6 +35,7 @@ _SCOPE_SET_OPS = {
     "channel_coupling", "channel_probe", "channel_label",
     "timebase_scale", "timebase_position",
     "trigger_level", "trigger_slope", "trigger_source",
+    "labels_on", "labels_off",
 }
 
 DMM_OPS = {
