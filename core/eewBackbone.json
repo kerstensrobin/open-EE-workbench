@@ -1658,11 +1658,21 @@
       "type": "awg",
       "inherits": "keysight_edu33211a",
       "patterns": [
+        "AFG-2005",
+        "AFG-2012",
+        "AFG-2021",
+        "AFG-2022",
+        "AFG-2051",
+        "AFG-2052",
+        "AFG-2105",
+        "AFG-2112",
+        "AFG-2125",
         "AFG-2225",
         "AFG-3031"
       ],
       "overrides": {
-        "apply": null
+        "apply": null,
+        "set_amplitude_unit": null
       }
     },
     {

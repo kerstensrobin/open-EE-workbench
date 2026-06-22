@@ -2715,7 +2715,7 @@ function buildAWGCard(instr) {
   const chTabs=Array.from({length:nCh},(_,i)=>
     `<button class="ch-tab${i===0?" active":""}" data-ch="${i+1}" onclick="awgSelectCh(this)">${i+1}</button>`
   ).join("");
-  const funcs=["SINE","SQU","TRI","RAMP","PULS","NOIS","DC"];
+  const funcs=["SIN","SQU","TRI","RAMP","PULS","NOIS","DC"];
   const funcPills=funcs.map((f,i)=>
     `<button class="func-pill${i===0?" active":""}" data-func="${f}" onclick="awgSelectFunc(this)">${f}</button>`
   ).join("");
@@ -2766,7 +2766,7 @@ function buildAWGCard(instr) {
     </div>`;
   return div;
 }
-let _awgCh=1, _awgFunc="SINE";
+let _awgCh=1, _awgFunc="SIN";
 function awgSelectCh(btn) {
   document.querySelectorAll("#awg-ch-tabs .ch-tab").forEach(b=>b.classList.remove("active"));
   btn.classList.add("active"); _awgCh=parseInt(btn.dataset.ch);
@@ -2799,9 +2799,14 @@ function awgReadState() {
       if (d.amplitude !== undefined) document.getElementById("awg-amp").value  = parseFloat(d.amplitude);
       if (d.offset    !== undefined) document.getElementById("awg-offs").value = parseFloat(d.offset);
       if (d.function  !== undefined) {
-        const func = d.function.toUpperCase().replace(/^(SIN|SINE)$/, "SINE")
-          .replace(/^SQU(ARE)?$/, "SQU").replace(/^(RAMP|TRIANGLE|TRI)$/, "RAMP")
-          .replace(/^(NOIS|NOISE)$/, "NOIS").replace(/^DC$/, "DC");
+        const func = d.function.toUpperCase()
+          .replace(/^(SIN|SINE|SINUSOID)$/, "SIN")
+          .replace(/^SQU(ARE)?$/, "SQU")
+          .replace(/^(TRI|TRIANGL|TRIANGLE)$/, "TRI")
+          .replace(/^RAMP$/, "RAMP")
+          .replace(/^(PULS|PULSE)$/, "PULS")
+          .replace(/^(NOIS|NOISE)$/, "NOIS")
+          .replace(/^DC$/, "DC");
         document.querySelectorAll("#awg-func-pills .func-pill").forEach(b => {
           const match = b.dataset.func === func || func.startsWith(b.dataset.func);
           b.classList.toggle("active", match);
