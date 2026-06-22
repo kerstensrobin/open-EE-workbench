@@ -2197,7 +2197,7 @@ function buildInstrumentGrid(instruments) {
     types[t].push(instr);
   }
   if (types.scope) $grid.appendChild(buildScopeCard(types.scope[0]));
-  if (types.psu)   $grid.appendChild(buildPSUCard(types.psu[0]));
+  if (types.psu)   { $grid.appendChild(buildPSUCard(types.psu[0])); _psuRefreshAllBtn(); }
   if (types.awg)   $grid.appendChild(buildAWGCard(types.awg[0]));
   if (types.dmm)   $grid.appendChild(buildDMMCard(types.dmm[0]));
   for (const [t,instrs] of Object.entries(types)) {
@@ -2649,7 +2649,7 @@ function buildPSUCard(instr) {
         <button class="output-toggle" id="psu-out-all"
                 style="flex:1;justify-content:center;border-radius:var(--radius);padding:6px 12px;font-size:11px;"
                 data-on="false" onclick="psuToggleAll(this)">
-          <span class="tog-dot"></span>All OFF
+          <span class="tog-dot"></span>All ON
         </button>
         <button class="btn btn-ghost" style="flex:1;font-size:11px;" onclick="psuReset()">↺ Reset all</button>
       </div>
