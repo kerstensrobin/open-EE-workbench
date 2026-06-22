@@ -445,13 +445,14 @@ def api_awg_read_state():
         for key, op in [("function", "set_function"), ("frequency", "set_frequency"),
                         ("amplitude", "set_amplitude"), ("offset", "set_offset")]:
             try:
-                steps = get_command(fam, op, ch=ch)
-                q = [(a, s) for a, s in steps if a == "query"]
-                if q:
-                    with _rlock(res):
-                        val = _run_steps(res, q, role="awg")
-                    if val is not None:
-                        out[key] = val.strip()
+                spec = fam.get("commands", {}).get(op)
+                if not isinstance(spec, dict) or "query" not in spec:
+                    continue
+                q_str = spec["query"].format(ch=ch)
+                with _rlock(res):
+                    val = _run_steps(res, [("query", q_str)], role="awg")
+                if val is not None:
+                    out[key] = val.strip()
             except Exception:
                 pass
         return out
