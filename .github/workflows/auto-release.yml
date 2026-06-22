@@ -1,8 +1,8 @@
 name: Auto Release
 
 on:
-  push:
-    branches: [main]
+  schedule:
+    - cron: '59 23 * * *'   # 23:59 UTC daily
 
 jobs:
   release:
@@ -14,8 +14,20 @@ jobs:
         with:
           fetch-depth: 0   # full history needed to collect commit messages
 
+      - name: Check for commits today
+        id: activity
+        run: |
+          COUNT=$(git log --since="$(date -u +%Y-%m-%d) 00:00:00" --oneline | wc -l)
+          echo "count=${COUNT}" >> $GITHUB_OUTPUT
+          if [ "$COUNT" -gt 0 ]; then
+            echo "has_commits=true"  >> $GITHUB_OUTPUT
+          else
+            echo "has_commits=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Check whether today's release already exists
         id: check
+        if: steps.activity.outputs.has_commits == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -28,7 +40,7 @@ jobs:
           fi
 
       - name: Collect commit messages since last release
-        if: steps.check.outputs.skip == 'false'
+        if: steps.activity.outputs.has_commits == 'true' && steps.check.outputs.skip == 'false'
         run: |
           LAST_TAG=$(git tag --sort=-version:refname | head -1)
           if [ -z "$LAST_TAG" ]; then
@@ -39,7 +51,7 @@ jobs:
           [ -s /tmp/notes.md ] || echo "- Maintenance update" > /tmp/notes.md
 
       - name: Create release
-        if: steps.check.outputs.skip == 'false'
+        if: steps.activity.outputs.has_commits == 'true' && steps.check.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
