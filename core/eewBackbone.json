@@ -1654,25 +1654,134 @@
     {
       "id": "gwinstek_afg",
       "vendor": "GW INSTEK",
-      "series": "AFG Series Arbitrary Function Generator",
+      "series": "AFG-2000 Series Arbitrary Function Generator",
       "type": "awg",
       "inherits": "keysight_edu33211a",
       "patterns": [
         "AFG-2005",
         "AFG-2012",
-        "AFG-2021",
-        "AFG-2022",
-        "AFG-2051",
-        "AFG-2052",
+        "AFG-2025",
         "AFG-2105",
         "AFG-2112",
         "AFG-2125",
-        "AFG-2225",
         "AFG-3031"
       ],
       "overrides": {
         "apply": null,
-        "set_amplitude_unit": null
+        "set_amplitude": {
+          "write": "SOUR{ch}:AMPL {amp}",
+          "query": "SOUR{ch}:AMPL?"
+        },
+        "set_offset": {
+          "write": "SOUR{ch}:DCO {offset}",
+          "query": "SOUR{ch}:DCO?"
+        },
+        "output_on": "OUTP ON",
+        "output_off": "OUTP OFF",
+        "query_output": {"query": "OUTP?"},
+        "set_duty_cycle": {
+          "write": "SOUR{ch}:SQU:DCYC {value}",
+          "query": "SOUR{ch}:SQU:DCYC?"
+        },
+        "set_symmetry": {
+          "write": "SOUR{ch}:RAMP:SYMM {value}",
+          "query": "SOUR{ch}:RAMP:SYMM?"
+        },
+        "output_load": {
+          "write": "OUTP:LOAD {value}",
+          "query": "OUTP:LOAD?"
+        },
+        "am_state": {
+          "write": "SOUR{ch}:AM:STAT {value}",
+          "query": "SOUR{ch}:AM:STAT?"
+        },
+        "am_source": {
+          "write": "SOUR{ch}:AM:SOUR {value}",
+          "query": "SOUR{ch}:AM:SOUR?"
+        },
+        "am_int_function": {
+          "write": "SOUR{ch}:AM:INT:FUNC {func}",
+          "query": "SOUR{ch}:AM:INT:FUNC?"
+        },
+        "am_int_frequency": {
+          "write": "SOUR{ch}:AM:INT:FREQ {freq}",
+          "query": "SOUR{ch}:AM:INT:FREQ?"
+        },
+        "am_depth": {
+          "write": "SOUR{ch}:AM:DEPT {value}",
+          "query": "SOUR{ch}:AM:DEPT?"
+        },
+        "fm_state": {
+          "write": "SOUR{ch}:FM:STAT {value}",
+          "query": "SOUR{ch}:FM:STAT?"
+        },
+        "fm_source": {
+          "write": "SOUR{ch}:FM:SOUR {value}",
+          "query": "SOUR{ch}:FM:SOUR?"
+        },
+        "fm_int_function": {
+          "write": "SOUR{ch}:FM:INT:FUNC {func}",
+          "query": "SOUR{ch}:FM:INT:FUNC?"
+        },
+        "fm_int_frequency": {
+          "write": "SOUR{ch}:FM:INT:FREQ {freq}",
+          "query": "SOUR{ch}:FM:INT:FREQ?"
+        },
+        "fm_deviation": {
+          "write": "SOUR{ch}:FM:DEV {value}",
+          "query": "SOUR{ch}:FM:DEV?"
+        },
+        "fsk_state": {
+          "write": "SOUR{ch}:FSK:STAT {value}",
+          "query": "SOUR{ch}:FSK:STAT?"
+        },
+        "fsk_source": {
+          "write": "SOUR{ch}:FSK:SOUR {value}",
+          "query": "SOUR{ch}:FSK:SOUR?"
+        },
+        "fsk_frequency": {
+          "write": "SOUR{ch}:FSK:FREQ {freq}",
+          "query": "SOUR{ch}:FSK:FREQ?"
+        },
+        "fsk_rate": {
+          "write": "SOUR{ch}:FSK:INT:RATE {value}",
+          "query": "SOUR{ch}:FSK:INT:RATE?"
+        },
+        "sweep_state": {
+          "write": "SOUR{ch}:SWE:STAT {value}",
+          "query": "SOUR{ch}:SWE:STAT?"
+        },
+        "sweep_start_freq": {
+          "write": "SOUR{ch}:FREQ:STAR {freq}",
+          "query": "SOUR{ch}:FREQ:STAR?"
+        },
+        "sweep_stop_freq": {
+          "write": "SOUR{ch}:FREQ:STOP {freq}",
+          "query": "SOUR{ch}:FREQ:STOP?"
+        },
+        "sweep_spacing": {
+          "write": "SOUR{ch}:SWE:SPAC {value}",
+          "query": "SOUR{ch}:SWE:SPAC?"
+        },
+        "sweep_rate": {
+          "write": "SOUR{ch}:SWE:RATE {value}",
+          "query": "SOUR{ch}:SWE:RATE?"
+        },
+        "sweep_source": {
+          "write": "SOUR{ch}:SWE:SOUR {value}",
+          "query": "SOUR{ch}:SWE:SOUR?"
+        },
+        "counter_gate": {
+          "write": "COUN:GAT {value}",
+          "query": "COUN:GAT?"
+        },
+        "counter_state": {
+          "write": "COUN:STAT {value}",
+          "query": "COUN:STAT?"
+        },
+        "counter_value": {"query": "COUN:VAL?"},
+        "save_state": "*SAV {value}",
+        "recall_state": "*RCL {value}"
       }
     },
     {
