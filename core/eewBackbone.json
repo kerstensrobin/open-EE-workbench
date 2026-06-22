@@ -1669,9 +1669,10 @@
       "overrides": {
         "apply": null,
         "set_amplitude": {
-          "write": "SOUR{ch}:AMPL {amp}",
+          "write": "SOUR{ch}:AMPL {amp} VPP",
           "query": "SOUR{ch}:AMPL?"
         },
+        "apply_query": {"query": "SOUR{ch}:APPL?"},
         "set_offset": {
           "write": "SOUR{ch}:DCO {offset}",
           "query": "SOUR{ch}:DCO?"

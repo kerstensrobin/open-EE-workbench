@@ -441,6 +441,32 @@ def api_awg_read_state():
         res, fam = _find_instrument("awg")
         if res is None or fam is None:
             return {}
+
+        # Prefer APPL? when available: returns func,freq,amp,offset in
+        # Vpp/V regardless of VOLT:UNIT, avoiding unit-scaling issues.
+        appl_spec = fam.get("commands", {}).get("apply_query")
+        if isinstance(appl_spec, dict) and "query" in appl_spec:
+            try:
+                q_str = appl_spec["query"].format(ch=ch)
+                with _rlock(res):
+                    raw = _run_steps(res, [("query", q_str)], role="awg")
+                if raw:
+                    raw = raw.strip()
+                    # Response: "SIN +5.000E+03,+3.0000E+00,-2.5000E+00"
+                    head, _, tail = raw.partition(" ")
+                    vals = [v.strip() for v in tail.split(",")]
+                    out = {"function": head.strip()}
+                    for dest, idx in [("frequency", 0), ("amplitude", 1), ("offset", 2)]:
+                        if idx < len(vals):
+                            try:
+                                out[dest] = str(float(vals[idx]))
+                            except ValueError:
+                                pass
+                    return out
+            except Exception:
+                pass
+
+        # Fall back to individual queries (one round-trip per parameter).
         out = {}
         for key, op in [("function", "set_function"), ("frequency", "set_frequency"),
                         ("amplitude", "set_amplitude"), ("offset", "set_offset")]:
