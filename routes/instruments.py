@@ -431,10 +431,32 @@ def api_awg_output():
     return jsonify({"status": "ok"})
 
 
-@bp.route("/api/awg/reset", methods=["POST"])
-def api_awg_reset():
-    _sh._executor.submit(lambda: _op(*_find_instrument("awg"), "reset", role="awg"))
-    return jsonify({"status": "ok"})
+@bp.route("/api/awg/read_state", methods=["POST"])
+def api_awg_read_state():
+    d  = request.json or {}
+    ch = int(d.get("ch", 1))
+
+    def _do():
+        res, fam = _find_instrument("awg")
+        if res is None or fam is None:
+            return {}
+        out = {}
+        for key, op in [("function", "set_function"), ("frequency", "set_frequency"),
+                        ("amplitude", "set_amplitude"), ("offset", "set_offset")]:
+            try:
+                steps = get_command(fam, op, ch=ch)
+                q = [(a, s) for a, s in steps if a == "query"]
+                if q:
+                    with _rlock(res):
+                        val = _run_steps(res, q, role="awg")
+                    if val is not None:
+                        out[key] = val.strip()
+            except Exception:
+                pass
+        return out
+
+    result = _sh._executor.submit(_do).result(timeout=5)
+    return jsonify(result)
 
 
 # ── DMM ───────────────────────────────────────────────────────────────────────

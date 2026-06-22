@@ -44,8 +44,8 @@ def _suggest_tests() -> list:
     """
     _KNOWN = [
         {"id": "ac_frequency_sweep", "name": "AC Frequency Sweep",
-         "description": "Sweep AWG frequency, measure Vpp on scope CH1 and CH2",
-         "requires": ["awg", "scope"]},
+         "description": "Sweep AWG frequency; scope measurements are optional",
+         "requires": ["awg"]},
         {"id": "dc_sweep",           "name": "DC Sweep",
          "description": "Sweep voltage source(s) across N channels and record measurements",
          "requires": ["psu"]},
@@ -74,20 +74,31 @@ def _suggest_tests() -> list:
     }
     tests = []
 
-    if "awg" in types and "scope" in types:
+    if "awg" in types:
+        has_scope = "scope" in types
         tests.append({
             "id":          "ac_frequency_sweep",
             "name":        "AC Frequency Sweep",
-            "description": "Sweep AWG frequency, measure Vpp on scope CH1 and CH2",
-            "requires":    ["awg", "scope"],
+            "description": "Sweep AWG frequency, measure Vpp on scope CH1 and CH2" if has_scope
+                           else "Sweep AWG frequency (connect scope to add Vpp measurements)",
+            "requires":    ["awg"],
             "params": [
                 {"id": "freq_start",  "label": "Start freq",  "unit": "Hz",  "default": 100,    "type": "number"},
                 {"id": "freq_stop",   "label": "Stop freq",   "unit": "Hz",  "default": 100000, "type": "number"},
                 {"id": "num_points",  "label": "Points",      "unit": "",    "default": 20,     "type": "number"},
                 {"id": "amplitude",   "label": "Amplitude",   "unit": "Vpp", "default": 1.0,    "type": "number"},
                 {"id": "settle_time", "label": "Settle",      "unit": "s",   "default": 0.2,    "type": "number"},
-            ],
-            "columns": ["set_freq_Hz", "meas_freq_Hz", "vpp_ch1_V", "vpp_ch2_V"],
+            ] + ([{
+                "id": "scope_measures", "label": "Measure", "type": "multicheck",
+                "default": "vpp_ch1,vpp_ch2,freq_ch1",
+                "options": [
+                    {"value": "vpp_ch1",  "label": "Vpp CH1"},
+                    {"value": "vpp_ch2",  "label": "Vpp CH2"},
+                    {"value": "freq_ch1", "label": "Freq CH1"},
+                ],
+            }] if has_scope else []),
+            "columns": ["set_freq_Hz", "meas_freq_Hz", "vpp_ch1_V", "vpp_ch2_V"] if has_scope
+                       else ["set_freq_Hz"],
         })
 
     if "psu" in types:
@@ -365,10 +376,18 @@ def api_automation_run():
 
         awg_res,   awg_fam   = _find_instrument("awg")
         scope_res, scope_fam = _find_instrument("scope")
-        if awg_res is None or scope_res is None:
-            _done([], [], "AWG or scope not connected"); return
+        if awg_res is None:
+            _done([], [], "AWG not connected"); return
 
-        cols = ["set_freq_Hz", "meas_freq_Hz", "vpp_ch1_V", "vpp_ch2_V"]
+        use_scope = scope_res is not None
+        sel_raw = params.get("scope_measures", "vpp_ch1,vpp_ch2,freq_ch1") if use_scope else ""
+        sel = set(s.strip() for s in sel_raw.split(",") if s.strip())
+
+        cols = ["set_freq_Hz"]
+        if use_scope:
+            if "freq_ch1" in sel: cols.append("meas_freq_Hz")
+            if "vpp_ch1"  in sel: cols.append("vpp_ch1_V")
+            if "vpp_ch2"  in sel: cols.append("vpp_ch2_V")
         rows = []
 
         # logarithmically spaced frequencies
@@ -378,38 +397,39 @@ def api_automation_run():
 
         # Configure AWG: sine wave, fixed amplitude
         try:
-            _run_steps(awg_res, get_command(awg_fam, "set_function",       ch=1, func="SIN"),  role="awg")
-            _run_steps(awg_res, get_command(awg_fam, "set_amplitude",      ch=1, amp=f"{amplitude:.4f}"), role="awg")
-            _run_steps(awg_res, get_command(awg_fam, "set_amplitude_unit", ch=1, unit="VPP"), role="awg")
-            _run_steps(awg_res, get_command(awg_fam, "output_on",          ch=1),             role="awg")
+            _op(awg_res, awg_fam, "set_function",       role="awg", ch=1, func="SIN")
+            _op(awg_res, awg_fam, "set_amplitude",      role="awg", ch=1, amp=f"{amplitude:.4f}")
+            _op(awg_res, awg_fam, "set_amplitude_unit", role="awg", ch=1, unit="VPP")
+            _op(awg_res, awg_fam, "output_on",          role="awg", ch=1)
         except Exception as exc:
             _done([], cols, f"AWG setup failed: {exc}"); return
 
+        if use_scope and sel:
+            enable_pairs = []
+            if "vpp_ch1"  in sel: enable_pairs.append(("measure_vpp",  1))
+            if "vpp_ch2"  in sel: enable_pairs.append(("measure_vpp",  2))
+            if "freq_ch1" in sel: enable_pairs.append(("measure_freq", 1))
+            _scope_enable_measures(scope_res, scope_fam, enable_pairs)
+
+        suffix = "" if use_scope else " (no scope — set frequency only)"
         _emit_progress(
-            f"Sweep started: {n_pts} points, {freq_start:.0f}–{freq_stop:.0f} Hz, {amplitude} Vpp")
+            f"Sweep: {n_pts} pts  {freq_start:.0f}–{freq_stop:.0f} Hz  {amplitude} Vpp  settle={settle_time}s{suffix}")
 
         for i, freq in enumerate(freqs):
             if _auto_stop.is_set():
                 _emit_progress("Stopped by user"); break
             try:
-                _run_steps(awg_res, get_command(awg_fam, "set_frequency", ch=1,
-                                                freq=f"{freq:.6g}"), role="awg")
+                _op(awg_res, awg_fam, "set_frequency", role="awg", ch=1, freq=f"{freq:.6g}")
                 time.sleep(settle_time)
-                raw_vpp1 = _run_steps(scope_res,
-                                      get_command(scope_fam, "measure_vpp",  ch=1), role="scope")
-                raw_vpp2 = _run_steps(scope_res,
-                                      get_command(scope_fam, "measure_vpp",  ch=2), role="scope")
-                raw_freq = _run_steps(scope_res,
-                                      get_command(scope_fam, "measure_freq", ch=1), role="scope")
-
-                def _safe(r):
-                    try:
-                        v = float(r)
-                        return None if abs(v) > 1e30 else round(v, 6)
-                    except Exception:
-                        return None
-
-                row = [round(freq, 3), _safe(raw_freq), _safe(raw_vpp1), _safe(raw_vpp2)]
+                row = [round(freq, 3)]
+                if use_scope:
+                    def _r(v): return round(v, 6) if v is not None else None
+                    if "freq_ch1" in sel:
+                        row.append(_r(_scope_query_only(scope_res, scope_fam, "measure_freq", ch=1)))
+                    if "vpp_ch1" in sel:
+                        row.append(_r(_scope_query_only(scope_res, scope_fam, "measure_vpp",  ch=1)))
+                    if "vpp_ch2" in sel:
+                        row.append(_r(_scope_query_only(scope_res, scope_fam, "measure_vpp",  ch=2)))
                 rows.append(row)
                 _sh.sio.emit("automation_row", {"test_id": test_id, "row": row,
                                                 "columns": cols,
@@ -417,7 +437,7 @@ def api_automation_run():
             except Exception as exc:
                 _log(f"[auto] step {i+1} error: {exc}")
 
-        try: _run_steps(awg_res, get_command(awg_fam, "output_off", ch=1))
+        try: _op(awg_res, awg_fam, "output_off", role="awg", ch=1)
         except Exception: pass
         _done(rows, cols)
 

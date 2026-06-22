@@ -543,6 +543,9 @@
     .test-param-input { flex:1; background:none; border:none; color:var(--text); font:inherit; font-family:var(--mono); font-size:12px; padding:5px 8px; outline:none; min-width:0; }
     .test-param-input.sel { cursor:pointer; }
     .test-param-unit  { padding:5px 8px; font-size:10px; font-family:var(--mono); color:var(--text-dim); background:var(--surface3); border-left:1px solid var(--border); white-space:nowrap; }
+    .test-param-checks { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+    .test-param-check  { display:flex; align-items:center; gap:4px; font-size:11px; color:var(--text-dim); cursor:pointer; user-select:none; }
+    .test-param-check input[type=checkbox] { cursor:pointer; accent-color:var(--accent); }
 
     /* psu interrupt diagram */
     .psu-int-diagram { background:var(--surface3); border:1px solid var(--border); border-radius:var(--radius); padding:8px 10px 2px; margin-bottom:10px; }
@@ -848,7 +851,7 @@
       color:var(--text-muted); cursor:pointer; transition:background .15s,color .15s;
       white-space:nowrap; flex-shrink:0;
     }
-    .scope-ch-tog.on { background:#16a34a22; border-color:#4ade80; color:#4ade80; }
+    .scope-ch-tog.on { background:#16a34a; border-color:#16a34a; color:#fff; }
     .scope-ch-tog .tog-dot {
       width:7px; height:7px; border-radius:50%; background:currentColor;
       transition:background .15s;
@@ -2747,7 +2750,7 @@ function buildAWGCard(instr) {
       <div class="awg-actions">
         <button class="btn btn-primary" onclick="awgApply()">Apply</button>
         <button class="btn btn-ghost" id="awg-out-btn" data-on="false" onclick="awgToggleOutput(this)">Output: OFF</button>
-        <button class="btn btn-ghost" onclick="awgReset()">↺</button>
+        <button class="btn btn-ghost" title="Read current state from instrument" onclick="awgReadState()">↺</button>
       </div>
       <div class="scpi-row">
         <input class="scpi-inp" type="text" placeholder="Manual SCPI command… (see log for output)"
@@ -2784,10 +2787,25 @@ function awgToggleOutput(btn) {
   btn.className=`btn ${on?"btn-green":"btn-ghost"}`;
   POST("/api/awg/output",{ch:_awgCh,state:on}).catch(e=>toast(e.message,"error"));
 }
-function awgReset() {
-  const b=document.getElementById("awg-out-btn");
-  if (b){b.dataset.on="false";b.textContent="Output: OFF";b.className="btn btn-ghost";}
-  POST("/api/awg/reset").catch(e=>toast(e.message,"error"));
+function awgReadState() {
+  POST("/api/awg/read_state", {ch: _awgCh})
+    .then(d => {
+      if (d.frequency !== undefined) document.getElementById("awg-freq").value = parseFloat(d.frequency);
+      if (d.amplitude !== undefined) document.getElementById("awg-amp").value  = parseFloat(d.amplitude);
+      if (d.offset    !== undefined) document.getElementById("awg-offs").value = parseFloat(d.offset);
+      if (d.function  !== undefined) {
+        const func = d.function.toUpperCase().replace(/^(SIN|SINE)$/, "SINE")
+          .replace(/^SQU(ARE)?$/, "SQU").replace(/^(RAMP|TRIANGLE|TRI)$/, "RAMP")
+          .replace(/^(NOIS|NOISE)$/, "NOIS").replace(/^DC$/, "DC");
+        document.querySelectorAll("#awg-func-pills .func-pill").forEach(b => {
+          const match = b.dataset.func === func || func.startsWith(b.dataset.func);
+          b.classList.toggle("active", match);
+          if (match) _awgFunc = b.dataset.func;
+        });
+      }
+      toast("State read from instrument", "ok");
+    })
+    .catch(e => toast(e.message, "error"));
 }
 
 // ── DMM card ───────────────────────────────────────────────────────
@@ -3299,6 +3317,20 @@ function buildTestCard(test) {
           </div>
         </div>`;
     }
+    if (p.type === "multicheck") {
+      const defaults = String(p.default || "").split(",").map(s => s.trim());
+      const checks = (p.options || []).map(o => {
+        const val = (o && typeof o === "object") ? o.value : String(o);
+        const lbl = (o && typeof o === "object") ? o.label : String(o);
+        const chk = defaults.includes(val) ? " checked" : "";
+        return `<label class="test-param-check"><input type="checkbox" id="tp-${test.id}-${p.id}-${escHtml(val)}" value="${escHtml(val)}"${chk}>${escHtml(lbl)}</label>`;
+      }).join("");
+      return `
+        <div class="test-param-row">
+          <span class="test-param-label">${escHtml(p.label)}</span>
+          <div class="test-param-checks">${checks}</div>
+        </div>`;
+    }
     return `
       <div class="test-param-row">
         <span class="test-param-label">${escHtml(p.label)}</span>
@@ -3695,8 +3727,15 @@ function getTestParams(testId) {
   if (!test) return {};
   const params = {};
   for (const p of test.params) {
-    const el = document.getElementById(`tp-${testId}-${p.id}`);
-    if (el) params[p.id] = p.type==="number" ? parseFloat(el.value) : el.value;
+    if (p.type === "multicheck") {
+      const vals = (p.options || [])
+        .map(o => (o && typeof o === "object") ? o.value : String(o))
+        .filter(v => { const el = document.getElementById(`tp-${testId}-${p.id}-${v}`); return el && el.checked; });
+      params[p.id] = vals.join(",");
+    } else {
+      const el = document.getElementById(`tp-${testId}-${p.id}`);
+      if (el) params[p.id] = p.type === "number" ? parseFloat(el.value) : el.value;
+    }
   }
   return params;
 }
