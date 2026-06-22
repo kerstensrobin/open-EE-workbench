@@ -253,8 +253,8 @@
     .psu-ch-label { font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text-dim); }
     .ch-num { font-weight:700; font-family:var(--mono); font-size:12px; color:var(--text); }
     .psu-ch-spacer { flex:1; }
-    .output-toggle { display:flex; align-items:center; gap:6px; cursor:pointer; padding:3px 8px; border-radius:12px; font-size:10px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; background:var(--red-dim); color:var(--red); border:1px solid rgba(185,28,28,.3); transition:all .2s; }
-    .output-toggle.on { background:var(--green-dim); color:var(--green); border-color:rgba(21,128,61,.35); }
+    .output-toggle { display:flex; align-items:center; gap:6px; cursor:pointer; padding:3px 8px; border-radius:4px; font-size:10px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; background:var(--surface2); color:var(--text-muted); border:1px solid var(--border); transition:all .15s; }
+    .output-toggle.on { background:#16a34a; border-color:#16a34a; color:#fff; }
     .output-toggle .tog-dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
     .psu-ch-body { padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
     .psu-set-row { display:flex; gap:8px; align-items:center; }
@@ -2265,15 +2265,16 @@ const SCOPE_TDIV_VALS = [
   1,2,5,10,20,50
 ];
 
+function _fmtN(n) { return String(parseFloat(n.toPrecision(3))); }
 function fmtDiv(v) {
-  if (v < 1e-6) return (v*1e9).toPrecision(3).replace(/\.?0+$/,"")+" ns";
-  if (v < 1e-3) return (v*1e6).toPrecision(3).replace(/\.?0+$/,"")+" µs";
-  if (v < 1)    return (v*1e3).toPrecision(3).replace(/\.?0+$/,"")+" ms";
-  return v.toPrecision(3).replace(/\.?0+$/,"")+" s";
+  if (v < 1e-6) return _fmtN(v*1e9)+" ns";
+  if (v < 1e-3) return _fmtN(v*1e6)+" µs";
+  if (v < 1)    return _fmtN(v*1e3)+" ms";
+  return _fmtN(v)+" s";
 }
 function fmtVDiv(v) {
-  if (v < 1) return (v*1e3).toPrecision(3).replace(/\.?0+$/,"")+" mV";
-  return v.toPrecision(3).replace(/\.?0+$/,"")+" V";
+  if (v < 1) return _fmtN(v*1e3)+" mV";
+  return _fmtN(v)+" V";
 }
 function scopeOptHTML(vals, fmtFn, selected) {
   return vals.map(v=>{
@@ -2342,6 +2343,7 @@ function scopeSetLabel(inp, ch) {
   const lbl = inp.value.trim().slice(0, 4);  // DS1000Z max label length is 4 chars
   inp.value = lbl;
   scopeSet('channel_label', {ch, label: lbl});
+  scopeSet('labels_on', {});
 }
 
 function _scopeChSelOpts(nCh) {
@@ -2672,11 +2674,11 @@ function _psuRefreshAllBtn() {
   const allBtn = document.getElementById("psu-out-all");
   if (!allBtn) return;
   const chBtns = [...document.querySelectorAll(".output-toggle[data-ch]")];
-  const allOn = chBtns.length > 0 && chBtns.every(b => b.dataset.on === "true");
-  allBtn.dataset.on = String(allOn);
-  allBtn.className = "output-toggle" + (allOn ? " on" : "");
+  const anyOn = chBtns.some(b => b.dataset.on === "true");
+  allBtn.dataset.on = String(anyOn);
+  allBtn.className = "output-toggle" + (anyOn ? " on" : "");
   allBtn.style.cssText = "flex:1;justify-content:center;border-radius:var(--radius);padding:6px 12px;font-size:11px;";
-  allBtn.innerHTML = `<span class="tog-dot"></span>${allOn ? "All ON" : "All OFF"}`;
+  allBtn.innerHTML = `<span class="tog-dot"></span>${anyOn ? "All OFF" : "All ON"}`;
 }
 function psuToggleOutput(btn) {
   const ch=parseInt(btn.dataset.ch), on=btn.dataset.on!=="true";
@@ -2687,7 +2689,8 @@ function psuToggleOutput(btn) {
 }
 function psuToggleAll(btn) {
   const chBtns = [...document.querySelectorAll(".output-toggle[data-ch]")];
-  const targetOn = !chBtns.every(b => b.dataset.on === "true");
+  const anyOn = chBtns.some(b => b.dataset.on === "true");
+  const targetOn = !anyOn;
   chBtns.forEach(b => {
     const ch = parseInt(b.dataset.ch);
     b.dataset.on = String(targetOn);
@@ -2749,7 +2752,7 @@ function buildAWGCard(instr) {
       </div>
       <div class="awg-actions">
         <button class="btn btn-primary" onclick="awgApply()">Apply</button>
-        <button class="btn btn-ghost" id="awg-out-btn" data-on="false" onclick="awgToggleOutput(this)">Output: OFF</button>
+        <button class="output-toggle" id="awg-out-btn" data-on="false" onclick="awgToggleOutput(this)"><span class="tog-dot"></span>Output: OFF</button>
         <button class="btn btn-ghost" title="Read current state from instrument" onclick="awgReadState()">↺</button>
       </div>
       <div class="scpi-row">
@@ -2783,8 +2786,9 @@ function awgApply() {
 }
 function awgToggleOutput(btn) {
   const on=btn.dataset.on!=="true";
-  btn.dataset.on=on; btn.textContent=`Output: ${on?"ON":"OFF"}`;
-  btn.className=`btn ${on?"btn-green":"btn-ghost"}`;
+  btn.dataset.on=on;
+  btn.className="output-toggle"+(on?" on":"");
+  btn.innerHTML=`<span class="tog-dot"></span>Output: ${on?"ON":"OFF"}`;
   POST("/api/awg/output",{ch:_awgCh,state:on}).catch(e=>toast(e.message,"error"));
 }
 function awgReadState() {
@@ -2835,7 +2839,7 @@ function buildDMMCard(instr) {
       <div class="dmm-display"><div class="dmm-value dim" id="dmm-value">—</div></div>
       <div class="dmm-actions">
         <button class="btn btn-primary" onclick="dmmMeasure()">Measure</button>
-        <button class="btn btn-ghost" id="dmm-cont-btn" data-on="false" onclick="dmmToggleContinuous(this)">Continuous: OFF</button>
+        <button class="output-toggle" id="dmm-cont-btn" data-on="false" onclick="dmmToggleContinuous(this)"><span class="tog-dot"></span>Continuous: OFF</button>
       </div>
       <div class="scpi-row">
         <input class="scpi-inp" type="text" placeholder="Manual SCPI command… (see log for output)"
@@ -2857,8 +2861,9 @@ function dmmSelectMode(btn) {
 function dmmMeasure() { POST("/api/dmm/measure",{mode:_dmmMode}).catch(e=>toast(e.message,"error")); }
 function dmmToggleContinuous(btn) {
   const on=btn.dataset.on!=="true";
-  btn.dataset.on=on; btn.textContent=`Continuous: ${on?"ON":"OFF"}`;
-  btn.className=`btn ${on?"btn-green":"btn-ghost"}`;
+  btn.dataset.on=on;
+  btn.className="output-toggle"+(on?" on":"");
+  btn.innerHTML=`<span class="tog-dot"></span>Continuous: ${on?"ON":"OFF"}`;
   if (on) { _dmmContID=setInterval(()=>POST("/api/dmm/measure",{mode:_dmmMode,poll:true}).catch(()=>{}),1000); }
   else    { clearInterval(_dmmContID); _dmmContID=null; }
 }
