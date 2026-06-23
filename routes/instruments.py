@@ -549,11 +549,67 @@ def api_dmm_measure():
         res, fam = _find_instrument("dmm")
         if res is None or fam is None: return
         try:
-            val = float(
-                _run_steps(res, get_command(fam, op), role="dmm", poll=poll) or "nan")
+            raw = (_run_steps(res, get_command(fam, op), role="dmm", poll=poll) or "nan")
+            # Some DMMs (e.g. OWON) append unit characters; strip them before float()
+            val = float(str(raw).strip().rstrip("VAΩFHzohm°C°F°K%dBm"))
             _sh.sio.emit("dmm_reading", {"value": val, "mode": mode})
         except Exception as exc:
             _log(f"[dmm] {exc}")
+
+    _sh._executor.submit(_do)
+    return jsonify({"status": "ok"})
+
+
+# ── Electronic Load ───────────────────────────────────────────────────────────
+
+@bp.route("/api/eload/mode", methods=["POST"])
+def api_eload_mode():
+    d    = request.json or {}
+    mode = d.get("mode", "CURR").upper()   # CURR / VOLT / RES / POW
+    _sh._executor.submit(
+        lambda: _op(*_find_instrument("eload"), "set_mode", role="eload", func=mode))
+    return jsonify({"status": "ok"})
+
+
+@bp.route("/api/eload/value", methods=["POST"])
+def api_eload_value():
+    d   = request.json or {}
+    op  = d.get("op", "set_current")       # set_current / set_voltage / set_resistance / set_power
+    val = d.get("value")
+    if val is None:
+        return jsonify({"error": "value required"}), 400
+    _sh._executor.submit(
+        lambda: _op(*_find_instrument("eload"), op, role="eload", value=str(val)))
+    return jsonify({"status": "ok"})
+
+
+@bp.route("/api/eload/input", methods=["POST"])
+def api_eload_input():
+    d  = request.json or {}
+    on = bool(d.get("state", False))
+    _sh._executor.submit(
+        lambda: _op(*_find_instrument("eload"),
+                    "input_on" if on else "input_off", role="eload"))
+    return jsonify({"status": "ok"})
+
+
+@bp.route("/api/eload/measure", methods=["POST"])
+def api_eload_measure():
+    def _do():
+        res, fam = _find_instrument("eload")
+        if res is None or fam is None: return
+        readings = {}
+        for op, key in [("measure_voltage", "v"),
+                        ("measure_current", "i"),
+                        ("measure_power",   "p")]:
+            try:
+                r = _run_steps(res, get_command(fam, op), role="eload")
+                if r is not None:
+                    readings[key] = float(str(r).strip().rstrip("VAW"))
+            except Exception:
+                pass
+        if readings:
+            _sh.sio.emit("eload_reading", readings)
 
     _sh._executor.submit(_do)
     return jsonify({"status": "ok"})

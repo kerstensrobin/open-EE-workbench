@@ -725,6 +725,76 @@
       "channels": 3
     },
     {
+      "id": "korad_kel",
+      "vendor": "Korad",
+      "series": "KEL100 Series Programmable Electronic Load",
+      "type": "eload",
+      "patterns": [
+        "KEL102",
+        "KEL103"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "input_on":  ":INP 1",
+        "input_off": ":INP 0",
+        "input_state": {
+          "write": ":INP {value}",
+          "query": ":INP?"
+        },
+        "set_mode": {
+          "write": ":FUNC {func}",
+          "query": ":FUNC?"
+        },
+        "set_current": {
+          "write": ":CURR {value}",
+          "query": ":CURR?"
+        },
+        "set_voltage": {
+          "write": ":VOLT {value}",
+          "query": ":VOLT?"
+        },
+        "set_resistance": {
+          "write": ":RES {value}",
+          "query": ":RES?"
+        },
+        "set_power": {
+          "write": ":POW {value}",
+          "query": ":POW?"
+        },
+        "measure_voltage": {
+          "query": ":MEAS:VOLT?"
+        },
+        "measure_current": {
+          "query": ":MEAS:CURR?"
+        },
+        "measure_power": {
+          "query": ":MEAS:POW?"
+        },
+        "max_voltage": {
+          "query": ":VOLT:UPP?"
+        },
+        "max_current": {
+          "query": ":CURR:UPP?"
+        },
+        "max_resistance": {
+          "query": ":RES:UPP?"
+        },
+        "max_power": {
+          "query": ":POW:UPP?"
+        },
+        "battery_mode": ":BATT {value}",
+        "battery_time": {
+          "query": ":BATT:TIM?"
+        },
+        "battery_capacity": {
+          "query": ":BATT:CAP?"
+        },
+        "status": {
+          "query": ":STAT?"
+        }
+      }
+    },
+    {
       "id": "korad_ka",
       "vendor": "Korad",
       "series": "KA / KD / KWR Series Power Supply",
@@ -962,6 +1032,32 @@
         "configure_idc": ":FUNCtion:CURRent:DC",
         "configure_resistance": ":FUNCtion:RESistance",
         "measure_capacitance": null
+      }
+    },
+    {
+      "id": "owon_xdm",
+      "vendor": "OWON",
+      "series": "XDM Series Digital Multimeter",
+      "type": "dmm",
+      "inherits": "keysight_34461a",
+      "patterns": [
+        "XDM1041",
+        "XDM1241",
+        "XDM2041",
+        "XDM3048"
+      ],
+      "overrides": {
+        "measure_vdc":  ["CONF:VOLT:DC AUTO", {"query": "MEAS:VOLT?"}],
+        "measure_vac":  ["CONF:VOLT:AC AUTO", {"query": "MEAS:VOLT?"}],
+        "measure_idc":  ["CONF:CURR:DC AUTO", {"query": "MEAS:CURRENT?"}],
+        "measure_iac":  ["CONF:CURR:AC AUTO", {"query": "MEAS:CURRENT?"}],
+        "measure_resistance": ["CONF:RES AUTO", {"query": "MEAS:RES?"}],
+        "remote_mode": "SYST:REM",
+        "local_mode":  "SYST:LOC",
+        "measure_rate": {
+          "write": "RATE {value}",
+          "query": "RATE?"
+        }
       }
     },
     {

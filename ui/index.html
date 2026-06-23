@@ -200,10 +200,11 @@
     .card:hover .card-edit-btn { opacity:0.55; }
     .card-edit-btn:hover { opacity:1 !important; }
     .card-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
-    .card-icon.scope { background:rgba(26,86,196,.14); color:var(--accent); }
-    .card-icon.psu   { background:rgba(21,128,61,.14); color:var(--green); }
-    .card-icon.awg   { background:rgba(109,40,217,.14); color:var(--purple); }
-    .card-icon.dmm   { background:rgba(180,83,9,.14); color:var(--amber); }
+    .card-icon.scope  { background:rgba(26,86,196,.14); color:var(--accent); }
+    .card-icon.psu    { background:rgba(21,128,61,.14); color:var(--green); }
+    .card-icon.awg    { background:rgba(109,40,217,.14); color:var(--purple); }
+    .card-icon.dmm    { background:rgba(180,83,9,.14); color:var(--amber); }
+    .card-icon.eload  { background:rgba(220,38,38,.13); color:#ef4444; }
     .card-title-wrap { flex:1; min-width:0; }
     .card-title    { font-weight:600; font-size:13px; color:var(--text); }
     .card-subtitle { font-size:11px; color:var(--text-dim); margin-top:1px; font-family:var(--mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -307,6 +308,29 @@
     .dmm-unit { font-size:14px; font-weight:400; color:var(--text-dim); align-self:flex-end; padding-bottom:3px; }
     .dmm-actions { display:flex; gap:8px; }
     .dmm-actions .btn { flex:1; }
+
+    /* ── Battery chart ──────────────────────────────────────────── */
+    #batt-canvas { display:block; width:100%; height:240px; margin-top:6px; }
+
+    /* ── ELoad Card ─────────────────────────────────────────────── */
+    .card-icon.eload { background:rgba(220,38,38,.13); color:#ef4444; }
+    .eload-body { display:flex; flex-direction:column; gap:14px; }
+    .eload-modes { display:flex; gap:5px; flex-wrap:wrap; }
+    .eload-mode { padding:5px 12px; border-radius:6px; font-size:10px; font-weight:700; letter-spacing:.06em; cursor:pointer; background:var(--surface3); color:var(--text-dim); border:1px solid var(--border); transition:all .15s; }
+    .eload-mode:hover { background:var(--surface4); color:var(--text); }
+    .eload-mode.active { background:rgba(220,38,38,.15); color:#ef4444; border-color:rgba(220,38,38,.4); }
+    .eload-set-row { display:flex; gap:8px; align-items:center; }
+    .eload-input-wrap { flex:1; display:flex; align-items:center; gap:0; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; transition:border-color .15s; }
+    .eload-input-wrap:focus-within { border-color:#ef4444; }
+    .eload-input-unit { padding:5px 7px; font-size:10px; font-family:var(--mono); color:var(--text-dim); background:var(--surface2); border-right:1px solid var(--border); white-space:nowrap; }
+    .eload-input { flex:1; background:none; border:none; color:var(--text); font:inherit; font-family:var(--mono); font-size:12px; padding:5px 8px; outline:none; min-width:0; }
+    .eload-set-btn { background:#ef4444; color:#fff; border:none; border-radius:var(--radius); padding:5px 10px; font:inherit; font-size:11px; font-weight:600; cursor:pointer; transition:background .15s; flex-shrink:0; }
+    .eload-set-btn:hover { background:#dc2626; }
+    .eload-readings { display:flex; gap:10px; }
+    .eload-reading { flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:6px 8px; text-align:center; }
+    .eload-reading-label { font-size:9px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--text-faint); margin-bottom:3px; }
+    .eload-reading-val { font-family:var(--mono); font-size:13px; font-weight:500; color:var(--text-dim); }
+    .eload-reading-val.live { color:var(--text); }
 
     /* ── DMM Logger custom card ───────────────────────────────────── */
     .dmml-timing-row { display:flex; gap:14px; align-items:flex-end; margin-bottom:12px; flex-wrap:wrap; }
@@ -2200,8 +2224,9 @@ function buildInstrumentGrid(instruments) {
   if (types.psu)   { $grid.appendChild(buildPSUCard(types.psu[0])); _psuRefreshAllBtn(); }
   if (types.awg)   $grid.appendChild(buildAWGCard(types.awg[0]));
   if (types.dmm)   $grid.appendChild(buildDMMCard(types.dmm[0]));
+  if (types.eload) $grid.appendChild(buildELoadCard(types.eload[0]));
   for (const [t,instrs] of Object.entries(types)) {
-    if (!["scope","psu","awg","dmm"].includes(t)) {
+    if (!["scope","psu","awg","dmm","eload"].includes(t)) {
       for (const instr of instrs) $grid.appendChild(buildGenericCard(instr));
     }
   }
@@ -2229,6 +2254,7 @@ function resetCardStatus() {
     if (sub) sub.textContent = c.dataset.model||"";
   });
   document.querySelectorAll(".psu-reading-val").forEach(el => { el.textContent="—"; el.classList.remove("live"); });
+  document.querySelectorAll(".eload-reading-val").forEach(el => { el.textContent="—"; el.classList.remove("live"); });
 }
 
 // ── Scope card ─────────────────────────────────────────────────────
@@ -2960,6 +2986,125 @@ async function resetBench() {
   finally { btn.disabled = false; }
 }
 
+// ── ELoad card ─────────────────────────────────────────────────────
+const ELOAD_MODES = [
+  { id:"CURR", label:"CC", unit:"A",  op:"set_current" },
+  { id:"VOLT", label:"CV", unit:"V",  op:"set_voltage" },
+  { id:"RES",  label:"CR", unit:"Ω",  op:"set_resistance" },
+  { id:"POW",  label:"CW", unit:"W",  op:"set_power" },
+];
+let _eloadMode = "CURR";
+
+function buildELoadCard(instr) {
+  const modePills = ELOAD_MODES.map((m,i) =>
+    `<button class="eload-mode${i===0?" active":""}" data-mode="${m.id}" data-unit="${m.unit}" data-op="${m.op}" onclick="eloadSelectMode(this)">${m.label}</button>`
+  ).join("");
+  const div = document.createElement("div");
+  div.className = "card"; div.dataset.type = "eload"; div.dataset.model = instr.model||"";
+  div.innerHTML = `
+    <div class="card-header">
+      <div class="card-icon eload" style="font-size:12px;font-weight:700;">CC</div>
+      <div class="card-title-wrap">
+        <div class="card-title">Electronic Load</div>
+        <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
+      </div>
+      <button class="btn btn-ghost card-edit-btn" title="Edit assignment" data-resource="${escHtml(instr.resource)}" data-family="${escHtml(instr.family_id||'')}" onclick="openAssignModal(this.dataset.resource,this.dataset.family)">✎</button>
+      <div class="card-status-dot"></div>
+    </div>
+    <div class="card-body eload-body">
+      <div>
+        <div class="section-label">Mode</div>
+        <div class="eload-modes">${modePills}</div>
+      </div>
+      <div>
+        <div class="section-label">Set value</div>
+        <div class="eload-set-row">
+          <div class="eload-input-wrap">
+            <span class="eload-input-unit" id="eload-unit">A</span>
+            <input class="eload-input" id="eload-val-inp" type="number" step="any" min="0" placeholder="0.000"
+                   onkeydown="if(event.key==='Enter')eloadApplyValue()" />
+          </div>
+          <button class="eload-set-btn" onclick="eloadApplyValue()">Set</button>
+        </div>
+      </div>
+      <div>
+        <div class="section-label">Measurements</div>
+        <div class="eload-readings">
+          <div class="eload-reading">
+            <div class="eload-reading-label">Voltage</div>
+            <div class="eload-reading-val" id="eload-read-v">—</div>
+          </div>
+          <div class="eload-reading">
+            <div class="eload-reading-label">Current</div>
+            <div class="eload-reading-val" id="eload-read-i">—</div>
+          </div>
+          <div class="eload-reading">
+            <div class="eload-reading-label">Power</div>
+            <div class="eload-reading-val" id="eload-read-p">—</div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="output-toggle" id="eload-input-btn" data-on="false" onclick="eloadToggleInput(this)" style="flex:1;">
+          <span class="tog-dot"></span>Input: OFF
+        </button>
+        <button class="btn" onclick="POST('/api/eload/measure').catch(e=>toast(e.message,'error'))" style="font-size:11px;padding:5px 10px;">Measure</button>
+      </div>
+      <div class="scpi-row">
+        <input class="scpi-inp" type="text" placeholder="Manual SCPI command…"
+               onkeydown="if(event.key==='Enter')sendScpi('eload',this)"
+               spellcheck="false" autocomplete="off" />
+        <button class="btn" style="padding:3px 8px;font-size:10px;flex-shrink:0;"
+                onclick="sendScpi('eload',this.previousElementSibling)">Send</button>
+      </div>
+    </div>`;
+  return div;
+}
+
+function eloadSelectMode(btn) {
+  document.querySelectorAll(".eload-mode").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  _eloadMode = btn.dataset.mode;
+  const unitEl = document.getElementById("eload-unit");
+  if (unitEl) unitEl.textContent = btn.dataset.unit;
+  // Update card icon label
+  const icon = document.querySelector(".card[data-type='eload'] .card-icon");
+  if (icon) icon.textContent = btn.textContent;
+  POST("/api/eload/mode", { mode: _eloadMode }).catch(e => toast(e.message, "error"));
+}
+
+function eloadApplyValue() {
+  const inp = document.getElementById("eload-val-inp");
+  const val = parseFloat(inp ? inp.value : "");
+  if (isNaN(val)) { toast("Enter a numeric value", "warn"); return; }
+  const activeBtn = document.querySelector(".eload-mode.active");
+  const op = activeBtn ? activeBtn.dataset.op : "set_current";
+  POST("/api/eload/value", { op, value: val }).catch(e => toast(e.message, "error"));
+}
+
+function eloadToggleInput(btn) {
+  const on = btn.dataset.on !== "true";
+  btn.dataset.on = on;
+  btn.className = "output-toggle" + (on ? " on" : "");
+  btn.innerHTML = `<span class="tog-dot"></span>Input: ${on ? "ON" : "OFF"}`;
+  POST("/api/eload/input", { state: on }).catch(e => toast(e.message, "error"));
+}
+
+socket.on("eload_reading", ({ v, i, p }) => {
+  const fmt = (x, dec, suf) => x != null && isFinite(x) ? x.toFixed(dec) + " " + suf : null;
+  const pairs = [
+    ["eload-read-v", fmt(v, 3, "V")],
+    ["eload-read-i", fmt(i, 4, "A")],
+    ["eload-read-p", fmt(p, 3, "W")],
+  ];
+  for (const [id, val] of pairs) {
+    const el = document.getElementById(id);
+    if (!el || val == null) continue;
+    el.textContent = val;
+    el.classList.add("live");
+  }
+});
+
 // ── Generic card ───────────────────────────────────────────────────
 function buildGenericCard(instr) {
   const div=document.createElement("div");
@@ -3354,7 +3499,8 @@ function buildTestCard(test) {
   }).join("");
 
   const _testIcons = { ac_frequency_sweep:"〜", dc_sweep:"⚡", dmm_logger:"Ω",
-                       waveform_analysis:"∿",  harmonic_analysis:"≋" };
+                       waveform_analysis:"∿",  harmonic_analysis:"≋",
+                       battery_capacity:"⚡" };
   const icon = _testIcons[test.id] || "▶";
 
   div.innerHTML = `
@@ -3371,6 +3517,7 @@ function buildTestCard(test) {
         <div class="progress-track"><div class="progress-fill" id="tprog-fill-${test.id}"></div></div>
         <div class="progress-label" id="tprog-label-${test.id}">Running…</div>
       </div>
+      ${test.id === "battery_capacity" ? `<canvas id="batt-canvas"></canvas>` : ""}
       <div class="test-actions">
         <button class="btn btn-primary" id="trun-${test.id}" onclick="runTest('${test.id}')">
           ▶ Run
@@ -3817,6 +3964,12 @@ async function runTest(testId) {
   // Init results panel
   initResultsPanel(testId, state.autoCols);
 
+  // Reset battery chart when starting that test
+  if (testId === "battery_capacity") {
+    const cutoff = parseFloat(params.cutoff_v ?? 3.0);
+    _battReset(cutoff);
+  }
+
   try {
     await POST("/api/automation/run",{test_id:testId, params, output_path});
   } catch(e) {
@@ -3889,6 +4042,19 @@ socket.on("automation_row", ({ test_id, row, columns, progress }) => {
     if (fillEl) fillEl.style.width = (progress * 100).toFixed(1) + "%";
     const lblEl  = document.getElementById(isIv ? "ts-prog-label" : "tc-prog-label");
     if (lblEl) { const n = _ivChart.curves.reduce((s,c) => s+c.points.length, 0); lblEl.textContent = `${n} pts…`; }
+    return;
+  }
+  if (test_id === "battery_capacity") {
+    _battPush(row, data.cutoff_v ?? null);
+    const fill = document.getElementById("tprog-fill-battery_capacity");
+    if (fill) { fill.style.width = "100%"; fill.style.opacity = "0.35"; }
+    const lbl = document.getElementById("tprog-label-battery_capacity");
+    if (lbl && row) lbl.textContent = `${row[0].toFixed(0)} s · ${row[1].toFixed(3)} V · ${row[4].toFixed(1)} mAh`;
+    if (state.autoRows.length === 0 && columns && columns.join("\0") !== state.autoCols.join("\0")) {
+      state.autoCols = columns; initResultsPanel(test_id, columns);
+    }
+    state.autoRows.push(row);
+    appendResultRow(row, columns);
     return;
   }
   if (test_id === "dmm_logger") {
@@ -3967,6 +4133,21 @@ socket.on("automation_done", ({ test_id, columns, rows, error, csv_path }) => {
       logMsg(`✓ [${test_id}] done (${_ivChart.curves.length} curves, ${_ivTotal} pts)${csv_path ? " → " + csv_path : ""}`, "ok");
     }
     tsTestFinished(error, csv_path);
+    return;
+  }
+  if (test_id === "battery_capacity") {
+    _batt.status = error ? "error" : "done";
+    if (error) {
+      toast("Battery test failed: " + error, "error");
+      logMsg(`✗ [battery_capacity] ${error}`, "error");
+    } else {
+      const n = (rows || []).length;
+      const cap = n ? rows[n-1][4].toFixed(1) : "?";
+      toast(`Battery test complete — ${cap} mAh`, "ok");
+      logMsg(`✓ [battery_capacity] done (${cap} mAh, ${n} samples)${csv_path ? " → " + csv_path : ""}`, "ok");
+    }
+    _battDraw();
+    testFinished(test_id, error, csv_path);
     return;
   }
   if (test_id === "dmm_logger") {
@@ -5267,6 +5448,159 @@ function _dmmLogDrawHistogram(c) {
       ctx.fillText(d.label, bx+pad+swW+5, ry+1);
     });
   }
+}
+
+// ── Battery capacity live chart ───────────────────────────────────────
+
+const _batt = { elapsed: [], voltage: [], capacity: [], cutoff: null, status: "idle" };
+
+function _battReset(cutoff) {
+  _batt.elapsed  = [];
+  _batt.voltage  = [];
+  _batt.capacity = [];
+  _batt.cutoff   = cutoff ?? null;
+  _batt.status   = "running";
+  _battDraw();
+}
+
+function _battPush(row, cutoff) {
+  // row: [elapsed_s, voltage_V, current_A, power_W, capacity_mAh]
+  if (cutoff != null) _batt.cutoff = cutoff;
+  _batt.elapsed.push(row[0]);
+  _batt.voltage.push(row[1]);
+  _batt.capacity.push(row[4]);
+  _battDraw();
+}
+
+function _battDraw() {
+  const c = document.getElementById("batt-canvas");
+  if (!c) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  const W = c.offsetWidth, H = c.offsetHeight;
+  if (W < 20 || H < 20) return;
+  if (c.width !== Math.round(W*dpr) || c.height !== Math.round(H*dpr)) {
+    c.width = Math.round(W*dpr); c.height = Math.round(H*dpr);
+  }
+  const ctx = c.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const ML=52, MR=58, MT=14, MB=42;
+  const pw=W-ML-MR, ph=H-MT-MB;
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(0,0,0,0.025)";
+  ctx.fillRect(ML, MT, pw, ph);
+
+  if (!_batt.elapsed.length) {
+    ctx.strokeStyle = "rgba(120,132,154,0.4)"; ctx.lineWidth = 1;
+    ctx.strokeRect(ML, MT, pw, ph);
+    ctx.fillStyle = "rgba(120,132,154,0.55)";
+    ctx.font = "12px 'Inter', system-ui";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(_batt.status === "running" ? "Waiting for first sample…" : "Run the test to see live data",
+                 ML+pw/2, MT+ph/2);
+    return;
+  }
+
+  const xMax   = Math.max(..._batt.elapsed, 1);
+  const xTicks = _niceTicks(0, xMax, 5);
+  const axMin  = xTicks[0], axMax = xTicks[xTicks.length-1];
+
+  const vMin0  = Math.min(..._batt.voltage), vMax0 = Math.max(..._batt.voltage);
+  const vPad   = Math.max((vMax0 - vMin0) * 0.1, 0.2);
+  const vTicks = _niceTicks(Math.max(0, vMin0 - vPad), vMax0 + vPad, 5);
+  const avMin  = vTicks[0], avMax = vTicks[vTicks.length-1];
+
+  const capMax   = Math.max(..._batt.capacity, 1);
+  const capTicks = _niceTicks(0, capMax, 5);
+  const acMax    = capTicks[capTicks.length-1];
+
+  const xR = (axMax - axMin) || 1;
+  const vR = (avMax - avMin) || 1;
+  const cR = acMax || 1;
+
+  const toX  = v   => ML + (v - axMin) / xR * pw;
+  const toYv = v   => MT + ph - (v - avMin) / vR * ph;
+  const toYc = mah => MT + ph - mah / cR * ph;
+
+  // Grid
+  ctx.strokeStyle = "rgba(150,156,169,0.18)"; ctx.lineWidth = 1;
+  for (const t of xTicks) { const x=toX(t);  ctx.beginPath(); ctx.moveTo(x,MT);  ctx.lineTo(x,MT+ph);   ctx.stroke(); }
+  for (const t of vTicks) { const y=toYv(t); ctx.beginPath(); ctx.moveTo(ML,y);  ctx.lineTo(ML+pw,y);   ctx.stroke(); }
+  ctx.strokeStyle = "rgba(120,132,154,0.4)"; ctx.lineWidth = 1;
+  ctx.strokeRect(ML, MT, pw, ph);
+
+  // Cutoff voltage dashed reference line
+  if (_batt.cutoff != null && _batt.cutoff >= avMin && _batt.cutoff <= avMax) {
+    const yc = toYv(_batt.cutoff);
+    ctx.save();
+    ctx.strokeStyle = "rgba(220,38,38,0.45)"; ctx.lineWidth = 1.2;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(ML, yc); ctx.lineTo(ML+pw, yc); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "rgba(220,38,38,0.6)"; ctx.font = "9px 'JetBrains Mono',monospace";
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.fillText(`cutoff ${_batt.cutoff} V`, ML+4, yc-6);
+    ctx.restore();
+  }
+
+  ctx.save();
+  ctx.beginPath(); ctx.rect(ML, MT, pw, ph); ctx.clip();
+
+  // Capacity line (right axis, blue)
+  if (_batt.capacity.length > 1) {
+    ctx.beginPath();
+    ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 1.5; ctx.lineJoin = "round"; ctx.globalAlpha = 0.65;
+    ctx.moveTo(toX(_batt.elapsed[0]), toYc(_batt.capacity[0]));
+    for (let i = 1; i < _batt.elapsed.length; i++)
+      ctx.lineTo(toX(_batt.elapsed[i]), toYc(_batt.capacity[i]));
+    ctx.stroke(); ctx.globalAlpha = 1;
+  }
+
+  // Voltage line (left axis, red)
+  if (_batt.voltage.length > 1) {
+    ctx.beginPath();
+    ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 2; ctx.lineJoin = "round"; ctx.globalAlpha = 0.85;
+    ctx.moveTo(toX(_batt.elapsed[0]), toYv(_batt.voltage[0]));
+    for (let i = 1; i < _batt.elapsed.length; i++)
+      ctx.lineTo(toX(_batt.elapsed[i]), toYv(_batt.voltage[i]));
+    ctx.stroke(); ctx.globalAlpha = 1;
+  }
+
+  // Dots on voltage line
+  ctx.fillStyle = "#ef4444";
+  for (let i = 0; i < _batt.elapsed.length; i++) {
+    ctx.beginPath(); ctx.arc(toX(_batt.elapsed[i]), toYv(_batt.voltage[i]), 2, 0, Math.PI*2); ctx.fill();
+  }
+  // Live ring on last point
+  if (_batt.status === "running" && _batt.elapsed.length) {
+    const n = _batt.elapsed.length - 1;
+    ctx.beginPath(); ctx.arc(toX(_batt.elapsed[n]), toYv(_batt.voltage[n]), 5.5, 0, Math.PI*2);
+    ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.6; ctx.stroke(); ctx.globalAlpha = 1;
+  }
+
+  ctx.restore();
+
+  // Tick labels
+  const yVStep = vTicks.length >= 2 ? vTicks[1] - vTicks[0] : 0;
+  const yCStep = capTicks.length >= 2 ? capTicks[1] - capTicks[0] : 0;
+  ctx.font = "10px 'JetBrains Mono', monospace";
+  ctx.fillStyle = "#78849a"; ctx.textAlign = "center"; ctx.textBaseline = "top";
+  for (const t of xTicks) ctx.fillText(_fmtTick(t), toX(t), MT+ph+5);
+  ctx.fillStyle = "#ef4444"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (const t of vTicks) ctx.fillText(_fmtTick(t, yVStep), ML-5, toYv(t));
+  ctx.fillStyle = "#3b82f6"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  for (const t of capTicks) ctx.fillText(_fmtTick(t, yCStep), ML+pw+5, toYc(t));
+
+  // Axis labels
+  ctx.font = "11px 'Inter', system-ui"; ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = "#78849a"; ctx.textAlign = "center";
+  ctx.fillText("Elapsed (s)", ML+pw/2, MT+ph+36);
+  ctx.fillStyle = "#ef4444"; ctx.save(); ctx.translate(13, MT+ph/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText("Voltage (V)", 0, 0); ctx.restore();
+  ctx.fillStyle = "#3b82f6"; ctx.save(); ctx.translate(W-12, MT+ph/2); ctx.rotate(Math.PI/2);
+  ctx.fillText("Capacity (mAh)", 0, 0); ctx.restore();
 }
 
 // ════════════════════════════════════════════════════════════════════

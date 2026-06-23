@@ -1,0 +1,82 @@
+{
+  "schema_version": "1.0",
+  "name": "demo",
+  "created_at": "2026-01-01T00:00:00+00:00",
+  "host": "demo",
+  "instruments": [
+    {
+      "resource": "DEMO::SCOPE::INSTR",
+      "connection": "Demo",
+      "manufacturer": "Rigol Technologies",
+      "model": "DS1054Z",
+      "serial": "DEMO000001",
+      "firmware": "00.04.04.SP4",
+      "idn": "RIGOL TECHNOLOGIES,DS1054Z,DS1ZA000000001,00.04.04.SP4",
+      "type": "scope",
+      "role": "scope",
+      "family_id": "rigol_ds1000z"
+    },
+    {
+      "resource": "DEMO::PSU::INSTR",
+      "connection": "Demo",
+      "manufacturer": "Rigol Technologies",
+      "model": "DP811",
+      "serial": "DEMO000002",
+      "firmware": "00.01.14",
+      "idn": "RIGOL TECHNOLOGIES,DP811,DP8A000000002,00.01.14",
+      "type": "psu",
+      "role": "psu",
+      "family_id": "rigol_dp800"
+    },
+    {
+      "resource": "DEMO::AWG::INSTR",
+      "connection": "Demo",
+      "manufacturer": "Rigol Technologies",
+      "model": "DG811",
+      "serial": "DEMO000003",
+      "firmware": "00.01.14.01.00",
+      "idn": "Rigol Technologies,DG811,DG8A000000003,00.01.14.01.00",
+      "type": "awg",
+      "role": "generator",
+      "family_id": "rigol_dg800"
+    },
+    {
+      "resource": "DEMO::DMM0::INSTR",
+      "connection": "Demo",
+      "manufacturer": "Keysight Technologies",
+      "model": "34461A",
+      "serial": "DEMO000004",
+      "firmware": "A.02.14-02.40",
+      "idn": "Keysight Technologies,34461A,MY00000004,A.02.14-02.40",
+      "type": "dmm",
+      "role": "dmm",
+      "family_id": "keysight_34461a"
+    },
+    {
+      "resource": "DEMO::DMM1::INSTR",
+      "connection": "Demo",
+      "manufacturer": "Rigol Technologies",
+      "model": "DM3058",
+      "serial": "DEMO000005",
+      "firmware": "01.01.01",
+      "idn": "RIGOL TECHNOLOGIES,DM3058,DM3A000000005,01.01.01",
+      "type": "dmm",
+      "role": "dmm",
+      "family_id": "rigol_dm3058"
+    },
+    {
+      "resource": "DEMO::ELOAD::INSTR",
+      "connection": "Demo",
+      "manufacturer": "Korad",
+      "model": "KEL103",
+      "serial": "DEMO000006",
+      "firmware": "1.00",
+      "idn": "KORAD,KEL103,KEL0000000006,1.00",
+      "type": "eload",
+      "role": "eload",
+      "family_id": "korad_kel"
+    }
+  ],
+  "suggested_tests": []
+}
+

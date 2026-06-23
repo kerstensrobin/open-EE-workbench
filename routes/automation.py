@@ -61,6 +61,9 @@ def _suggest_tests() -> list:
         {"id": "harmonic_analysis",  "name": "Harmonic Analysis",
          "description": "Crest factor, THD estimate, and optional CH1→CH2 gain",
          "requires": ["scope"]},
+        {"id": "battery_capacity",   "name": "Battery Capacity",
+         "description": "Constant-current discharge test; records V/I/P and calculates mAh",
+         "requires": ["eload"]},
     ]
     wb = _sh._state.get("workbench")
     if not wb:
@@ -246,6 +249,21 @@ def _suggest_tests() -> list:
             ],
             "columns": ["sample", "freq_Hz", "vpp_V", "vrms_V", "crest_factor", "thd_est_pct",
                         "ref_vpp_V", "gain_dB"],
+        })
+
+    if "eload" in types:
+        tests.append({
+            "id":          "battery_capacity",
+            "name":        "Battery Capacity",
+            "description": "Constant-current discharge; records V/I/P and calculates mAh",
+            "requires":    ["eload"],
+            "params": [
+                {"id": "current",       "label": "Discharge I",    "unit": "A",   "default": 1.0,  "type": "number"},
+                {"id": "cutoff_v",      "label": "Cutoff voltage", "unit": "V",   "default": 3.0,  "type": "number"},
+                {"id": "interval",      "label": "Poll interval",  "unit": "s",   "default": 5,    "type": "number"},
+                {"id": "max_hours",     "label": "Max duration",   "unit": "h",   "default": 10,   "type": "number"},
+            ],
+            "columns": ["elapsed_s", "voltage_V", "current_A", "power_W", "capacity_mAh"],
         })
 
     # Append greyed-out stubs for any known test whose instruments aren't connected
@@ -2103,6 +2121,91 @@ def api_automation_run():
         if meas_row: _flush_row()
         _done(rows, meas_cols)
 
+    # ── Battery Capacity (eload) ──────────────────────────────────────────────
+    # Ported from BatteryCapacity.py by Gert Lauritsen
+    # https://github.com/gert-lauritsen/KE103  (MIT licence, used with permission)
+    def _run_battery_capacity():
+        load_i   = float(params.get("current",   1.0))
+        cutoff_v = float(params.get("cutoff_v",  3.0))
+        interval = float(params.get("interval",  5.0))
+        max_s    = float(params.get("max_hours", 10)) * 3600
+
+        res, fam = _find_instrument("eload")
+        if res is None:
+            _done([], [], "Electronic load not connected"); return
+
+        cols = ["elapsed_s", "voltage_V", "current_A", "power_W", "capacity_mAh"]
+        rows = []
+
+        try:
+            with _rlock(res):
+                _run_steps(res, get_command(fam, "set_mode", func="CURR"), role="eload")
+                _run_steps(res, get_command(fam, "set_current", value=f"{load_i:.4f}"),
+                           role="eload")
+                _run_steps(res, get_command(fam, "input_on"), role="eload")
+        except Exception as exc:
+            _done([], [], f"eload init: {exc}"); return
+
+        _emit_progress(f"Discharge started: {load_i} A, cutoff {cutoff_v} V")
+        start = time.time()
+
+        try:
+            while not _auto_stop.is_set():
+                _pause_point()
+                if _auto_stop.is_set(): break
+
+                elapsed = time.time() - start
+                if elapsed > max_s:
+                    _emit_progress("Max duration reached — stopping test"); break
+
+                v_raw, i_raw, p_raw = None, None, None
+                try:
+                    with _rlock(res):
+                        v_r = _run_steps(res, get_command(fam, "measure_voltage"),
+                                         role="eload")
+                        i_r = _run_steps(res, get_command(fam, "measure_current"),
+                                         role="eload")
+                        p_r = _run_steps(res, get_command(fam, "measure_power"),
+                                         role="eload")
+                    v_raw = float(str(v_r).strip().rstrip("V"))
+                    i_raw = float(str(i_r).strip().rstrip("A"))
+                    p_raw = float(str(p_r).strip().rstrip("W"))
+                except Exception as exc:
+                    _emit_progress(f"Measurement error: {exc}"); break
+
+                cap_mah = (load_i * elapsed / 3600) * 1000
+                row = [round(elapsed, 2), round(v_raw, 4), round(i_raw, 4),
+                       round(p_raw, 4), round(cap_mah, 2)]
+                rows.append(row)
+                _sh.sio.emit("eload_reading", {"v": v_raw, "i": i_raw, "p": p_raw})
+                _sh.sio.emit("automation_row", {
+                    "test_id": test_id, "row": row, "columns": cols, "progress": -1,
+                    "cutoff_v": cutoff_v,
+                })
+                _emit_progress(
+                    f"t={elapsed/3600:.3f} h  V={v_raw:.3f} V  "
+                    f"I={i_raw:.3f} A  cap={cap_mah:.1f} mAh")
+
+                if v_raw <= cutoff_v:
+                    _emit_progress(f"Cutoff reached ({v_raw:.3f} V ≤ {cutoff_v} V) — done")
+                    break
+
+                _auto_stop.wait(timeout=interval)
+        finally:
+            try:
+                with _rlock(res):
+                    _run_steps(res, get_command(fam, "input_off"), role="eload")
+            except Exception:
+                pass
+
+        if rows:
+            total_s   = rows[-1][0]
+            final_mah = rows[-1][4]
+            _emit_progress(
+                f"Test complete — {total_s/3600:.3f} h elapsed, "
+                f"{final_mah:.1f} mAh measured")
+        _done(rows, cols)
+
     runners = {
         "ac_frequency_sweep": _run_ac_sweep,
         "dc_sweep":           _run_dc_sweep,
@@ -2113,6 +2216,7 @@ def api_automation_run():
         "harmonic_analysis":  _run_harmonic_analysis,
         "psu_interrupt":      _run_psu_interrupt,
         "sandbox":            _run_sandbox,
+        "battery_capacity":   _run_battery_capacity,
     }
     runner = runners.get(test_id)
     if runner is None:

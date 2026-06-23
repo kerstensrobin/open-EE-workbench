@@ -210,19 +210,41 @@ def _start_polling():
                 wb = _sh._state.get("workbench")
                 if wb:
                     for instr in wb.get("_unique", []):
-                        if instr.get("type") != "psu":
-                            continue
-                        rstr = instr.get("resource", "")
-                        res  = _sh._state["resources"].get(rstr)
-                        fam  = _sh._state["families"].get(rstr)
+                        itype = instr.get("type")
+                        rstr  = instr.get("resource", "")
+                        res   = _sh._state["resources"].get(rstr)
+                        fam   = _sh._state["families"].get(rstr)
                         if res is None or fam is None:
                             continue
-                        # Use the family's declared channel count as the ceiling.
-                        # _psu_ch_cache[rstr] shrinks to the true count after the
-                        # first poll on instruments whose family covers multiple
-                        # models with different channel counts (e.g. DP811/DP832).
-                        max_ch = _sh._psu_ch_cache.get(rstr, fam.get("channels", 4))
-                        for ch in range(1, max_ch + 1):
+
+                        if itype == "psu":
+                            # Use the family's declared channel count as the ceiling.
+                            # _psu_ch_cache[rstr] shrinks to the true count after the
+                            # first poll on instruments whose family covers multiple
+                            # models with different channel counts (e.g. DP811/DP832).
+                            max_ch = _sh._psu_ch_cache.get(rstr, fam.get("channels", 4))
+                            for ch in range(1, max_ch + 1):
+                                if _sh._poll_stop.is_set():
+                                    break
+                                readings: dict = {}
+                                for op, key in [("measure_voltage", "v"),
+                                                ("measure_current", "i"),
+                                                ("measure_power",   "p")]:
+                                    try:
+                                        r = _run_steps(res,
+                                                       get_command(fam, op, ch=ch),
+                                                       role="psu", poll=True)
+                                        if r is not None:
+                                            readings[key] = float(r)
+                                    except Exception:
+                                        pass
+                                if readings:
+                                    _sh.sio.emit("psu_reading", {"ch": ch, **readings})
+                                elif ch > 1:
+                                    _sh._psu_ch_cache[rstr] = ch - 1
+                                    break
+
+                        elif itype == "eload":
                             if _sh._poll_stop.is_set():
                                 break
                             readings: dict = {}
@@ -231,20 +253,16 @@ def _start_polling():
                                             ("measure_power",   "p")]:
                                 try:
                                     r = _run_steps(res,
-                                                   get_command(fam, op, ch=ch),
-                                                   role="psu", poll=True)
+                                                   get_command(fam, op),
+                                                   role="eload", poll=True)
                                     if r is not None:
-                                        readings[key] = float(r)
+                                        readings[key] = float(
+                                            str(r).strip().rstrip("VAW"))
                                 except Exception:
                                     pass
                             if readings:
-                                _sh.sio.emit("psu_reading", {"ch": ch, **readings})
-                            elif ch > 1:
-                                # This channel returned nothing — instrument has
-                                # fewer channels than the family maximum.  Cache
-                                # the true count so we never probe beyond it again.
-                                _sh._psu_ch_cache[rstr] = ch - 1
-                                break
+                                _sh.sio.emit("eload_reading", readings)
+
                 _sh._poll_stop.wait(timeout=1.5)
         finally:
             _sh._poller_idle.set()

@@ -79,3 +79,9 @@ To add a new instrument, add an entry to `core/eewBackbone.json` — no code cha
 Discuss, report issues, or get involved in development on the **[EEVblog forum thread](https://www.eevblog.com/forum/projects/open-ee-workbench-a-cross-compatible-interface-for-your-equipment-489668/)**.
 
 Made with love by [nacho.works](https://nacho.works)
+
+---
+
+## Acknowledgements
+
+- **[Gert Lauritsen](https://github.com/gert-lauritsen)** — battery capacity test logic and Korad KEL103 SCPI command reference ([KE103](https://github.com/gert-lauritsen/KE103), MIT licence, used with permission); OWON XDM multimeter SCPI dialect ([OWON_SCPI_PY](https://github.com/gert-lauritsen/OWON_SCPI_PY), used with permission)

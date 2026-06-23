@@ -50,17 +50,25 @@ class DemoResource:
         s = scpi.upper()
         try:
             tok = scpi.split()
-            val = float(tok[-1]) if tok else 0.0
-            if "VOLT" in s and "MEAS" not in s:
+            val_str = tok[-1] if tok else ""
+            val = float(val_str)
+            if "VOLT" in s and "MEAS" not in s and "UPP" not in s and "LOW" not in s:
                 self._sp["voltage"] = val
             elif "CURR" in s and "MEAS" not in s and "LIM" in s:
                 self._sp["i_limit"] = val
+            elif "CURR" in s and "MEAS" not in s and "UPP" not in s and "LOW" not in s:
+                self._sp["load_current"] = val
             elif "FREQ" in s:
                 self._sp["freq"] = val
             elif "AMPL" in s or ("VOLT" in s and "AWG" in self._type.upper()):
                 self._sp["amplitude"] = val
         except (ValueError, IndexError):
             pass
+        # track non-numeric eload state
+        if ":FUNC " in s:
+            self._sp["func"] = scpi.split()[-1].upper()
+        if ":INP " in s:
+            self._sp["inp"] = scpi.split()[-1].strip()
 
     def query(self, scpi: str) -> str:
         if "*IDN?" in scpi.upper():
@@ -95,6 +103,34 @@ class DemoResource:
         if "CURR" in s and "?" in s and "MEAS" not in s:
             sp = self._sp.get("i_limit", 0.5)
             return f"{sp:.6f}"
+
+        # ── Electronic load measurements ─────────────────────────────────
+        if tp == "eload":
+            load_i = self._sp.get("load_current", 1.0)
+            # Simulate a gently discharging battery: 12.6 V → drifts down slowly
+            batt_v = 12.6 - (t % 3600) * 0.003 + slow(0.05, 20) + noise(0.005)
+            batt_v = max(batt_v, 2.8)
+            if "MEAS" in s and "VOLT" in s:
+                return f"{batt_v:.4f}"
+            if "MEAS" in s and "CURR" in s:
+                return f"{load_i + noise(0.002):.4f}"
+            if "MEAS" in s and "POW" in s:
+                return f"{batt_v * load_i:.4f}"
+            if "FUNC" in s and "?" in s:
+                return self._sp.get("func", "CURR")
+            if "INP" in s and "?" in s:
+                return self._sp.get("inp", "0")
+            if "STAT" in s and "?" in s:
+                return "0"
+            if "CURR" in s and "UPP" in s:
+                return "30.0000"
+            if "VOLT" in s and "UPP" in s:
+                return "150.0000"
+            if "CURR" in s and "?" in s:
+                return f"{load_i:.4f}"
+            if "VOLT" in s and "?" in s:
+                return f"{self._sp.get('voltage', 12.0):.4f}"
+            return "0.0000"
 
         # ── PSU output measurements (:MEASure:VOLTage? / :MEASure:CURRent?) ─
         if tp == "psu" and "MEAS" in s and "VOLT" in s:
