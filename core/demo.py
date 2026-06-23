@@ -107,8 +107,8 @@ class DemoResource:
         # ── Electronic load measurements ─────────────────────────────────
         if tp == "eload":
             load_i = self._sp.get("load_current", 1.0)
-            # Simulate a gently discharging battery: 12.6 V → drifts down slowly
-            batt_v = 12.6 - (t % 3600) * 0.003 + slow(0.05, 20) + noise(0.005)
+            # Simulate discharging battery — fast enough to complete in demo (12.6→3 V in ~96 s)
+            batt_v = 12.6 - (t % 120) * 0.08 + slow(0.05, 20) + noise(0.005)
             batt_v = max(batt_v, 2.8)
             if "MEAS" in s and "VOLT" in s:
                 return f"{batt_v:.4f}"

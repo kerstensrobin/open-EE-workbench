@@ -4011,7 +4011,7 @@ socket.on("automation_progress", ({ test_id, msg }) => {
   if (label) label.textContent = msg;
 });
 
-socket.on("automation_row", ({ test_id, row, columns, progress }) => {
+socket.on("automation_row", ({ test_id, row, columns, progress, cutoff_v }) => {
   if (test_id === "sandbox") {
     _sbRows.push(row);
     if (_sbCols.length === 0 && columns?.length) {
@@ -4045,7 +4045,7 @@ socket.on("automation_row", ({ test_id, row, columns, progress }) => {
     return;
   }
   if (test_id === "battery_capacity") {
-    _battPush(row, data.cutoff_v ?? null);
+    _battPush(row, cutoff_v ?? null);
     const fill = document.getElementById("tprog-fill-battery_capacity");
     if (fill) { fill.style.width = "100%"; fill.style.opacity = "0.35"; }
     const lbl = document.getElementById("tprog-label-battery_capacity");
