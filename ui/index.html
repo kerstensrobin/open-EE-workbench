@@ -3135,7 +3135,7 @@ function buildGenericCard(instr) {
 let _assignResource = null;
 let _allFamilies    = [];
 
-const _TYPE_LABELS = { scope:"Scope", psu:"PSU", awg:"AWG / FGen", dmm:"DMM", load:"Load", smu:"SMU" };
+const _TYPE_LABELS = { scope:"Scope", psu:"PSU", awg:"AWG / FGen", dmm:"DMM", eload:"E-Load", smu:"SMU" };
 
 // ── Workbench manage modal ────────────────────────────────────────────
 async function openWbManageModal() {
@@ -3296,7 +3296,7 @@ function assignOnFamilyChange() {
 }
 
 function _defaultRole(type) {
-  return { scope:"scope", psu:"psu", awg:"generator", dmm:"dmm", load:"load", smu:"smu" }[type] || type;
+  return { scope:"scope", psu:"psu", awg:"generator", dmm:"dmm", eload:"eload", smu:"smu" }[type] || type;
 }
 
 async function confirmAssign() {

@@ -567,7 +567,7 @@ def api_eload_mode():
     d    = request.json or {}
     mode = d.get("mode", "CURR").upper()   # CURR / VOLT / RES / POW
     _sh._executor.submit(
-        lambda: _op(*_find_instrument("eload"), "set_mode", role="eload", func=mode))
+        lambda: _op(*_find_instrument("load"), "set_mode", role="load", func=mode))
     return jsonify({"status": "ok"})
 
 
@@ -579,7 +579,7 @@ def api_eload_value():
     if val is None:
         return jsonify({"error": "value required"}), 400
     _sh._executor.submit(
-        lambda: _op(*_find_instrument("eload"), op, role="eload", value=str(val)))
+        lambda: _op(*_find_instrument("load"), op, role="load", value=str(val)))
     return jsonify({"status": "ok"})
 
 
@@ -588,28 +588,28 @@ def api_eload_input():
     d  = request.json or {}
     on = bool(d.get("state", False))
     _sh._executor.submit(
-        lambda: _op(*_find_instrument("eload"),
-                    "input_on" if on else "input_off", role="eload"))
+        lambda: _op(*_find_instrument("load"),
+                    "input_on" if on else "input_off", role="load"))
     return jsonify({"status": "ok"})
 
 
 @bp.route("/api/eload/measure", methods=["POST"])
 def api_eload_measure():
     def _do():
-        res, fam = _find_instrument("eload")
+        res, fam = _find_instrument("load")
         if res is None or fam is None: return
         readings = {}
         for op, key in [("measure_voltage", "v"),
                         ("measure_current", "i"),
                         ("measure_power",   "p")]:
             try:
-                r = _run_steps(res, get_command(fam, op), role="eload")
+                r = _run_steps(res, get_command(fam, op), role="load")
                 if r is not None:
                     readings[key] = float(str(r).strip().rstrip("VAW"))
             except Exception:
                 pass
         if readings:
-            _sh.sio.emit("eload_reading", readings)
+            _sh.sio.emit("load_reading", readings)
 
     _sh._executor.submit(_do)
     return jsonify({"status": "ok"})

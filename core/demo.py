@@ -105,7 +105,7 @@ class DemoResource:
             return f"{sp:.6f}"
 
         # ── Electronic load measurements ─────────────────────────────────
-        if tp == "eload":
+        if tp == "load":
             load_i = self._sp.get("load_current", 1.0)
             # Simulate discharging battery — fast enough to complete in demo (12.6→3 V in ~96 s)
             batt_v = 12.6 - (t % 120) * 0.08 + slow(0.05, 20) + noise(0.005)

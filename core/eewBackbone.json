@@ -2110,7 +2110,7 @@
       "id": "rigol_dl3000",
       "vendor": "Rigol",
       "series": "DL3000 Series Programmable Electronic Load",
-      "type": "load",
+      "type": "eload",
       "patterns": [
         "DL3021",
         "DL3021A",
@@ -2237,7 +2237,7 @@
       "id": "bk_mdl",
       "vendor": "BK Precision",
       "series": "MDL Series Programmable DC Electronic Load",
-      "type": "load",
+      "type": "eload",
       "patterns": [
         "MDL"
       ],

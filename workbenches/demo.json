@@ -72,8 +72,8 @@
       "serial": "DEMO000006",
       "firmware": "1.00",
       "idn": "KORAD,KEL103,KEL0000000006,1.00",
-      "type": "eload",
-      "role": "eload",
+      "type": "load",
+      "role": "load",
       "family_id": "korad_kel"
     }
   ],

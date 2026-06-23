@@ -63,7 +63,7 @@ def _suggest_tests() -> list:
          "requires": ["scope"]},
         {"id": "battery_capacity",   "name": "Battery Capacity",
          "description": "Constant-current discharge test; records V/I/P and calculates mAh",
-         "requires": ["eload"]},
+         "requires": ["load"]},
     ]
     wb = _sh._state.get("workbench")
     if not wb:
@@ -251,12 +251,12 @@ def _suggest_tests() -> list:
                         "ref_vpp_V", "gain_dB"],
         })
 
-    if "eload" in types:
+    if "load" in types:
         tests.append({
             "id":          "battery_capacity",
             "name":        "Battery Capacity",
             "description": "Constant-current discharge; records V/I/P and calculates mAh",
-            "requires":    ["eload"],
+            "requires":    ["load"],
             "params": [
                 {"id": "current",       "label": "Discharge I",    "unit": "A",   "default": 1.0,  "type": "number"},
                 {"id": "cutoff_v",      "label": "Cutoff voltage", "unit": "V",   "default": 3.0,  "type": "number"},
@@ -2121,7 +2121,7 @@ def api_automation_run():
         if meas_row: _flush_row()
         _done(rows, meas_cols)
 
-    # ── Battery Capacity (eload) ──────────────────────────────────────────────
+    # ── Battery Capacity (load) ───────────────────────────────────────────────
     # Ported from BatteryCapacity.py by Gert Lauritsen
     # https://github.com/gert-lauritsen/KE103  (MIT licence, used with permission)
     def _run_battery_capacity():
@@ -2130,7 +2130,7 @@ def api_automation_run():
         interval = float(params.get("interval",  5.0))
         max_s    = float(params.get("max_hours", 10)) * 3600
 
-        res, fam = _find_instrument("eload")
+        res, fam = _find_instrument("load")
         if res is None:
             _done([], [], "Electronic load not connected"); return
 
@@ -2139,12 +2139,12 @@ def api_automation_run():
 
         try:
             with _rlock(res):
-                _run_steps(res, get_command(fam, "set_mode", func="CURR"), role="eload")
+                _run_steps(res, get_command(fam, "set_mode", func="CURR"), role="load")
                 _run_steps(res, get_command(fam, "set_current", value=f"{load_i:.4f}"),
-                           role="eload")
-                _run_steps(res, get_command(fam, "input_on"), role="eload")
+                           role="load")
+                _run_steps(res, get_command(fam, "input_on"), role="load")
         except Exception as exc:
-            _done([], [], f"eload init: {exc}"); return
+            _done([], [], f"load init: {exc}"); return
 
         _emit_progress(f"Discharge started: {load_i} A, cutoff {cutoff_v} V")
         start = time.time()
@@ -2162,11 +2162,11 @@ def api_automation_run():
                 try:
                     with _rlock(res):
                         v_r = _run_steps(res, get_command(fam, "measure_voltage"),
-                                         role="eload")
+                                         role="load")
                         i_r = _run_steps(res, get_command(fam, "measure_current"),
-                                         role="eload")
+                                         role="load")
                         p_r = _run_steps(res, get_command(fam, "measure_power"),
-                                         role="eload")
+                                         role="load")
                     v_raw = float(str(v_r).strip().rstrip("V"))
                     i_raw = float(str(i_r).strip().rstrip("A"))
                     p_raw = float(str(p_r).strip().rstrip("W"))
@@ -2177,7 +2177,7 @@ def api_automation_run():
                 row = [round(elapsed, 2), round(v_raw, 4), round(i_raw, 4),
                        round(p_raw, 4), round(cap_mah, 2)]
                 rows.append(row)
-                _sh.sio.emit("eload_reading", {"v": v_raw, "i": i_raw, "p": p_raw})
+                _sh.sio.emit("load_reading", {"v": v_raw, "i": i_raw, "p": p_raw})
                 _sh.sio.emit("automation_row", {
                     "test_id": test_id, "row": row, "columns": cols, "progress": -1,
                     "cutoff_v": cutoff_v,
@@ -2194,7 +2194,7 @@ def api_automation_run():
         finally:
             try:
                 with _rlock(res):
-                    _run_steps(res, get_command(fam, "input_off"), role="eload")
+                    _run_steps(res, get_command(fam, "input_off"), role="load")
             except Exception:
                 pass
 

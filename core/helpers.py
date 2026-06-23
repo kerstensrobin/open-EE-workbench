@@ -244,7 +244,7 @@ def _start_polling():
                                     _sh._psu_ch_cache[rstr] = ch - 1
                                     break
 
-                        elif itype == "eload":
+                        elif itype == "load":
                             if _sh._poll_stop.is_set():
                                 break
                             readings: dict = {}
@@ -254,14 +254,14 @@ def _start_polling():
                                 try:
                                     r = _run_steps(res,
                                                    get_command(fam, op),
-                                                   role="eload", poll=True)
+                                                   role="load", poll=True)
                                     if r is not None:
                                         readings[key] = float(
                                             str(r).strip().rstrip("VAW"))
                                 except Exception:
                                     pass
                             if readings:
-                                _sh.sio.emit("eload_reading", readings)
+                                _sh.sio.emit("load_reading", readings)
 
                 _sh._poll_stop.wait(timeout=1.5)
         finally:

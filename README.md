@@ -3,7 +3,7 @@
 A non-proprietary, cross-compatible VISA toolset for automating the modern electronic engineering workbench.
 Works out of the box with any combination of supported instruments — no vendor lock-in.
 
-Built on PyVISA and PyVISA-py with SCPI dialect coverage across **69 instrument families** from **15 vendors**: Keysight, Rigol, Rohde & Schwarz, Tektronix, Siglent, Agilent, and more.
+Built on PyVISA and PyVISA-py with SCPI dialect coverage across **73 instrument families** from **15 vendors**: Keysight, Rigol, Rohde & Schwarz, Tektronix, Siglent, Agilent, and more.
 
 > Forever a work in progress.
 
@@ -34,8 +34,8 @@ python core/nachoVisa.py --fix-udev   # then re-plug USB instruments
 
 | | |
 |---|---|
-| **Workbench GUI** | Instrument cards with live controls for scope, PSU, AWG, and DMM. Save / load / reset instrument state snapshots. Unrecognised instruments can be manually assigned a family. |
-| **Automation** | Parametric tests: DC sweep (single / simultaneous / nested), PSU interrupt transient, AC frequency sweep, DMM logger. |
+| **Workbench GUI** | Instrument cards with live controls for scope, PSU, AWG, DMM, and electronic load. Save / load / reset instrument state snapshots. Unrecognised instruments can be manually assigned a family. |
+| **Automation** | Parametric tests: DC sweep (single / simultaneous / nested), PSU interrupt transient, AC frequency sweep, DMM logger, battery capacity discharge test (with live voltage/capacity chart). |
 | **Plot Specific** | Purpose-built tests that produce specific, well-defined plots — the kind that appear in a component datasheet. Currently: Static Characteristic (IV Curve) and Transfer Characteristic for BJT / FET. |
 | **Sandbox** | Build arbitrary test sequences with a no-code column-based pipeline editor. |
 | **CLI scripts** | Standalone Python scripts for screenshots, sweeps, and waveform analysis. |
@@ -48,12 +48,12 @@ python core/nachoVisa.py --fix-udev   # then re-plug USB instruments
 
 | Type | Families |
 |---|---|
-| Oscilloscope | 25 |
+| Oscilloscope | 26 |
 | AWG / Function generator | 15 |
 | Power supply | 15 |
-| Multimeter | 9 |
+| Multimeter | 11 |
+| Electronic load | 3 |
 | SMU | 3 |
-| Electronic load | 2 |
 
 To add a new instrument, add an entry to `core/eewBackbone.json` — no code changes needed.
 → **[eewBackbone](https://github.com/kerstensrobin/open-EE-workbench/wiki/eewBackbone)**
