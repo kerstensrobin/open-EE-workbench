@@ -2010,12 +2010,13 @@ def api_automation_run():
                 return [round(a * (b / a) ** (i / (n - 1)), 9) for i in range(n)]
             return [round(a + (b - a) * i / (n - 1), 9) for i in range(n)]
 
-        # pre-seed first sweep value so it's available on iteration 0
+        # pre-seed first sweep value for each sweep loop so iteration 0 sees it
         for _lc in loops_cfg:
             if _lc.get("condition", {}).get("type") == "sweep":
                 _sv = _sweep_values(_lc["condition"])
                 if _sv:
                     loop_sweep_val[_lc["id"]] = _sv[0]
+                    _lc["condition"].setdefault("var", "sweep")
 
         def _flush_row():
             vals = [meas_row.get(c) for c in meas_cols]
@@ -2083,11 +2084,12 @@ def api_automation_run():
             if t == "wait":
                 time.sleep(float(s.get("duration", 0)))
             elif t in ("set", "wait_for") and res:
-                # build var_map from any active sweep loops covering this step
+                # build var_map from all active sweep loops (supports nesting)
                 vmap = {}
                 for lc in loops_cfg:
-                    if lc.get("condition", {}).get("type") == "sweep" and lc["id"] in loop_sweep_val:
-                        vmap["sweep"] = loop_sweep_val[lc["id"]]
+                    c = lc.get("condition", {})
+                    if c.get("type") == "sweep" and lc["id"] in loop_sweep_val:
+                        vmap[c.get("var", "sweep")] = loop_sweep_val[lc["id"]]
                 _exec_action_seq(s, res, fam, vmap)
             elif t == "measure" and res:
                 op     = _MEAS_OPS.get(s.get("param", "voltage"), "measure_voltage")
