@@ -1227,12 +1227,25 @@
           <span>condition:</span>
           <select id="sb-lf-ctype" onchange="sbLoopFormCondChange()" style="width:100px;">
             <option value="count">Count</option>
+            <option value="sweep">Sweep</option>
             <option value="until">Until sensor</option>
             <option value="while">While sensor</option>
           </select>
           <span id="sb-lf-count-wrap">repeat
             <input id="sb-lf-count" type="number" value="10" min="1" style="width:54px;"> ×
           </span>
+          <div id="sb-lf-sweep-wrap" style="display:none;align-items:center;gap:4px;flex-wrap:wrap;">
+            <span style="font-size:11px;color:var(--text-faint);">start</span>
+            <input id="sb-lf-sw-start" type="number" value="0" step="any" style="width:60px;">
+            <span style="font-size:11px;color:var(--text-faint);">stop</span>
+            <input id="sb-lf-sw-stop"  type="number" value="1" step="any" style="width:60px;">
+            <span style="font-size:11px;color:var(--text-faint);">steps</span>
+            <input id="sb-lf-sw-steps" type="number" value="11" min="2" style="width:48px;">
+            <label style="font-size:11px;display:flex;align-items:center;gap:3px;">
+              <input id="sb-lf-sw-log" type="checkbox"> log
+            </label>
+            <span style="font-size:11px;color:var(--text-faint);margin-left:4px;">use <code>{sweep}</code> in Set value</span>
+          </div>
           <div id="sb-lf-until-wrap" style="display:none;align-items:center;gap:4px;flex-wrap:wrap;">
             <select id="sb-lf-u-instr" style="width:120px;"></select>
             <input id="sb-lf-u-ch" type="number" value="1" min="1" max="4" title="Channel" style="width:40px;">
@@ -2224,9 +2237,9 @@ function buildInstrumentGrid(instruments) {
   if (types.psu)   { $grid.appendChild(buildPSUCard(types.psu[0])); _psuRefreshAllBtn(); }
   if (types.awg)   $grid.appendChild(buildAWGCard(types.awg[0]));
   if (types.dmm)   $grid.appendChild(buildDMMCard(types.dmm[0]));
-  if (types.eload) $grid.appendChild(buildELoadCard(types.eload[0]));
+  if (types.load) $grid.appendChild(buildELoadCard(types.load[0]));
   for (const [t,instrs] of Object.entries(types)) {
-    if (!["scope","psu","awg","dmm","eload"].includes(t)) {
+    if (!["scope","psu","awg","dmm","load"].includes(t)) {
       for (const instr of instrs) $grid.appendChild(buildGenericCard(instr));
     }
   }
@@ -3000,7 +3013,7 @@ function buildELoadCard(instr) {
     `<button class="eload-mode${i===0?" active":""}" data-mode="${m.id}" data-unit="${m.unit}" data-op="${m.op}" onclick="eloadSelectMode(this)">${m.label}</button>`
   ).join("");
   const div = document.createElement("div");
-  div.className = "card"; div.dataset.type = "eload"; div.dataset.model = instr.model||"";
+  div.className = "card"; div.dataset.type = "load"; div.dataset.model = instr.model||"";
   div.innerHTML = `
     <div class="card-header">
       <div class="card-icon eload" style="font-size:12px;font-weight:700;">CC</div>
@@ -3052,10 +3065,10 @@ function buildELoadCard(instr) {
       </div>
       <div class="scpi-row">
         <input class="scpi-inp" type="text" placeholder="Manual SCPI command…"
-               onkeydown="if(event.key==='Enter')sendScpi('eload',this)"
+               onkeydown="if(event.key==='Enter')sendScpi('load',this)"
                spellcheck="false" autocomplete="off" />
         <button class="btn" style="padding:3px 8px;font-size:10px;flex-shrink:0;"
-                onclick="sendScpi('eload',this.previousElementSibling)">Send</button>
+                onclick="sendScpi('load',this.previousElementSibling)">Send</button>
       </div>
     </div>`;
   return div;
@@ -3068,7 +3081,7 @@ function eloadSelectMode(btn) {
   const unitEl = document.getElementById("eload-unit");
   if (unitEl) unitEl.textContent = btn.dataset.unit;
   // Update card icon label
-  const icon = document.querySelector(".card[data-type='eload'] .card-icon");
+  const icon = document.querySelector(".card[data-type='load'] .card-icon");
   if (icon) icon.textContent = btn.textContent;
   POST("/api/eload/mode", { mode: _eloadMode }).catch(e => toast(e.message, "error"));
 }
@@ -3090,7 +3103,7 @@ function eloadToggleInput(btn) {
   POST("/api/eload/input", { state: on }).catch(e => toast(e.message, "error"));
 }
 
-socket.on("eload_reading", ({ v, i, p }) => {
+socket.on("load_reading", ({ v, i, p }) => {
   const fmt = (x, dec, suf) => x != null && isFinite(x) ? x.toFixed(dec) + " " + suf : null;
   const pairs = [
     ["eload-read-v", fmt(v, 3, "V")],
@@ -3135,7 +3148,7 @@ function buildGenericCard(instr) {
 let _assignResource = null;
 let _allFamilies    = [];
 
-const _TYPE_LABELS = { scope:"Scope", psu:"PSU", awg:"AWG / FGen", dmm:"DMM", eload:"E-Load", smu:"SMU" };
+const _TYPE_LABELS = { scope:"Scope", psu:"PSU", awg:"AWG / FGen", dmm:"DMM", load:"Load", smu:"SMU" };
 
 // ── Workbench manage modal ────────────────────────────────────────────
 async function openWbManageModal() {
@@ -3296,7 +3309,7 @@ function assignOnFamilyChange() {
 }
 
 function _defaultRole(type) {
-  return { scope:"scope", psu:"psu", awg:"generator", dmm:"dmm", eload:"eload", smu:"smu" }[type] || type;
+  return { scope:"scope", psu:"psu", awg:"generator", dmm:"dmm", load:"load", smu:"smu" }[type] || type;
 }
 
 async function confirmAssign() {
@@ -5835,8 +5848,9 @@ function sbOpenLoopForm() {
 function sbCloseLoopForm() { document.getElementById("sb-loop-form").classList.remove("open"); }
 function sbLoopFormCondChange() {
   const type = document.getElementById("sb-lf-ctype").value;
-  document.getElementById("sb-lf-count-wrap").style.display = type === "count" ? "" : "none";
-  document.getElementById("sb-lf-until-wrap").style.display = (type === "until" || type === "while") ? "flex" : "none";
+  document.getElementById("sb-lf-count-wrap").style.display  = type === "count"  ? "" : "none";
+  document.getElementById("sb-lf-sweep-wrap").style.display  = type === "sweep"  ? "flex" : "none";
+  document.getElementById("sb-lf-until-wrap").style.display  = (type === "until" || type === "while") ? "flex" : "none";
 }
 function sbConfirmLoop() {
   const fromId = parseInt(document.getElementById("sb-lf-from").value);
@@ -5848,6 +5862,11 @@ function sbConfirmLoop() {
   const cond = { type: ctype };
   if (ctype === "count") {
     cond.count = Math.max(1, parseInt(document.getElementById("sb-lf-count").value) || 10);
+  } else if (ctype === "sweep") {
+    cond.start = parseFloat(document.getElementById("sb-lf-sw-start").value) || 0;
+    cond.stop  = parseFloat(document.getElementById("sb-lf-sw-stop").value)  || 1;
+    cond.steps = Math.max(2, parseInt(document.getElementById("sb-lf-sw-steps").value) || 11);
+    cond.log   = document.getElementById("sb-lf-sw-log").checked;
   } else {
     cond.instrument = document.getElementById("sb-lf-u-instr").value;
     cond.ch         = parseInt(document.getElementById("sb-lf-u-ch").value) || 1;
@@ -5984,8 +6003,8 @@ function sbRenderLoopChips() {
     const fi = _sb.steps.findIndex(s => s.id === l.start_id);
     const ti = _sb.steps.findIndex(s => s.id === l.end_id);
     const c  = l.condition;
-    const cStr = c.type === "count"
-      ? `×${c.count}`
+    const cStr = c.type === "count"  ? `×${c.count}`
+      : c.type === "sweep" ? `sweep ${c.start}→${c.stop} (${c.steps} pts${c.log?" log":""})`
       : `${c.type} ${c.param} ${c.op ?? ">="} ${c.target}`;
     return `<div class="sb-loop-chip">
       <span>L${i+1}: step ${fi+1}→${ti+1} ${escHtml(cStr)}</span>

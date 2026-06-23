@@ -1997,7 +1997,25 @@ def api_automation_run():
 
         rows, meas_row = [], {}
         loop_counters  = {l["id"]: 0 for l in loops_cfg}
+        loop_sweep_val = {}   # lc_id -> current swept float value
         step_idx, safety = 0, 200_000
+
+        def _sweep_values(cond):
+            n  = max(2, int(cond.get("steps", 11)))
+            a  = float(cond.get("start", 0))
+            b  = float(cond.get("stop",  1))
+            lg = bool(cond.get("log", False))
+            if lg and a > 0 and b > 0:
+                import math as _math
+                return [round(a * (b / a) ** (i / (n - 1)), 9) for i in range(n)]
+            return [round(a + (b - a) * i / (n - 1), 9) for i in range(n)]
+
+        # pre-seed first sweep value so it's available on iteration 0
+        for _lc in loops_cfg:
+            if _lc.get("condition", {}).get("type") == "sweep":
+                _sv = _sweep_values(_lc["condition"])
+                if _sv:
+                    loop_sweep_val[_lc["id"]] = _sv[0]
 
         def _flush_row():
             vals = [meas_row.get(c) for c in meas_cols]
@@ -2065,7 +2083,12 @@ def api_automation_run():
             if t == "wait":
                 time.sleep(float(s.get("duration", 0)))
             elif t in ("set", "wait_for") and res:
-                _exec_action_seq(s, res, fam, {})
+                # build var_map from any active sweep loops covering this step
+                vmap = {}
+                for lc in loops_cfg:
+                    if lc.get("condition", {}).get("type") == "sweep" and lc["id"] in loop_sweep_val:
+                        vmap["sweep"] = loop_sweep_val[lc["id"]]
+                _exec_action_seq(s, res, fam, vmap)
             elif t == "measure" and res:
                 op     = _MEAS_OPS.get(s.get("param", "voltage"), "measure_voltage")
                 ch     = int(s.get("ch", 1))
@@ -2098,6 +2121,15 @@ def api_automation_run():
                         should_loop = True
                     else:
                         loop_counters[lc_id] = 0
+                elif ctype == "sweep":
+                    vals = _sweep_values(cond)
+                    loop_counters[lc_id] += 1
+                    if loop_counters[lc_id] < len(vals):
+                        loop_sweep_val[lc_id] = vals[loop_counters[lc_id]]
+                        should_loop = True
+                    else:
+                        loop_counters[lc_id] = 0
+                        loop_sweep_val.pop(lc_id, None)
                 elif ctype in ("until", "while") and res:
                     op_key = _MEAS_OPS.get(cond.get("param", "voltage"), "measure_voltage")
                     u_ch   = int(cond.get("ch", 1))
