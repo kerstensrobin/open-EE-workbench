@@ -513,6 +513,102 @@
       }
     },
     {
+      "id": "rs_rtm3000",
+      "vendor": "Rohde & Schwarz",
+      "series": "RTM3000 Series (RTM3002 / RTM3004)",
+      "type": "scope",
+      "inherits": "rs_rtb2000",
+      "patterns": [
+        "RTM3002",
+        "RTM3004"
+      ],
+      "overrides": {
+        "channel_probe": {
+          "write": ":PROBe{ch}:SETup:ATTenuation:MANual {attenuation}",
+          "query": ":PROBe{ch}:SETup:ATTenuation:MANual?"
+        },
+        "trigger_source": ":TRIGger:A:SOURce CH{ch}",
+        "trigger_level": {
+          "write": ":TRIGger:A:LEVel{ch}:VALue {value}",
+          "query": ":TRIGger:A:LEVel{ch}:VALue?"
+        },
+        "trigger_slope": {
+          "write": ":TRIGger:A:EDGE:SLOPe {slope}",
+          "query": ":TRIGger:A:EDGE:SLOPe?"
+        },
+        "measure_vpp": [
+          ":MEASurement1:SOURce CH{ch}",
+          ":MEASurement1:MAIN PEAK",
+          {
+            "query": ":MEASurement1:RESult?"
+          }
+        ],
+        "measure_freq": [
+          ":MEASurement1:SOURce CH{ch}",
+          ":MEASurement1:MAIN FREQuency",
+          {
+            "query": ":MEASurement1:RESult?"
+          }
+        ],
+        "measure_period": [
+          ":MEASurement1:SOURce CH{ch}",
+          ":MEASurement1:MAIN PERiod",
+          {
+            "query": ":MEASurement1:RESult?"
+          }
+        ],
+        "measure_vavg": [
+          ":MEASurement1:SOURce CH{ch}",
+          ":MEASurement1:MAIN MEAN",
+          {
+            "query": ":MEASurement1:RESult?"
+          }
+        ],
+        "measure_vrms": [
+          ":MEASurement1:SOURce CH{ch}",
+          ":MEASurement1:MAIN RMS",
+          {
+            "query": ":MEASurement1:RESult?"
+          }
+        ],
+        "measure_vmax": [
+          ":MEASurement1:SOURce CH{ch}",
+          ":MEASurement1:MAIN UPEakvalue",
+          {
+            "query": ":MEASurement1:RESult?"
+          }
+        ],
+        "measure_vmin": [
+          ":MEASurement1:SOURce CH{ch}",
+          ":MEASurement1:MAIN LPEakvalue",
+          {
+            "query": ":MEASurement1:RESult?"
+          }
+        ],
+        "measure_risetime": [
+          ":MEASurement1:SOURce CH{ch}",
+          ":MEASurement1:MAIN RTIMe",
+          {
+            "query": ":MEASurement1:RESult?"
+          }
+        ],
+        "measure_falltime": [
+          ":MEASurement1:SOURce CH{ch}",
+          ":MEASurement1:MAIN FTIMe",
+          {
+            "query": ":MEASurement1:RESult?"
+          }
+        ],
+        "measure_dutycycle": [
+          ":MEASurement1:SOURce CH{ch}",
+          ":MEASurement1:MAIN PDCYcle",
+          {
+            "query": ":MEASurement1:RESult?"
+          }
+        ]
+      }
+    },
+    {
       "id": "siglent_sds",
       "vendor": "Siglent",
       "series": "SDS1000 / SDS2000 Series Digital Oscilloscopes",
