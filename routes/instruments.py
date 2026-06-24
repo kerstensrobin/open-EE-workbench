@@ -84,7 +84,7 @@ def api_scope_measure():
         if res is None:
             _sh.sio.emit("scope_measurement", {"error": "No scope connected"}); return
         try:
-            raw = _run_steps(res, get_command(fam, meas, ch=ch), role="scope")
+            raw = _run_steps(res, get_command(fam, meas, ch=ch, slot=1), role="scope")
             val = float(raw) if raw is not None else None
             label, unit = _SCOPE_MEASURES[meas]
             _sh.sio.emit("scope_measurement",
@@ -134,7 +134,7 @@ def api_scope_measure_batch():
             if idx > 0 and delay_s > 0:
                 time.sleep(delay_s)
             label, unit = _SCOPE_MEASURES[op]
-            val = _scope_query_only(res, fam, op, ch, poll=poll)
+            val = _scope_query_only(res, fam, op, ch, poll=poll, slot=idx + 1)
             _sh.sio.emit("scope_measurement",
                          {"measurement": op, "label": label, "unit": unit,
                           "ch": ch, "value": val})
@@ -267,8 +267,9 @@ def api_scope_set():
             if writes:
                 _sh.sio.emit("log", {"msg": "→  " + "  |  ".join(writes[:2])})
         except KeyError:
-            _sh.sio.emit("log",
-                         {"msg": f"⚠ scope: {op!r} not supported on this scope model"})
+            if op not in {"labels_on", "labels_off"}:
+                _sh.sio.emit("log",
+                             {"msg": f"⚠ scope: {op!r} not supported on this scope model"})
         except Exception as exc:
             _sh.sio.emit("log", {"msg": f"✗ scope {op}: {exc}"})
 
@@ -300,7 +301,9 @@ def api_scope_sync():
             for ch in range(1, 5):
                 ch_state: dict = {"ch": ch}
                 try:
-                    ch_state["display"] = res.query(f":CHANnel{ch}:DISPlay?").strip() in ("1", "ON")
+                    for act, scpi in get_command(fam, "channel_display", ch=ch):
+                        if act == "query":
+                            ch_state["display"] = res.query(scpi).strip() in ("1", "ON")
                 except Exception:
                     pass
                 for op, kw in [("channel_scale",    {"value": 1}),

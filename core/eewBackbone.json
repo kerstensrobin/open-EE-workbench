@@ -43,6 +43,9 @@
           "query": ":CHANnel{ch}:PROBe?"
         },
         "channel_label": ":CHANnel{ch}:LABel \"{label}\"",
+        "channel_display": {
+          "query": ":CHANnel{ch}:DISPlay?"
+        },
         "labels_on": ":DISPlay:LABel ON",
         "labels_off": ":DISPlay:LABel OFF",
         "annotation_text": ":DISPlay:ANNotation:TEXT \"{text}\"",
@@ -421,6 +424,9 @@
       "overrides": {
         "channel_on": ":CHANnel{ch}:STATe ON",
         "channel_off": ":CHANnel{ch}:STATe OFF",
+        "channel_display": {
+          "query": ":CHANnel{ch}:STATe?"
+        },
         "channel_probe": {
           "write": ":CHANnel{ch}:PROBe:ATTenuation {attenuation}",
           "query": ":CHANnel{ch}:PROBe:ATTenuation?"
@@ -605,6 +611,99 @@
           {
             "query": ":MEASurement1:RESult?"
           }
+        ]
+      }
+    },
+    {
+      "id": "rs_hmo3000",
+      "vendor": "Rohde & Schwarz",
+      "series": "HMO3000 Series (HMO3002 / HMO3004 / HMO3024 / HMO3054)",
+      "type": "scope",
+      "inherits": "rs_rtm3000",
+      "patterns": [
+        "HMO3002",
+        "HMO3004",
+        "HMO3024",
+        "HMO3054"
+      ],
+      "overrides": {
+        "labels_on": null,
+        "labels_off": null,
+        "channel_label": [
+          ":CHANnel{ch}:LABel \"{label}\"",
+          ":CHANnel{ch}:LABel:STATe ON"
+        ],
+        "trigger_level": {
+          "write": ":TRIGger:A:LEVel{ch} {value}",
+          "query": ":TRIGger:A:LEVel{ch}?"
+        },
+        "measure_clear_all": [
+          ":MEASurement1:ENABle OFF",
+          ":MEASurement2:ENABle OFF",
+          ":MEASurement3:ENABle OFF",
+          ":MEASurement4:ENABle OFF",
+          ":MEASurement5:ENABle OFF",
+          ":MEASurement6:ENABle OFF"
+        ],
+        "measure_vpp": [
+          ":MEASurement{slot}:ENABle ON",
+          ":MEASurement{slot}:SOURce CH{ch}",
+          ":MEASurement{slot}:MAIN PEAK",
+          {"query": ":MEASurement{slot}:RESult?"}
+        ],
+        "measure_freq": [
+          ":MEASurement{slot}:ENABle ON",
+          ":MEASurement{slot}:SOURce CH{ch}",
+          ":MEASurement{slot}:MAIN FREQuency",
+          {"query": ":MEASurement{slot}:RESult?"}
+        ],
+        "measure_period": [
+          ":MEASurement{slot}:ENABle ON",
+          ":MEASurement{slot}:SOURce CH{ch}",
+          ":MEASurement{slot}:MAIN PERiod",
+          {"query": ":MEASurement{slot}:RESult?"}
+        ],
+        "measure_vavg": [
+          ":MEASurement{slot}:ENABle ON",
+          ":MEASurement{slot}:SOURce CH{ch}",
+          ":MEASurement{slot}:MAIN MEAN",
+          {"query": ":MEASurement{slot}:RESult?"}
+        ],
+        "measure_vrms": [
+          ":MEASurement{slot}:ENABle ON",
+          ":MEASurement{slot}:SOURce CH{ch}",
+          ":MEASurement{slot}:MAIN RMS",
+          {"query": ":MEASurement{slot}:RESult?"}
+        ],
+        "measure_vmax": [
+          ":MEASurement{slot}:ENABle ON",
+          ":MEASurement{slot}:SOURce CH{ch}",
+          ":MEASurement{slot}:MAIN UPEakvalue",
+          {"query": ":MEASurement{slot}:RESult?"}
+        ],
+        "measure_vmin": [
+          ":MEASurement{slot}:ENABle ON",
+          ":MEASurement{slot}:SOURce CH{ch}",
+          ":MEASurement{slot}:MAIN LPEakvalue",
+          {"query": ":MEASurement{slot}:RESult?"}
+        ],
+        "measure_risetime": [
+          ":MEASurement{slot}:ENABle ON",
+          ":MEASurement{slot}:SOURce CH{ch}",
+          ":MEASurement{slot}:MAIN RTIMe",
+          {"query": ":MEASurement{slot}:RESult?"}
+        ],
+        "measure_falltime": [
+          ":MEASurement{slot}:ENABle ON",
+          ":MEASurement{slot}:SOURce CH{ch}",
+          ":MEASurement{slot}:MAIN FTIMe",
+          {"query": ":MEASurement{slot}:RESult?"}
+        ],
+        "measure_dutycycle": [
+          ":MEASurement{slot}:ENABle ON",
+          ":MEASurement{slot}:SOURce CH{ch}",
+          ":MEASurement{slot}:MAIN PDCYcle",
+          {"query": ":MEASurement{slot}:RESult?"}
         ]
       }
     },

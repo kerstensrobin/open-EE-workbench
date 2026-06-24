@@ -128,10 +128,10 @@ def _scope_enable_measures(scope_res, scope_fam, op_ch_pairs: list):
     except Exception as exc:
         _log(f"[scope] measure_clear_all: {exc}")
 
-    # Phase 2 — enable each item (write step only)
-    for op, ch in op_ch_pairs:
+    # Phase 2 — enable each item (write step only); slot=1-indexed position
+    for idx, (op, ch) in enumerate(op_ch_pairs):
         try:
-            steps      = get_command(scope_fam, op, ch=ch)
+            steps      = get_command(scope_fam, op, ch=ch, slot=idx + 1)
             write_only = [(a, s) for a, s in steps if a == "write"]
             if write_only:
                 _run_steps(scope_res, write_only, role="scope")
@@ -141,14 +141,16 @@ def _scope_enable_measures(scope_res, scope_fam, op_ch_pairs: list):
             _log(f"[scope] enable {op} CH{ch}: {exc}")
 
 
-def _scope_query_only(scope_res, scope_fam, op: str, ch: int, poll: bool = False):
+def _scope_query_only(scope_res, scope_fam, op: str, ch: int, poll: bool = False,
+                      slot: int = 1):
     """Query a single scope measurement *without* re-sending its enable write.
 
     Call _scope_enable_measures() first, then use this inside the loop.
+    slot: 1-indexed measurement slot (for slot-based scopes like HMO3000; ignored otherwise).
     Returns the float value, or None if unavailable / out-of-range.
     """
     try:
-        steps       = get_command(scope_fam, op, ch=ch)
+        steps       = get_command(scope_fam, op, ch=ch, slot=slot)
         query_steps = [(a, s) for a, s in steps if a in ("query", "raw_query")]
         if not query_steps:
             return None

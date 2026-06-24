@@ -912,6 +912,10 @@
       white-space:nowrap; min-width:70px; text-align:right;
     }
     .scope-meas-val.dim { color:var(--text-faint); }
+    .scope-meas-slot {
+      font-size:9px; font-weight:600; color:var(--text-faint);
+      min-width:14px; text-align:center; flex-shrink:0; letter-spacing:0.03em;
+    }
     .scope-meas-remove {
       background:none; border:none; color:var(--text-faint); cursor:pointer;
       font-size:14px; line-height:1; padding:0 2px; flex-shrink:0;
@@ -2419,13 +2423,22 @@ function scopeAddMeasurement() {
   item.dataset.meas = op;
   item.dataset.id   = id;
   item.innerHTML = `
+    <span class="scope-meas-slot">—</span>
     <span class="scope-ch-badge ${cc}">CH${ch}</span>
     <span class="scope-meas-label">${escHtml(meas.label)}</span>
     <span class="scope-meas-val dim" id="smv-${id}">—</span>
-    <button class="scope-meas-remove" onclick="this.closest('.scope-meas-item').remove();_scopeNeedsSetup=true;" title="Remove">×</button>`;
+    <button class="scope-meas-remove" onclick="this.closest('.scope-meas-item').remove();_scopeNeedsSetup=true;_renumberMeasSlots();" title="Remove">×</button>`;
   const list = document.getElementById("scope-meas-list");
   if (list) list.appendChild(item);
   _scopeNeedsSetup = true;
+  _renumberMeasSlots();
+}
+
+function _renumberMeasSlots() {
+  document.querySelectorAll(".scope-meas-item").forEach((item, idx) => {
+    const badge = item.querySelector(".scope-meas-slot");
+    if (badge) badge.textContent = idx + 1;
+  });
 }
 
 function scopeMeasureAll() {

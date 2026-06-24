@@ -104,11 +104,19 @@ def api_connect():
                 raw_results[rstr] = (None, None, str(exc))
                 _log(f"✗  {instr['model']}:  {exc}")
 
-        families = {
-            instr["resource"]: _family_for(instr)
-            for instr in wb.get("_unique", [])
-            if instr.get("resource")
-        }
+        families = {}
+        for instr in wb.get("_unique", []):
+            rstr = instr.get("resource", "")
+            if not rstr:
+                continue
+            _, idn, _ = raw_results.get(rstr, (None, None, None))
+            # Prefer live-IDN classification over the stored family_id so stale
+            # workbench entries (created before a new family was added) get the
+            # right commands automatically.
+            fam = _classify(idn) if idn else None
+            if fam is None:
+                fam = _family_for(instr)
+            families[rstr] = fam
 
         with _sh._lock:
             for r in _sh._state["resources"].values():
