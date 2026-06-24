@@ -1548,6 +1548,27 @@
       "channels": 3
     },
     {
+      "id": "rs_ngc100",
+      "vendor": "Rohde & Schwarz",
+      "series": "NGC100 Series (NGC101 / NGC102 / NGC103)",
+      "type": "psu",
+      "inherits": "rs_hmc804x",
+      "patterns": [
+        "NGC101",
+        "NGC102",
+        "NGC103"
+      ],
+      "overrides": {
+        "measure_power": [
+          ":INSTrument:NSELect {ch}",
+          {
+            "query": ":MEASure:SCALar:POWer:DC?"
+          }
+        ]
+      },
+      "channels": 3
+    },
+    {
       "id": "keithley_2200psu",
       "vendor": "Keithley Instruments",
       "series": "2220 / 2230 / 2231A Dual/Triple-Output Power Supply",
