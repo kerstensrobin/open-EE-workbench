@@ -110,11 +110,11 @@ if _shared.PYVISA_OK:
     _apply_usbtmc_patch()
 
 # ── Register blueprints ───────────────────────────────────────────────────────
-from routes.connection   import bp as bp_connection
-from routes.workbench    import bp as bp_workbench
-from routes.instruments  import bp as bp_instruments
-from routes.automation   import bp as bp_automation
-from routes.system       import bp as bp_system
+from core.routes.connection   import bp as bp_connection
+from core.routes.workbench    import bp as bp_workbench
+from core.routes.instruments  import bp as bp_instruments
+from core.routes.automation   import bp as bp_automation
+from core.routes.system       import bp as bp_system
 
 flask_app.register_blueprint(bp_connection)
 flask_app.register_blueprint(bp_workbench)

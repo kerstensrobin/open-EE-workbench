@@ -40,7 +40,7 @@ python core/nachoVisa.py --fix-udev   # then re-plug USB instruments
 | **Sandbox** | Build arbitrary test sequences with a no-code column-based pipeline editor. |
 | **CLI scripts** | Standalone Python scripts for screenshots, sweeps, and waveform analysis. |
 
-![Workbench tab](images/workbench.png)
+![Workbench tab](documentation/images/workbench.png)
 
 ---
 

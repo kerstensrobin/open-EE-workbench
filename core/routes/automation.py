@@ -20,7 +20,7 @@ from core.helpers import (
     _scope_enable_measures, _scope_query_only, _start_polling,
     _extract_value_key,
 )
-from routes.instruments import DMM_OPS, PSU_LOGGER_OPS, _res_for_interval
+from core.routes.instruments import DMM_OPS, PSU_LOGGER_OPS, _res_for_interval
 
 bp = Blueprint("automation", __name__)
 
