@@ -242,3 +242,4 @@ screenshots/*
 
 # Claude Code internal state
 .claude/
+CLAUDE.md
