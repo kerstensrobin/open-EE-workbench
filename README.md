@@ -40,7 +40,32 @@ python core/nachoVisa.py --fix-udev   # then re-plug USB instruments
 | **Sandbox** | Build arbitrary test sequences with a no-code column-based pipeline editor. |
 | **CLI scripts** | Standalone Python scripts for screenshots, sweeps, and waveform analysis. |
 
-![Workbench tab](documentation/images/workbench.png)
+![Workbench tab](screenshots/workbench.png)
+
+---
+
+## Folder structure
+
+```
+open-EE-workbench/
+├── app.py              Flask + SocketIO server, entry point
+├── install.py          dependency installer (creates .venv)
+├── open-eew            launch script (Linux / Mac)
+├── open-eew.bat        launch script (Windows)
+├── core/
+│   ├── eewBackbone.json    SCPI command database (73 families, 15 vendors)
+│   ├── eewBackbone.py      classify() + get_command()
+│   ├── helpers.py          shared VISA helpers used by all routes
+│   ├── nachoVisa.py        instrument discovery CLI
+│   ├── setWorkbench.py     drive instruments to a saved state
+│   ├── demo.py             offline demo resources (no hardware needed)
+│   └── routes/             Flask API blueprints (connection, instruments, …)
+├── ui/                 single-file web front-end (index.html)
+├── workbenches/        per-bench instrument config JSON files
+├── scripts/            standalone Python scripts (sweeps, screenshots, …)
+├── results/            test output — CSV data, scope captures, plots
+└── screenshots/        GUI screenshots
+```
 
 ---
 
