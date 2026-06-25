@@ -17,6 +17,8 @@ from pathlib import Path
 
 ROOT   = Path(__file__).parent.resolve()
 PYTHON = sys.executable
+VENV   = ROOT / ".venv"
+VENV_PYTHON = VENV / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
 
 
 # ── 1. Dependencies ───────────────────────────────────────────────────────────
@@ -35,18 +37,70 @@ OPTIONAL = {
     "zeroconf":  "mDNS / LAN instrument discovery",
 }
 
+def _venv_pkg():
+    return f"python{sys.version_info.major}.{sys.version_info.minor}-venv"
+
+
+def ensure_venv():
+    if VENV_PYTHON.exists():
+        print(f"Virtual environment already exists at {VENV}")
+        return
+
+    print("Creating virtual environment…")
+    try:
+        subprocess.check_call([PYTHON, "-m", "venv", str(VENV)])
+    except subprocess.CalledProcessError:
+        if sys.platform == "linux" and Path("/etc/debian_version").exists():
+            print(
+                f"\n[error] Could not create virtual environment.\n"
+                f"        On Ubuntu/Debian, install the venv package first:\n\n"
+                f"            sudo apt install {_venv_pkg()}\n\n"
+                f"        Then re-run:  python3 install.py",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        raise
+
+
 def install_deps():
+    ensure_venv()
+
     print("Installing required packages…")
-    subprocess.check_call([PYTHON, "-m", "pip", "install", "--upgrade", *REQUIRED])
+    subprocess.check_call([str(VENV_PYTHON), "-m", "pip", "install", "--upgrade", *REQUIRED])
 
     print("\nOptional packages (skip with Ctrl-C to accept defaults):")
     for pkg, desc in OPTIONAL.items():
         ans = input(f"  Install {pkg} ({desc})? [y/N] ").strip().lower()
         if ans == "y":
-            subprocess.check_call([PYTHON, "-m", "pip", "install", pkg])
+            subprocess.check_call([str(VENV_PYTHON), "-m", "pip", "install", pkg])
 
 
 # ── 2. Desktop launcher (Linux only) ─────────────────────────────────────────
+
+def patch_launchers():
+    launcher = ROOT / "open-eew"
+    launcher.write_text(
+        "#!/usr/bin/env bash\n"
+        'cd "$(dirname "$0")"\n'
+        'if [ -f .venv/bin/python ]; then\n'
+        "    exec .venv/bin/python app.py \"$@\"\n"
+        "else\n"
+        '    exec python3 app.py "$@"\n'
+        "fi\n"
+    )
+    launcher.chmod(launcher.stat().st_mode | 0o755)
+
+    bat = ROOT / "open-eew.bat"
+    bat.write_text(
+        "@echo off\n"
+        'cd /d "%~dp0"\n'
+        'if exist .venv\\Scripts\\python.exe (\n'
+        '    .venv\\Scripts\\python.exe app.py %*\n'
+        ") else (\n"
+        "    python app.py %*\n"
+        ")\n"
+    )
+
 
 def make_desktop():
     if sys.platform != "linux":
@@ -95,8 +149,29 @@ Keywords=VISA;SCPI;oscilloscope;power supply;DMM;AWG;lab;instrument;
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def print_pywebview_apt_note():
+    """pywebview needs GTK/WebKit apt packages that pip cannot provide."""
+    if sys.platform != "linux" or not Path("/etc/debian_version").exists():
+        return
+    # Detect Ubuntu release to pick the right webkit package
+    webkit_pkg = "gir1.2-webkit2-4.0"
+    try:
+        out = subprocess.check_output(["lsb_release", "-rs"], stderr=subprocess.DEVNULL).decode().strip()
+        if float(out) >= 24.0:
+            webkit_pkg = "gir1.2-webkit2-4.1"
+    except Exception:
+        pass
+    print(
+        "\n[install] pywebview requires system GTK/WebKit packages on Ubuntu/Debian.\n"
+        "          If the app fails to open a window, run:\n\n"
+        f"              sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-3.0 {webkit_pkg}\n"
+    )
+
+
 if __name__ == "__main__":
     print(f"open-EE-workbench installer\nProject root: {ROOT}\n")
     install_deps()
+    patch_launchers()
+    print_pywebview_apt_note()
     make_desktop()
     print("\nDone.")

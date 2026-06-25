@@ -1,3 +1,7 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")"
-exec python3 app.py "$@"
+if [ -f .venv/bin/python ]; then
+    exec .venv/bin/python app.py "$@"
+else
+    exec python3 app.py "$@"
+fi
