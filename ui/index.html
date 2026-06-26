@@ -167,6 +167,7 @@
 
     /* ── Content area ────────────────────────────────────────────── */
     #content { flex:1; overflow-y:auto; padding:20px; }
+    #content.py-active { display:flex; flex-direction:column; overflow:hidden; padding:0; }
 
     /* ── Empty / connecting states ───────────────────────────────── */
     .empty-state {
@@ -943,6 +944,33 @@
     .scope-auto-tog.on { background:#1e3a5f; border-color:#60a5fa; color:#93c5fd; }
     .scope-auto-tog .tog-dot { width:7px;height:7px;border-radius:50%;background:currentColor; }
 
+    /* ── Python console tab ──────────────────────────────────────── */
+    #python-tab { display:none; flex-direction:column; gap:0; flex:1; min-height:0; }
+    #python-tab.visible { display:flex; }
+    #py-card {
+      display:flex; flex-direction:column; flex:1; min-height:0;
+      background:var(--surface); border:1px solid var(--border);
+      border-radius:var(--radius-lg); overflow:hidden;
+    }
+    #py-card .test-card-header {
+      flex-shrink:0; border-bottom:1px solid var(--border);
+      padding:10px 14px; display:flex; align-items:center; gap:8px;
+    }
+    #py-editor {
+      flex:1; width:100%; resize:none;
+      font-family:var(--mono); font-size:12px; line-height:1.6;
+      background:var(--surface3); color:var(--text);
+      border:none; border-bottom:1px solid var(--border2);
+      padding:10px 12px; outline:none; tab-size:4;
+    }
+    #py-editor:focus { background:var(--surface2); }
+    .py-toolbar { flex-shrink:0; display:flex; align-items:center; gap:8px; padding:8px 12px; }
+    .py-hint { font-size:11px; color:var(--text-faint); flex:1; }
+    /* log colour overrides for python output */
+    .log-entry.py-out { color: var(--text); }
+    .log-entry.py-ok  { color: var(--green); }
+    .log-entry.py-err { color: var(--red); }
+
     /* ── Responsive ──────────────────────────────────────────────── */
     @media (max-width:900px) { #log-panel{display:none;} #log-resize{display:none;} #instrument-grid{grid-template-columns:1fr;} }
     @media (max-width:600px) { #content{padding:12px;} .nav-title{display:none;} }
@@ -1045,6 +1073,12 @@
       <line x1="17.5" y1="14" x2="17.5" y2="21"/>
     </svg>
     Sandbox
+  </button>
+  <button class="tab" id="tab-python" onclick="switchTab('python')">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+    </svg>
+    Python
   </button>
 </div>
 
@@ -1678,6 +1712,39 @@
 
     </div><!-- /testspec-tab -->
 
+    <!-- ── Python console tab ─────────────────────────────────────── -->
+    <div id="python-tab">
+      <div id="py-card">
+        <div class="test-card-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+            <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+          </svg>
+          <span class="test-card-title">Python Console</span>
+        </div>
+        <textarea id="py-editor" spellcheck="false"># Pre-imported
+import pyvisa, time, json, math
+from pathlib import Path
+from eewBackbone import get_command
+from helpers import _find_instrument, _op, _run_steps, _log
+
+# Live state (read from current session)
+# resources  — dict[resource_str → pyvisa resource]
+# families   — dict[resource_str → resolved family dict]
+# wb         — loaded workbench dict, or None
+
+# Example
+scope, fam = _find_instrument('scope')
+if scope:
+    print(scope.query('*IDN?'))
+</textarea>
+        <div class="py-toolbar">
+          <button class="btn btn-primary" id="py-run-btn" onclick="pyRun()">▶ Run</button>
+          <button class="btn btn-ghost" onclick="document.getElementById('py-editor').value=''">Clear</button>
+          <span class="py-hint">Shift+Enter to run</span>
+        </div>
+      </div>
+    </div><!-- /python-tab -->
+
   </div>
 
   <!-- ── Log resize handle ────────────────────────────────────── -->
@@ -1895,14 +1962,54 @@ function switchTab(name) {
   document.getElementById("tab-automation").classList.toggle("active", name === "automation");
   document.getElementById("tab-sandbox").classList.toggle("active", name === "sandbox");
   document.getElementById("tab-testspec").classList.toggle("active", name === "testspec");
+  document.getElementById("tab-python").classList.toggle("active", name === "python");
   document.getElementById("workbench-tab").style.display = name === "workbench" ? "" : "none";
   document.getElementById("auto-tab").classList.toggle("visible", name === "automation");
   document.getElementById("sandbox-tab").classList.toggle("visible", name === "sandbox");
   document.getElementById("testspec-tab").classList.toggle("visible", name === "testspec");
+  document.getElementById("python-tab").classList.toggle("visible", name === "python");
+  document.getElementById("content").classList.toggle("py-active", name === "python");
+  if (name === "workbench") fetch("/api/polling/resume", {method:"POST"});
+  else                      fetch("/api/polling/stop",   {method:"POST"});
   if (name === "automation") refreshAutoTab();
   if (name === "sandbox")    sbRefreshTab();
   if (name === "testspec")   { refreshTestSpecTab(); setTimeout(ivChartDraw, 30); }
 }
+
+// ── Python console ─────────────────────────────────────────────────
+let _pyRunning = false;
+
+function pyRun() {
+  if (_pyRunning) return;
+  const code = document.getElementById("py-editor").value.trim();
+  if (!code) return;
+  _pyRunning = true;
+  const btn = document.getElementById("py-run-btn");
+  btn.disabled = true;
+  btn.textContent = "⏳ Running…";
+  logMsg("▶ run", "scpi");
+  fetch("/api/python/run", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({code}),
+  }).catch(err => {
+    logMsg("✗ " + err, "error");
+    _pyRunning = false;
+    btn.disabled = false;
+    btn.textContent = "▶ Run";
+  });
+}
+
+document.getElementById("py-editor").addEventListener("keydown", e => {
+  if (e.key === "Enter" && e.shiftKey) { e.preventDefault(); pyRun(); return; }
+  if (e.key === "Tab") {
+    e.preventDefault();
+    const ed = e.target;
+    const s = ed.selectionStart, en = ed.selectionEnd;
+    ed.value = ed.value.slice(0, s) + "    " + ed.value.slice(en);
+    ed.selectionStart = ed.selectionEnd = s + 4;
+  }
+});
 
 // ── Helpers ─────────────────────────────────────────────────────────
 function inferPSUChannels(model) {
@@ -2018,7 +2125,13 @@ const POST = (p, b) => api("POST", p, b);
 const socket = io({ transports: ["websocket","polling"] });
 socket.on("connect",    () => logMsg("[socket] connected"));
 socket.on("disconnect", () => logMsg("[socket] disconnected","warn"));
-socket.on("log", ({ msg }) => logMsg(msg));
+socket.on("log", ({ msg, cls }) => logMsg(msg, cls));
+socket.on("python_done", () => {
+  _pyRunning = false;
+  const btn = document.getElementById("py-run-btn");
+  btn.disabled = false;
+  btn.textContent = "▶ Run";
+});
 socket.on("scpi_traffic", ({ role, cmd, result, poll }) => {
   if (poll ? !verbosePoll : !verboseScpi) return;
   const r = role ? `[${role}] ` : "";

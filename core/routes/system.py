@@ -1,10 +1,13 @@
 """
 routes/system.py — update check, URL/folder helpers, report issue, plot save.
 """
+import io
 import json as _json
+import math as _math
 import os
 import subprocess
 import sys
+import time as _time
 import urllib.request as _urlreq
 from datetime import datetime
 from pathlib import Path
@@ -266,6 +269,96 @@ def api_pick_folder():
         return jsonify({"path": result["path"]})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
+
+
+# ── Python console ───────────────────────────────────────────────────────────
+
+_py_running = False
+
+@bp.route("/api/python/run", methods=["POST"])
+def api_python_run():
+    global _py_running
+    if _py_running:
+        return jsonify({"error": "Already running"}), 409
+
+    code = (request.json or {}).get("code", "").strip()
+    if not code:
+        return jsonify({"error": "No code"}), 400
+
+    _py_running = True
+
+    def _run():
+        global _py_running
+        try:
+            # Build a custom print() that routes to the log panel
+            output_lines = []
+
+            class _LogStream(io.TextIOBase):
+                def write(self, s):
+                    for line in s.splitlines():
+                        stripped = line.rstrip()
+                        if stripped:
+                            _sh.sio.emit("log", {"msg": stripped, "cls": "py-out"})
+                    return len(s)
+
+            stream = _LogStream()
+
+            def _print(*args, sep=" ", end="\n", **_kw):
+                text = sep.join(str(a) for a in args)
+                for line in (text + end).splitlines():
+                    if line:
+                        _sh.sio.emit("log", {"msg": line, "cls": "py-out"})
+
+            # Namespace available to user code
+            try:
+                from core.backbone import get_command
+                from core.helpers import _op, _log, _run_steps, _find_instrument
+            except Exception:
+                get_command = _op = _log = _run_steps = _find_instrument = None
+
+            ns = {
+                "__builtins__": __builtins__,
+                "print":   _print,
+                "time":    _time,
+                "json":    _json,
+                "math":    _math,
+                "Path":    Path,
+                # live state shortcuts
+                "resources":  _sh._state.get("resources", {}),
+                "families":   _sh._state.get("families",  {}),
+                "wb":         _sh._state.get("workbench"),
+                "sio":        _sh.sio,
+            }
+            if _sh.PYVISA_OK:
+                ns["pyvisa"] = _sh.pyvisa
+            if get_command:
+                ns.update(get_command=get_command, _op=_op, _log=_log,
+                          _run_steps=_run_steps, _find_instrument=_find_instrument)
+
+            import contextlib
+            with contextlib.redirect_stdout(stream), contextlib.redirect_stderr(stream):
+                exec(compile(code, "<console>", "exec"), ns)  # noqa: S102
+
+            _sh.sio.emit("log", {"msg": "✓ Done", "cls": "py-ok"})
+            _sh.sio.emit("python_done", {"error": None})
+        except Exception as exc:
+            import traceback, sys
+            exc_type, exc_val, exc_tb = sys.exc_info()
+            # Filter to frames from user code only, skip internal exec wrapper
+            te = traceback.TracebackException(exc_type, exc_val, exc_tb)
+            te.stack = traceback.StackSummary.from_list(
+                [f for f in te.stack if f.filename == "<console>"]
+            )
+            lines = list(te.format())
+            for line in "".join(lines).splitlines():
+                if line:
+                    _sh.sio.emit("log", {"msg": line, "cls": "py-err"})
+            _sh.sio.emit("python_done", {"error": str(exc)})
+        finally:
+            _py_running = False
+
+    _sh._executor.submit(_run)
+    return jsonify({"status": "running"})
 
 
 # ── Plot image save ───────────────────────────────────────────────────────────
