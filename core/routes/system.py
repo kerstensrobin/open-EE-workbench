@@ -1,5 +1,5 @@
 """
-routes/system.py — update check, URL/folder helpers, report issue, plot save.
+routes/system.py — update check, URL/folder helpers, report issue, plot save, SCPI ref.
 """
 import io
 import json as _json
@@ -381,5 +381,32 @@ def api_plot_save_image():
         path = save_dir / f"{filename}_{ts}.png"
         path.write_bytes(img_bytes)
         return jsonify({"path": str(path)})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+# ── SCPI command reference ────────────────────────────────────────────────────
+
+@bp.route("/api/scpi-commands", methods=["GET"])
+def api_scpi_commands():
+    """Return the resolved command table for a given family_id."""
+    family_id = request.args.get("family_id", "").strip()
+    if not family_id:
+        return jsonify({"error": "family_id required"}), 400
+    try:
+        from core.backbone import _family_index, _resolve_family, HELPERS_OK
+        if not HELPERS_OK:
+            return jsonify({"error": "backbone unavailable"}), 503
+        idx = _family_index()
+        if family_id not in idx:
+            return jsonify({"error": f"Unknown family: {family_id}"}), 404
+        fam = _resolve_family(idx[family_id])
+        return jsonify({
+            "family_id": fam["id"],
+            "vendor":    fam.get("vendor", ""),
+            "series":    fam.get("series", ""),
+            "type":      fam.get("type", ""),
+            "commands":  fam.get("commands", {}),
+        })
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
