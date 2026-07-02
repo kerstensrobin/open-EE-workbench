@@ -494,6 +494,29 @@
     .scpi-inp:focus { border-color:var(--accent); }
     .scpi-inp::placeholder { color:var(--text-faint); }
 
+    /* ── SCPI reference modal ────────────────────────────────────── */
+    .scpi-ref-table { width:100%; border-collapse:collapse; font-size:11px; }
+    .scpi-ref-table th { text-align:left; padding:5px 8px; font-size:10px; font-weight:700;
+      letter-spacing:.06em; text-transform:uppercase; color:var(--text-faint);
+      border-bottom:1px solid var(--border); white-space:nowrap; }
+    .scpi-ref-table td { padding:5px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
+    .scpi-ref-table tr:last-child td { border-bottom:none; }
+    .scpi-ref-table tr:hover td { background:var(--surface2); }
+    .scpi-ref-op { font-family:var(--mono); color:var(--text); }
+    .scpi-ref-badge { display:inline-block; padding:1px 5px; border-radius:3px;
+      font-size:9px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; flex-shrink:0; }
+    .scpi-ref-badge.write { background:rgba(26,86,196,.15); color:var(--accent); }
+    .scpi-ref-badge.query { background:rgba(21,128,61,.15); color:var(--green); }
+    .scpi-ref-badge.raw   { background:rgba(109,40,217,.15); color:var(--purple); }
+    .scpi-ref-str { font-family:var(--mono); color:var(--text-dim); word-break:break-all; }
+    .scpi-ref-filter { width:100%; background:var(--surface); border:1px solid var(--border);
+      border-radius:var(--radius); color:var(--text); font:inherit; font-size:12px;
+      padding:5px 10px; outline:none; transition:border-color .15s; }
+    .scpi-ref-filter:focus { border-color:var(--accent); }
+
+    /* ── polling toggle (bench-state-bar) ───────────────────────── */
+    #poll-toggle-btn.paused { color:var(--amber); border-color:rgba(180,83,9,.35); }
+
     .auto-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; min-height:200px; color:var(--text-faint); }
     .auto-empty p { font-size:13px; color:var(--text-dim); }
 
@@ -1080,6 +1103,12 @@
           Load state
         </button>
         <div style="flex:1"></div>
+        <button class="btn btn-ghost" id="poll-toggle-btn" style="font-size:12px;gap:5px;" onclick="togglePolling()" title="Pause or resume background instrument polling">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+          </svg>
+          Pause polling
+        </button>
         <button class="btn btn-ghost" id="bench-reset-btn" style="font-size:12px;color:var(--text-dim);gap:5px;" onclick="resetBench()">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/>
@@ -1783,6 +1812,36 @@
   </div>
 </div>
 
+<!-- ── SCPI command reference modal ───────────────────────────────── -->
+<div id="scpi-ref-modal" class="modal-overlay hidden">
+  <div class="modal" style="width:min(680px,95vw);max-height:85vh;">
+    <div class="modal-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+        <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+      </svg>
+      <span class="modal-title" id="scpi-ref-title">SCPI Command Reference</span>
+      <button class="btn btn-ghost" style="padding:2px 7px;font-size:13px;" onclick="closeScpiRefModal()">✕</button>
+    </div>
+    <div class="modal-body" style="gap:10px;">
+      <div style="font-size:11px;color:var(--text-dim);" id="scpi-ref-subtitle"></div>
+      <input class="scpi-ref-filter" id="scpi-ref-filter" type="text" placeholder="Filter commands…" oninput="scpiRefFilter(this.value)">
+      <div id="scpi-ref-body" style="overflow:auto;">
+        <table class="scpi-ref-table" id="scpi-ref-table">
+          <thead><tr>
+            <th style="width:30%">Operation</th>
+            <th style="width:14%">Type</th>
+            <th>SCPI string</th>
+          </tr></thead>
+          <tbody id="scpi-ref-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer" style="justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="closeScpiRefModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Scan modal ─────────────────────────────────────────────────── -->
 <div id="scan-modal" class="modal-overlay hidden">
   <div class="modal">
@@ -1899,9 +1958,102 @@ function switchTab(name) {
   document.getElementById("auto-tab").classList.toggle("visible", name === "automation");
   document.getElementById("sandbox-tab").classList.toggle("visible", name === "sandbox");
   document.getElementById("testspec-tab").classList.toggle("visible", name === "testspec");
+  if (name === "workbench") { if (!_pollingPaused) fetch("/api/polling/resume", {method:"POST"}); }
+  else                      fetch("/api/polling/stop", {method:"POST"});
   if (name === "automation") refreshAutoTab();
   if (name === "sandbox")    sbRefreshTab();
   if (name === "testspec")   { refreshTestSpecTab(); setTimeout(ivChartDraw, 30); }
+}
+
+// ── Polling toggle ─────────────────────────────────────────────────
+let _pollingPaused = false;
+
+function togglePolling() {
+  _pollingPaused = !_pollingPaused;
+  const btn = document.getElementById("poll-toggle-btn");
+  if (_pollingPaused) {
+    fetch("/api/polling/stop", {method:"POST"});
+    btn.classList.add("paused");
+    btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Resume polling`;
+    btn.title = "Resume background instrument polling";
+  } else {
+    if (state.activeTab === "workbench") fetch("/api/polling/resume", {method:"POST"});
+    btn.classList.remove("paused");
+    btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause polling`;
+    btn.title = "Pause background instrument polling";
+  }
+}
+
+// ── SCPI command reference modal ────────────────────────────────────
+let _scpiRefRows = []; // [{op, type, scpi}] for filtering
+
+function _scpiCmdToRows(op, cmd) {
+  const rows = [];
+  if (typeof cmd === "string") {
+    rows.push({op, type:"write", scpi: cmd});
+  } else if (Array.isArray(cmd)) {
+    cmd.forEach(item => _scpiCmdToRows(op, item).forEach(r => rows.push({...r, op})));
+  } else if (cmd && typeof cmd === "object") {
+    if (cmd.write)     rows.push({op, type:"write", scpi: cmd.write});
+    if (cmd.query)     rows.push({op, type:"query", scpi: cmd.query});
+    if (cmd.raw_query) rows.push({op, type:"raw",   scpi: cmd.raw_query});
+  }
+  return rows;
+}
+
+function _scpiRefRender(rows) {
+  const tbody = document.getElementById("scpi-ref-tbody");
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="3" style="color:var(--text-faint);font-size:12px;text-align:center;padding:20px;">No matching commands.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    const badge = `<span class="scpi-ref-badge ${r.type}">${r.type === "raw" ? "raw" : r.type}</span>`;
+    return `<tr>
+      <td class="scpi-ref-op">${escHtml(r.op)}</td>
+      <td>${badge}</td>
+      <td class="scpi-ref-str">${escHtml(r.scpi)}</td>
+    </tr>`;
+  }).join("");
+}
+
+function scpiRefFilter(q) {
+  const lq = q.toLowerCase();
+  const filtered = lq ? _scpiRefRows.filter(r =>
+    r.op.toLowerCase().includes(lq) || r.scpi.toLowerCase().includes(lq)
+  ) : _scpiRefRows;
+  _scpiRefRender(filtered);
+}
+
+async function openScpiRefModal(familyId, modelName) {
+  if (!familyId) return;
+  document.getElementById("scpi-ref-modal").classList.remove("hidden");
+  document.getElementById("scpi-ref-title").textContent = "SCPI Command Reference";
+  document.getElementById("scpi-ref-subtitle").textContent = "Loading…";
+  document.getElementById("scpi-ref-filter").value = "";
+  document.getElementById("scpi-ref-tbody").innerHTML = "";
+  try {
+    const r = await fetch(`/api/scpi-commands?family_id=${encodeURIComponent(familyId)}`);
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    document.getElementById("scpi-ref-title").textContent =
+      `SCPI Reference — ${d.vendor} ${d.series || d.family_id}`;
+    document.getElementById("scpi-ref-subtitle").textContent =
+      modelName ? `Connected: ${modelName}` : `Family: ${d.family_id}`;
+    _scpiRefRows = [];
+    for (const [op, cmd] of Object.entries(d.commands || {})) {
+      _scpiCmdToRows(op, cmd).forEach(r => _scpiRefRows.push(r));
+    }
+    _scpiRefRender(_scpiRefRows);
+  } catch(e) {
+    document.getElementById("scpi-ref-subtitle").textContent = "";
+    document.getElementById("scpi-ref-tbody").innerHTML =
+      `<tr><td colspan="3" style="color:var(--red);font-size:12px;">Error: ${escHtml(String(e))}</td></tr>`;
+  }
+}
+
+function closeScpiRefModal() {
+  document.getElementById("scpi-ref-modal").classList.add("hidden");
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -2062,6 +2214,13 @@ socket.on("disconnected", () => {
   $connectBtn.disabled    = !state.workbench;
   document.getElementById("bench-state-bar").classList.add("hidden");
   document.getElementById("demo-badge")?.classList.add("hidden");
+  _pollingPaused = false; // reset polling state on disconnect
+  const pollBtn = document.getElementById("poll-toggle-btn");
+  if (pollBtn) {
+    pollBtn.classList.remove("paused");
+    pollBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause polling`;
+    pollBtn.title = "Pause background instrument polling";
+  }
   resetCardStatus();
   _scopeStopAuto();
   logMsg("Disconnected","warn");
@@ -2499,6 +2658,7 @@ function buildScopeCard(instr) {
         <div class="card-title">Oscilloscope</div>
         <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
       </div>
+      <button class="btn btn-ghost" title="SCPI command reference" data-family="${escHtml(instr.family_id||'')}" data-model="${escHtml(instr.model||instr.idn||'')}" onclick="openScpiRefModal(this.dataset.family,this.dataset.model)" style="font-size:10px;padding:2px 6px;flex-shrink:0;">SCPI REF</button>
       <button class="btn btn-ghost card-edit-btn" title="Edit assignment" data-resource="${escHtml(instr.resource)}" data-family="${escHtml(instr.family_id||'')}" onclick="openAssignModal(this.dataset.resource,this.dataset.family)">✎</button>
       <div class="card-status-dot"></div>
     </div>
@@ -2693,6 +2853,7 @@ function buildPSUCard(instr) {
         <div class="card-title">Power Supply</div>
         <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
       </div>
+      <button class="btn btn-ghost" title="SCPI command reference" data-family="${escHtml(instr.family_id||'')}" data-model="${escHtml(instr.model||instr.idn||'')}" onclick="openScpiRefModal(this.dataset.family,this.dataset.model)" style="font-size:10px;padding:2px 6px;flex-shrink:0;">SCPI REF</button>
       <button class="btn btn-ghost card-edit-btn" title="Edit assignment" data-resource="${escHtml(instr.resource)}" data-family="${escHtml(instr.family_id||'')}" onclick="openAssignModal(this.dataset.resource,this.dataset.family)">✎</button>
       <div class="card-status-dot"></div>
     </div>
@@ -2781,6 +2942,7 @@ function buildAWGCard(instr) {
         <div class="card-title">Waveform Generator</div>
         <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
       </div>
+      <button class="btn btn-ghost" title="SCPI command reference" data-family="${escHtml(instr.family_id||'')}" data-model="${escHtml(instr.model||instr.idn||'')}" onclick="openScpiRefModal(this.dataset.family,this.dataset.model)" style="font-size:10px;padding:2px 6px;flex-shrink:0;">SCPI REF</button>
       <button class="btn btn-ghost card-edit-btn" title="Edit assignment" data-resource="${escHtml(instr.resource)}" data-family="${escHtml(instr.family_id||'')}" onclick="openAssignModal(this.dataset.resource,this.dataset.family)">✎</button>
       <div class="card-status-dot"></div>
     </div>
@@ -2890,6 +3052,7 @@ function buildDMMCard(instr) {
         <div class="card-title">Multimeter</div>
         <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
       </div>
+      <button class="btn btn-ghost" title="SCPI command reference" data-family="${escHtml(instr.family_id||'')}" data-model="${escHtml(instr.model||instr.idn||'')}" onclick="openScpiRefModal(this.dataset.family,this.dataset.model)" style="font-size:10px;padding:2px 6px;flex-shrink:0;">SCPI REF</button>
       <button class="btn btn-ghost card-edit-btn" title="Edit assignment" data-resource="${escHtml(instr.resource)}" data-family="${escHtml(instr.family_id||'')}" onclick="openAssignModal(this.dataset.resource,this.dataset.family)">✎</button>
       <div class="card-status-dot"></div>
     </div>
@@ -3035,6 +3198,7 @@ function buildELoadCard(instr) {
         <div class="card-title">Electronic Load</div>
         <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
       </div>
+      <button class="btn btn-ghost" title="SCPI command reference" data-family="${escHtml(instr.family_id||'')}" data-model="${escHtml(instr.model||instr.idn||'')}" onclick="openScpiRefModal(this.dataset.family,this.dataset.model)" style="font-size:10px;padding:2px 6px;flex-shrink:0;">SCPI REF</button>
       <button class="btn btn-ghost card-edit-btn" title="Edit assignment" data-resource="${escHtml(instr.resource)}" data-family="${escHtml(instr.family_id||'')}" onclick="openAssignModal(this.dataset.resource,this.dataset.family)">✎</button>
       <div class="card-status-dot"></div>
     </div>
@@ -3144,6 +3308,7 @@ function buildGenericCard(instr) {
         <div class="card-title">${escHtml(instr.type||"Unknown")}</div>
         <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
       </div>
+      ${hasFamily ? `<button class="btn btn-ghost" title="SCPI command reference" data-family="${escHtml(instr.family_id||'')}" data-model="${escHtml(instr.model||'')}" onclick="openScpiRefModal(this.dataset.family,this.dataset.model)" style="font-size:10px;padding:2px 6px;flex-shrink:0;">SCPI REF</button>` : ''}
       <div class="card-status-dot"></div>
     </div>
     <div class="card-body">
