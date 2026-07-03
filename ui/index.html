@@ -977,22 +977,36 @@
     }
     #py-card .test-card-header {
       flex-shrink:0; border-bottom:1px solid var(--border);
-      padding:10px 14px; display:flex; align-items:center; gap:8px;
+      padding:8px 14px; display:flex; align-items:center; gap:8px;
     }
+    #py-name-inp {
+      font:inherit; font-size:12px; background:var(--surface3);
+      border:1px solid var(--border); border-radius:var(--radius);
+      color:var(--text); padding:3px 8px; outline:none; width:160px;
+    }
+    #py-name-inp:focus { border-color:var(--accent); }
     #py-editor {
-      flex:1; width:100%; resize:none;
+      flex:1; width:100%; resize:none; min-height:120px;
       font-family:var(--mono); font-size:12px; line-height:1.6;
       background:var(--surface3); color:var(--text);
-      border:none; border-bottom:1px solid var(--border2);
+      border:none; border-bottom:1px solid var(--border);
       padding:10px 12px; outline:none; tab-size:4;
     }
     #py-editor:focus { background:var(--surface2); }
-    .py-toolbar { flex-shrink:0; display:flex; align-items:center; gap:8px; padding:8px 12px; }
+    #py-output {
+      flex: 0 0 180px; overflow-y:auto;
+      font-family:var(--mono); font-size:11px; line-height:1.55;
+      padding:8px 12px; background:var(--surface); color:var(--text-dim);
+      border-top:1px solid var(--border2); white-space:pre-wrap; word-break:break-all;
+    }
+    #py-output:empty::before { content:"Output will appear here…"; color:var(--text-faint); font-style:italic; }
+    .py-line { display:block; }
+    .py-line.py-out { color:var(--text); }
+    .py-line.py-ok  { color:var(--green); }
+    .py-line.py-err { color:var(--red); }
+    .py-run-sep { border:none; border-top:1px solid var(--border); margin:5px 0; opacity:.4; }
+    .py-toolbar { flex-shrink:0; display:flex; align-items:center; gap:8px; padding:8px 12px; border-top:1px solid var(--border); }
     .py-hint { font-size:11px; color:var(--text-faint); flex:1; }
-    /* log colour overrides for python output */
-    .log-entry.py-out { color: var(--text); }
-    .log-entry.py-ok  { color: var(--green); }
-    .log-entry.py-err { color: var(--red); }
 
     /* ── Responsive ──────────────────────────────────────────────── */
     @media (max-width:900px) { #log-panel{display:none;} #log-resize{display:none;} #instrument-grid{grid-template-columns:1fr;} }
@@ -1749,27 +1763,37 @@
             <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
           </svg>
           <span class="test-card-title">Python Console</span>
+          <div style="flex:1"></div>
+          <input id="py-name-inp" type="text" value="script" placeholder="script name" spellcheck="false" autocomplete="off" title="Script name (used when saving)">
+          <button class="btn btn-ghost" style="font-size:11px;gap:4px;" onclick="pyLoad()" title="Load .py file">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            Load
+          </button>
+          <button class="btn btn-ghost" style="font-size:11px;gap:4px;" onclick="pySave()" title="Save to output folder">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Save
+          </button>
         </div>
-        <textarea id="py-editor" spellcheck="false"># Pre-imported
-import pyvisa, time, json, math
-from pathlib import Path
-from eewBackbone import get_command
-from helpers import _find_instrument, _op, _run_steps, _log
+        <textarea id="py-editor" spellcheck="false"># Available in scope (no imports needed):
+#   print, time, json, math, Path, pyvisa
+#   resources  — dict[resource_str → pyvisa resource]
+#   families   — dict[resource_str → resolved family dict]
+#   wb         — active workbench dict, or None
+#   _find_instrument(type)  → (resource, family_id)
+#   _op(resource, family, operation, **kwargs)
+#   get_command(family_id, operation)
 
-# Live state (read from current session)
-# resources  — dict[resource_str → pyvisa resource]
-# families   — dict[resource_str → resolved family dict]
-# wb         — loaded workbench dict, or None
-
-# Example
+# Example — query scope IDN
 scope, fam = _find_instrument('scope')
 if scope:
     print(scope.query('*IDN?'))
 </textarea>
+        <div id="py-output"></div>
         <div class="py-toolbar">
           <button class="btn btn-primary" id="py-run-btn" onclick="pyRun()">▶ Run</button>
-          <button class="btn btn-ghost" onclick="document.getElementById('py-editor').value=''">Clear</button>
-          <span class="py-hint">Shift+Enter to run</span>
+          <button class="btn btn-danger hidden" id="py-stop-btn" onclick="pyStop()">■ Stop</button>
+          <button class="btn btn-ghost" style="font-size:11px;" onclick="pyClearOutput()">Clear output</button>
+          <span class="py-hint">Ctrl+Enter or Shift+Enter to run</span>
         </div>
       </div>
     </div><!-- /python-tab -->
@@ -2129,29 +2153,74 @@ function closeScpiRefModal() {
 // ── Python console ─────────────────────────────────────────────────
 let _pyRunning = false;
 
+function _pySetRunning(running) {
+  _pyRunning = running;
+  document.getElementById("py-run-btn").classList.toggle("hidden", running);
+  document.getElementById("py-stop-btn").classList.toggle("hidden", !running);
+}
+
+function _pyAppend(msg, cls) {
+  const out = document.getElementById("py-output");
+  const line = document.createElement("span");
+  line.className = "py-line " + (cls || "py-out");
+  line.textContent = msg;
+  out.appendChild(line);
+  out.appendChild(document.createElement("br"));
+  out.scrollTop = out.scrollHeight;
+}
+
+function pyClearOutput() {
+  document.getElementById("py-output").innerHTML = "";
+}
+
 function pyRun() {
   if (_pyRunning) return;
   const code = document.getElementById("py-editor").value.trim();
   if (!code) return;
-  _pyRunning = true;
-  const btn = document.getElementById("py-run-btn");
-  btn.disabled = true;
-  btn.textContent = "⏳ Running…";
-  logMsg("▶ run", "scpi");
+  pyClearOutput();
+  _pySetRunning(true);
   fetch("/api/python/run", {
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({code}),
   }).catch(err => {
-    logMsg("✗ " + err, "error");
-    _pyRunning = false;
-    btn.disabled = false;
-    btn.textContent = "▶ Run";
+    _pyAppend("✗ " + err, "py-err");
+    _pySetRunning(false);
   });
 }
 
+function pyStop() {
+  fetch("/api/python/stop", { method: "POST" }).catch(() => {});
+}
+
+function pyLoad() {
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = ".py,.txt";
+  inp.onchange = e => {
+    const file = e.target.files[0]; if (!file) return;
+    const r = new FileReader();
+    r.onload = ev => {
+      document.getElementById("py-editor").value = ev.target.result;
+      const name = file.name.replace(/\.(py|txt)$/i, "");
+      document.getElementById("py-name-inp").value = name;
+      toast("Loaded " + file.name, "ok");
+    };
+    r.readAsText(file);
+  };
+  inp.click();
+}
+
+function pySave() {
+  const code = document.getElementById("py-editor").value;
+  const name = (document.getElementById("py-name-inp").value.trim() || "script").replace(/[^\w-]/g, "_");
+  const filename = name + ".py";
+  POST("/api/save-text", { filename, content: code, output_path: state.outputPath || "" })
+    .then(r => toast("Saved → " + r.path, "ok"))
+    .catch(e => toast("Save failed: " + e.message, "error"));
+}
+
 document.getElementById("py-editor").addEventListener("keydown", e => {
-  if (e.key === "Enter" && e.shiftKey) { e.preventDefault(); pyRun(); return; }
+  if (e.key === "Enter" && (e.shiftKey || e.ctrlKey)) { e.preventDefault(); pyRun(); return; }
   if (e.key === "Tab") {
     e.preventDefault();
     const ed = e.target;
@@ -2276,11 +2345,10 @@ const socket = io({ transports: ["websocket","polling"] });
 socket.on("connect",    () => logMsg("[socket] connected"));
 socket.on("disconnect", () => logMsg("[socket] disconnected","warn"));
 socket.on("log", ({ msg, cls }) => logMsg(msg, cls));
-socket.on("python_done", () => {
-  _pyRunning = false;
-  const btn = document.getElementById("py-run-btn");
-  btn.disabled = false;
-  btn.textContent = "▶ Run";
+socket.on("python_output", ({ msg, cls }) => _pyAppend(msg, cls));
+socket.on("python_done", ({ error } = {}) => {
+  _pySetRunning(false);
+  if (error) _pyAppend("✗ Interrupted", "py-err");
 });
 socket.on("scpi_traffic", ({ role, cmd, result, poll }) => {
   if (poll ? !verbosePoll : !verboseScpi) return;

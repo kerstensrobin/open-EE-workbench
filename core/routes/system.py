@@ -273,11 +273,20 @@ def api_pick_folder():
 
 # ── Python console ───────────────────────────────────────────────────────────
 
+import ctypes
+import threading
+
 _py_running = False
+_py_thread: threading.Thread | None = None
+
+
+def _py_emit(msg, cls="py-out"):
+    _sh.sio.emit("python_output", {"msg": msg, "cls": cls})
+
 
 @bp.route("/api/python/run", methods=["POST"])
 def api_python_run():
-    global _py_running
+    global _py_running, _py_thread
     if _py_running:
         return jsonify({"error": "Already running"}), 409
 
@@ -288,77 +297,106 @@ def api_python_run():
     _py_running = True
 
     def _run():
-        global _py_running
+        global _py_running, _py_thread
+
+        class _OutStream(io.TextIOBase):
+            def __init__(self, cls):
+                self._cls = cls
+            def write(self, s):
+                for line in s.splitlines():
+                    if line.rstrip():
+                        _py_emit(line.rstrip(), self._cls)
+                return len(s)
+
+        def _print(*args, sep=" ", end="\n", **_kw):
+            text = sep.join(str(a) for a in args)
+            for line in (text + end).splitlines():
+                if line:
+                    _py_emit(line, "py-out")
+
         try:
-            # Build a custom print() that routes to the log panel
-            output_lines = []
+            from core.backbone import get_command
+            from core.helpers import _op, _log, _run_steps, _find_instrument
+        except Exception:
+            get_command = _op = _log = _run_steps = _find_instrument = None
 
-            class _LogStream(io.TextIOBase):
-                def write(self, s):
-                    for line in s.splitlines():
-                        stripped = line.rstrip()
-                        if stripped:
-                            _sh.sio.emit("log", {"msg": stripped, "cls": "py-out"})
-                    return len(s)
+        ns = {
+            "__builtins__": __builtins__,
+            "print":      _print,
+            "time":       _time,
+            "json":       _json,
+            "math":       _math,
+            "Path":       Path,
+            "resources":  _sh._state.get("resources", {}),
+            "families":   _sh._state.get("families",  {}),
+            "wb":         _sh._state.get("workbench"),
+            "sio":        _sh.sio,
+        }
+        if _sh.PYVISA_OK:
+            ns["pyvisa"] = _sh.pyvisa
+        if get_command:
+            ns.update(get_command=get_command, _op=_op, _log=_log,
+                      _run_steps=_run_steps, _find_instrument=_find_instrument)
 
-            stream = _LogStream()
-
-            def _print(*args, sep=" ", end="\n", **_kw):
-                text = sep.join(str(a) for a in args)
-                for line in (text + end).splitlines():
-                    if line:
-                        _sh.sio.emit("log", {"msg": line, "cls": "py-out"})
-
-            # Namespace available to user code
-            try:
-                from core.backbone import get_command
-                from core.helpers import _op, _log, _run_steps, _find_instrument
-            except Exception:
-                get_command = _op = _log = _run_steps = _find_instrument = None
-
-            ns = {
-                "__builtins__": __builtins__,
-                "print":   _print,
-                "time":    _time,
-                "json":    _json,
-                "math":    _math,
-                "Path":    Path,
-                # live state shortcuts
-                "resources":  _sh._state.get("resources", {}),
-                "families":   _sh._state.get("families",  {}),
-                "wb":         _sh._state.get("workbench"),
-                "sio":        _sh.sio,
-            }
-            if _sh.PYVISA_OK:
-                ns["pyvisa"] = _sh.pyvisa
-            if get_command:
-                ns.update(get_command=get_command, _op=_op, _log=_log,
-                          _run_steps=_run_steps, _find_instrument=_find_instrument)
-
+        try:
             import contextlib
-            with contextlib.redirect_stdout(stream), contextlib.redirect_stderr(stream):
+            with contextlib.redirect_stdout(_OutStream("py-out")), \
+                 contextlib.redirect_stderr(_OutStream("py-err")):
                 exec(compile(code, "<console>", "exec"), ns)  # noqa: S102
-
-            _sh.sio.emit("log", {"msg": "✓ Done", "cls": "py-ok"})
+            _py_emit("✓ Done", "py-ok")
             _sh.sio.emit("python_done", {"error": None})
+        except KeyboardInterrupt:
+            _py_emit("■ Stopped", "py-err")
+            _sh.sio.emit("python_done", {"error": "stopped"})
         except Exception as exc:
-            import traceback, sys
+            import traceback
             exc_type, exc_val, exc_tb = sys.exc_info()
-            # Filter to frames from user code only, skip internal exec wrapper
             te = traceback.TracebackException(exc_type, exc_val, exc_tb)
             te.stack = traceback.StackSummary.from_list(
                 [f for f in te.stack if f.filename == "<console>"]
             )
-            lines = list(te.format())
-            for line in "".join(lines).splitlines():
+            for line in "".join(te.format()).splitlines():
                 if line:
-                    _sh.sio.emit("log", {"msg": line, "cls": "py-err"})
+                    _py_emit(line, "py-err")
             _sh.sio.emit("python_done", {"error": str(exc)})
         finally:
             _py_running = False
+            _py_thread = None
 
-    _sh._executor.submit(_run)
+    _py_thread = threading.Thread(target=_run, daemon=True)
+    _py_thread.start()
     return jsonify({"status": "running"})
+
+
+@bp.route("/api/python/stop", methods=["POST"])
+def api_python_stop():
+    global _py_thread
+    t = _py_thread
+    if t is None or not t.is_alive():
+        return jsonify({"status": "not_running"})
+    tid = t.ident
+    if tid:
+        ctypes.pythonapi.PyThreadState_SetAsyncExc(
+            ctypes.c_ulong(tid),
+            ctypes.py_object(KeyboardInterrupt),
+        )
+    return jsonify({"status": "stopping"})
+
+
+@bp.route("/api/save-text", methods=["POST"])
+def api_save_text():
+    d        = request.json or {}
+    filename = d.get("filename", "script.py")
+    content  = d.get("content", "")
+    out_path = (d.get("output_path") or "").strip()
+    try:
+        save_dir = Path(os.path.expanduser(out_path)).resolve() if out_path else _ROOT / "results"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        path = save_dir / filename
+        path.write_text(content, encoding="utf-8")
+        return jsonify({"path": str(path)})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 
 # ── Plot image save ───────────────────────────────────────────────────────────
