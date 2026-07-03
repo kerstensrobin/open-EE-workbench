@@ -1,8 +1,7 @@
 name: Auto Release
 
 on:
-  schedule:
-    - cron: '59 23 * * *'   # 23:59 UTC daily
+  workflow_dispatch:   # manual trigger only — auto-release paused for testing
 
 jobs:
   release:

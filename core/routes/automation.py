@@ -376,8 +376,8 @@ def api_automation_run():
             "rows":     rows,    "error":   error,
             "csv_path": str(csv_path) if csv_path else None,
         })
-        # Resume PSU polling now that automation has released the resources
-        if _sh._state.get("connected"):
+        # Resume PSU polling only if user is on the Workbench tab
+        if _sh._state.get("connected") and _sh._polling_enabled:
             _start_polling()
 
     def _pause_point():

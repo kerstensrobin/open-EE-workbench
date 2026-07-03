@@ -176,6 +176,23 @@ def api_connect():
     return jsonify({"status": "connecting"})
 
 
+# ── /api/polling/stop and /api/polling/resume ─────────────────────────────────
+
+@bp.route("/api/polling/stop", methods=["POST"])
+def api_polling_stop():
+    _sh._polling_enabled = False
+    _sh._poll_stop.set()
+    return jsonify({"status": "stopped"})
+
+
+@bp.route("/api/polling/resume", methods=["POST"])
+def api_polling_resume():
+    _sh._polling_enabled = True
+    if _sh._state.get("connected"):
+        _start_polling()
+    return jsonify({"status": "resumed"})
+
+
 # ── /api/disconnect ───────────────────────────────────────────────────────────
 
 @bp.route("/api/disconnect", methods=["POST"])
