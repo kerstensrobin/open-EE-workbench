@@ -292,6 +292,24 @@ def api_plot_save_image():
         return jsonify({"error": str(exc)}), 500
 
 
+# ── Generic JSON save ────────────────────────────────────────────────────────
+
+@bp.route("/api/save-json", methods=["POST"])
+def api_save_json():
+    d        = request.json or {}
+    filename = d.get("filename", "export")
+    data     = d.get("data")
+    out_path = (d.get("output_path") or "").strip()
+    try:
+        save_dir = Path(os.path.expanduser(out_path)).resolve() if out_path else _ROOT / "results"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        path = save_dir / filename
+        path.write_text(_json.dumps(data, indent=2), encoding="utf-8")
+        return jsonify({"path": str(path)})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
 # ── SCPI command reference ────────────────────────────────────────────────────
 
 @bp.route("/api/scpi-commands", methods=["GET"])

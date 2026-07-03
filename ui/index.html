@@ -982,6 +982,18 @@
   <span class="nav-title">open-EE-workbench</span>
   <div class="nav-divider"></div>
 
+  <button class="btn btn-ghost" onclick="openTestMetaModal()" style="gap:5px;font-size:12px;" title="Generate/export test metadata">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+      <rect x="9" y="3" width="6" height="4" rx="1"/>
+      <line x1="9" y1="12" x2="15" y2="12"/>
+      <line x1="9" y1="16" x2="12" y2="16"/>
+    </svg>
+    Metadata
+  </button>
+
+  <div class="nav-divider"></div>
+
   <!-- ── Global output path ────────────────────────────────────── -->
   <div id="nav-outpath">
     <span id="nav-outpath-icon">📁</span>
@@ -1913,6 +1925,110 @@
         <button class="btn btn-primary" onclick="saveScanWorkbench()">Save workbench</button>
         <button class="btn btn-ghost"   onclick="closeScanModal()">Close</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Test metadata modal ────────────────────────────────────────── -->
+<div id="test-meta-modal" class="modal-overlay hidden">
+  <div class="modal" style="width:min(520px,95vw);">
+    <div class="modal-header">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+        <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+        <rect x="9" y="3" width="6" height="4" rx="1"/>
+        <line x1="9" y1="12" x2="15" y2="12"/>
+        <line x1="9" y1="16" x2="12" y2="16"/>
+      </svg>
+      <span class="modal-title">Test Metadata</span>
+      <button class="btn btn-ghost" style="padding:2px 7px;font-size:13px;" onclick="closeTestMetaModal()">✕</button>
+    </div>
+    <div class="modal-body" style="gap:14px;">
+
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding-bottom:4px;border-bottom:1px solid var(--border);">Auto-filled</div>
+
+      <div class="assign-section">
+        <div class="assign-lbl">Timestamp</div>
+        <div id="tmeta-timestamp" style="font-family:var(--mono);font-size:12px;color:var(--text-dim);background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;"></div>
+      </div>
+
+      <div class="assign-section">
+        <div class="assign-lbl">Workbench</div>
+        <div id="tmeta-workbench" style="font-size:12px;color:var(--text-dim);background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;"></div>
+      </div>
+
+      <div class="assign-section">
+        <div class="assign-lbl">Equipment on bench</div>
+        <div id="tmeta-equipment" style="font-size:11px;color:var(--text-dim);background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;display:flex;flex-direction:column;gap:4px;"></div>
+      </div>
+
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding-bottom:4px;border-bottom:1px solid var(--border);margin-top:4px;">Test session</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="assign-section">
+          <div class="assign-lbl">Project name</div>
+          <input id="tmeta-project" class="assign-sel" type="text" placeholder="e.g. Widget Rev B" spellcheck="false" autocomplete="off">
+        </div>
+        <div class="assign-section">
+          <div class="assign-lbl">Tested by</div>
+          <input id="tmeta-person" class="assign-sel" type="text" placeholder="Name" spellcheck="false" autocomplete="off">
+        </div>
+        <div class="assign-section">
+          <div class="assign-lbl">Location</div>
+          <input id="tmeta-location" class="assign-sel" type="text" placeholder="e.g. Lab 2, Bench 4" spellcheck="false" autocomplete="off">
+        </div>
+        <div class="assign-section">
+          <div class="assign-lbl">Software version</div>
+          <input id="tmeta-sw-version" class="assign-sel" type="text" placeholder="e.g. v1.2.0" spellcheck="false" autocomplete="off">
+        </div>
+      </div>
+
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding-bottom:4px;border-bottom:1px solid var(--border);margin-top:4px;">Device under test</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="assign-section">
+          <div class="assign-lbl">Sensor ID</div>
+          <input id="tmeta-sensor-id" class="assign-sel" type="text" placeholder="e.g. SN-001234" spellcheck="false" autocomplete="off" style="font-family:var(--mono);">
+        </div>
+        <div class="assign-section">
+          <div class="assign-lbl">Board revision</div>
+          <input id="tmeta-board-rev" class="assign-sel" type="text" placeholder="e.g. Rev C2" spellcheck="false" autocomplete="off" style="font-family:var(--mono);">
+        </div>
+        <div class="assign-section">
+          <div class="assign-lbl">Firmware version</div>
+          <input id="tmeta-firmware" class="assign-sel" type="text" placeholder="e.g. 0x1A" spellcheck="false" autocomplete="off" style="font-family:var(--mono);">
+        </div>
+      </div>
+
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding-bottom:4px;border-bottom:1px solid var(--border);margin-top:4px;">Test conditions</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="assign-section">
+          <div class="assign-lbl">Room temperature (°C)</div>
+          <input id="tmeta-room-temp" class="assign-sel" type="number" placeholder="23" step="0.1">
+        </div>
+        <div class="assign-section">
+          <div class="assign-lbl">DUT temperature (°C)</div>
+          <input id="tmeta-dut-temp" class="assign-sel" type="number" placeholder="25" step="0.1">
+        </div>
+        <div class="assign-section">
+          <div class="assign-lbl">Illumination</div>
+          <input id="tmeta-illumination" class="assign-sel" type="text" placeholder="e.g. 500 lux / dark" spellcheck="false" autocomplete="off">
+        </div>
+        <div class="assign-section" style="grid-column:span 2;">
+          <div class="assign-lbl">Acquisition settings</div>
+          <input id="tmeta-acq-settings" class="assign-sel" type="text" placeholder="e.g. gain=4×, int_time=100 ms, avg=16" spellcheck="false" autocomplete="off" style="font-family:var(--mono);">
+        </div>
+      </div>
+
+      <div class="assign-section">
+        <div class="assign-lbl">Notes</div>
+        <textarea id="tmeta-notes" class="assign-sel" rows="3" placeholder="Any additional notes…" spellcheck="false" style="resize:vertical;font-family:inherit;"></textarea>
+      </div>
+
+    </div>
+    <div class="modal-footer" style="justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="closeTestMetaModal()">Close</button>
+      <button class="btn btn-primary" onclick="exportTestMeta()">Export JSON</button>
     </div>
   </div>
 </div>
@@ -6271,360 +6387,6 @@ function sbRefreshTab() {
   sbRender();
 }
 
-// sbRefreshTab defined above
-
-// (old loop/action helpers removed — replaced by new model above)
-
-function _sbOldLoopAction_STUB(loopId, type) {
-  const lp = _sb.loops.find(l => l.id === loopId);
-  if (!lp) return;
-  const id = _sbId();
-  if (type === "set")      lp.step_actions.push({ id, type, label:"Set",  instrument:"", ch:1, param:"set_voltage", mode:"single", value:"0", settle:0.1 });
-  if (type === "wait")     lp.step_actions.push({ id, type, label:"Wait", duration:0.1 });
-  if (type === "wait_for") lp.step_actions.push({ id, type, label:"Wait for state",
-    instrument:"", ch:1, param:"voltage", condition:">=", target:0, tolerance:0.5,
-    interval:5, timeout:300 });
-  sbRender();
-}
-
-// (old loop-action and action helpers removed — new model above)
-
-function _sbOldRender_STUB() {
-  // old sbRender removed — new sbRender is above
-  const el = document.getElementById("sb-pipeline-REMOVED");
-  if (!el) return;
-  const instrs = _sbInstruments();
-  const iOpts  = (cur) => '<option value="">— any —</option>' +
-    instrs.map(i => `<option value="${escHtml(i.value)}"${i.value===cur?" selected":""}>${escHtml(i.label)}</option>`).join("");
-  const pOpts  = (cur, extra) => `
-    <option value="voltage" ${cur==="voltage"?"selected":""}>Voltage</option>
-    <option value="current" ${cur==="current"?"selected":""}>Current (CC)</option>
-    ${extra||""}`;
-
-  const mOpts = (cur) => `
-    <option value="voltage" ${cur==="voltage"?"selected":""}>Voltage (DC)</option>
-    <option value="current" ${cur==="current"?"selected":""}>Current</option>
-    <option value="vac"     ${cur==="vac"    ?"selected":""}>Voltage (AC)</option>
-    <option value="r"       ${cur==="r"      ?"selected":""}>Resistance</option>
-    <option value="r4w"     ${cur==="r4w"    ?"selected":""}>Resistance (4W)</option>`;
-
-  // Measurement param options filtered to what the selected instrument type supports.
-  // PSUs expose voltage and current readback; DMMs and unknowns get the full list.
-  const measOpts = (cur, resource) => {
-    const type = ((state.workbench || {})._unique || []).find(i => i.resource === resource)?.type || "";
-    if (type === "psu") return `
-      <option value="voltage" ${cur==="voltage"?"selected":""}>Voltage</option>
-      <option value="current" ${cur==="current"?"selected":""}>Current</option>`;
-    return mOpts(cur);
-  };
-
-  // Set-action param options: read write_ops from the instrument's eewBackbone family.
-  // Falls back to PSU voltage/current if the instrument has no family or isn't loaded yet.
-  const setOpts = (cur, resource) => {
-    const instr = ((state.workbench || {})._unique || []).find(i => i.resource === resource);
-    const ops   = instr?.write_ops || [];
-    if (ops.length === 0) return pOpts(cur);
-    return ops.map(o => `<option value="${escHtml(o.op)}" ${cur===o.op?"selected":""}>${escHtml(o.label)}</option>`).join("");
-  };
-
-  let html = "";
-
-  // Loop columns
-  _sb.loops.forEach((lp, idx) => {
-    const level = idx === 0 ? "outer" : idx === _sb.loops.length-1 ? "inner" : `level ${idx+1}`;
-    const isCC  = lp.param === "current";
-    html += `
-      <div class="sb-col">
-        <div class="sb-col-hdr">
-          <span>Loop ${idx+1} <span>(${level})</span></span>
-          <button class="sb-col-hdr-remove" onclick="sbRemoveLoop(${lp.id})" title="Remove loop">✕</button>
-        </div>
-        <div class="sb-col-body">
-          <div class="sb-block sb-block-loop">
-            <div class="sb-block-title">Sweep</div>
-            <div class="test-param-row"><span class="test-param-label">Variable</span>
-              <div class="test-param-input-wrap"><input class="test-param-input" type="text"
-                value="${escHtml(lp.var)}" placeholder="var_name"
-                onchange="_sbSet('loop',${lp.id},'var',this.value)"></div></div>
-            <div class="test-param-row"><span class="test-param-label">Label</span>
-              <div class="test-param-input-wrap"><input class="test-param-input" type="text"
-                value="${escHtml(lp.label)}"
-                onchange="_sbSet('loop',${lp.id},'label',this.value)"></div></div>
-            <div class="test-param-row"><span class="test-param-label">Instrument</span>
-              <div class="test-param-input-wrap"><select class="test-param-input sel"
-                onchange="_sbSet('loop',${lp.id},'instrument',this.value)">${iOpts(lp.instrument)}</select></div></div>
-            <div class="test-param-row"><span class="test-param-label">Channel</span>
-              <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-                value="${lp.ch}" min="1" max="4"
-                onchange="_sbSet('loop',${lp.id},'ch',+this.value)"></div></div>
-            <div class="test-param-row"><span class="test-param-label">Parameter</span>
-              <div class="test-param-input-wrap"><select class="test-param-input sel"
-                onchange="_sbSetRe('loop',${lp.id},'param',this.value)">${pOpts(lp.param)}</select></div></div>
-            <div class="test-param-row"><span class="test-param-label">Start</span>
-              <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-                value="${lp.start}" onchange="_sbSet('loop',${lp.id},'start',+this.value)">
-                <span class="test-param-unit">${isCC?"A":"V"}</span></div></div>
-            <div class="test-param-row"><span class="test-param-label">Stop</span>
-              <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-                value="${lp.stop}" onchange="_sbSet('loop',${lp.id},'stop',+this.value)">
-                <span class="test-param-unit">${isCC?"A":"V"}</span></div></div>
-            <div class="test-param-row"><span class="test-param-label">Step</span>
-              <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-                value="${lp.step}" min="0.0001" onchange="_sbSet('loop',${lp.id},'step',+this.value)">
-                <span class="test-param-unit">${isCC?"A":"V"}</span></div></div>
-            <div class="test-param-row"><span class="test-param-label">Settle</span>
-              <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-                value="${lp.settle}" min="0" step="0.01" onchange="_sbSet('loop',${lp.id},'settle',+this.value)">
-                <span class="test-param-unit">s</span></div></div>
-            ${isCC ? `
-            <div class="test-param-row"><span class="test-param-label">V Comp.</span>
-              <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-                value="${lp.v_compliance}" min="0" step="0.5" onchange="_sbSet('loop',${lp.id},'v_compliance',+this.value)">
-                <span class="test-param-unit">V</span></div></div>` : `
-            <div class="test-param-row"><span class="test-param-label">I Limit</span>
-              <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-                value="${lp.i_limit}" min="0" step="0.1" onchange="_sbSet('loop',${lp.id},'i_limit',+this.value)">
-                <span class="test-param-unit">A</span></div></div>`}
-          </div>
-
-          ${(lp.step_actions||[]).map(sa => {
-            const rm = `onclick="sbRemoveLoopAction(${lp.id},${sa.id})"`;
-            if (sa.type === "set") { const saMode = sa.mode||"single"; return `
-              <div class="sb-block sb-block-set">
-                <div class="sb-block-title">Set
-                  <select class="test-param-input sel" style="font-size:10px;padding:1px 4px;height:auto;width:auto;margin-left:4px;"
-                    onchange="_sbSetLoopActionRe(${lp.id},${sa.id},'mode',this.value)">
-                    <option value="single" ${saMode==="single"?"selected":""}>Single</option>
-                    <option value="sweep"  ${saMode==="sweep" ?"selected":""}>Sweep</option>
-                  </select>
-                  <button class="sb-rm" ${rm}>✕</button></div>
-                <div class="test-param-row"><span class="test-param-label">Instrument</span>
-                  <div class="test-param-input-wrap"><select class="test-param-input sel"
-                    onchange="_sbSetLoopActionInstrAndParam(${lp.id},${sa.id},this.value)">${iOpts(sa.instrument)}</select></div></div>
-                <div class="test-param-row"><span class="test-param-label">Channel</span>
-                  <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-                    value="${sa.ch||1}" min="1" max="4" onchange="_sbSetLoopAction(${lp.id},${sa.id},'ch',+this.value)"></div></div>
-                <div class="test-param-row"><span class="test-param-label">Parameter</span>
-                  <div class="test-param-input-wrap"><select class="test-param-input sel"
-                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'param',this.value)">${setOpts(sa.param, sa.instrument)}</select></div></div>
-                ${saMode === "sweep" ? `
-                <div class="test-param-row"><span class="test-param-label">Start</span>
-                  <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-                    value="${sa.start??0}" onchange="_sbSetLoopAction(${lp.id},${sa.id},'start',+this.value)"></div></div>
-                <div class="test-param-row"><span class="test-param-label">Stop</span>
-                  <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-                    value="${sa.stop??1}" onchange="_sbSetLoopAction(${lp.id},${sa.id},'stop',+this.value)"></div></div>
-                <div class="test-param-row"><span class="test-param-label">Step</span>
-                  <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-                    value="${sa.step??0.1}" min="0.0001" onchange="_sbSetLoopAction(${lp.id},${sa.id},'step',+this.value)"></div></div>
-                ` : `
-                <div class="test-param-row"><span class="test-param-label">Value</span>
-                  <div class="test-param-input-wrap"><input class="test-param-input" type="text"
-                    value="${escHtml(String(sa.value??'0'))}" placeholder="{var} or 0"
-                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'value',this.value)"></div></div>
-                `}
-                <div class="test-param-row"><span class="test-param-label">Settle</span>
-                  <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-                    value="${sa.settle??0.1}" min="0" step="0.01" onchange="_sbSetLoopAction(${lp.id},${sa.id},'settle',+this.value)">
-                    <span class="test-param-unit">s</span></div></div>
-              </div>`; }
-            if (sa.type === "wait") return `
-              <div class="sb-block sb-block-wait">
-                <div class="sb-block-title">Wait <button class="sb-rm" ${rm}>✕</button></div>
-                <div class="test-param-row"><span class="test-param-label">Duration</span>
-                  <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-                    value="${sa.duration||0.1}" min="0.001" step="0.05"
-                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'duration',+this.value)">
-                    <span class="test-param-unit">s</span></div></div>
-              </div>`;
-            if (sa.type === "wait_for") return `
-              <div class="sb-block" style="border-left:3px solid var(--purple);">
-                <div class="sb-block-title" style="color:var(--purple);">Wait for State
-                  <button class="sb-rm" ${rm}>✕</button></div>
-                <div class="test-param-row"><span class="test-param-label">Instrument</span>
-                  <div class="test-param-input-wrap"><select class="test-param-input sel"
-                    onchange="_sbSetLoopActionRe(${lp.id},${sa.id},'instrument',this.value)">${iOpts(sa.instrument)}</select></div></div>
-                <div class="test-param-row"><span class="test-param-label">Channel</span>
-                  <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-                    value="${sa.ch||1}" min="1" max="4" onchange="_sbSetLoopAction(${lp.id},${sa.id},'ch',+this.value)"></div></div>
-                <div class="test-param-row"><span class="test-param-label">Parameter</span>
-                  <div class="test-param-input-wrap"><select class="test-param-input sel"
-                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'param',this.value)">${measOpts(sa.param, sa.instrument)}</select></div></div>
-                <div class="test-param-row"><span class="test-param-label">Condition</span>
-                  <div class="test-param-input-wrap">
-                    <select class="test-param-input sel" style="flex:0 0 auto;width:60px;"
-                      onchange="_sbSetLoopActionRe(${lp.id},${sa.id},'condition',this.value)">
-                      <option value=">=" ${sa.condition===">="?"selected":""}>≥</option>
-                      <option value="<=" ${sa.condition==="<="?"selected":""}>≤</option>
-                      <option value="within" ${sa.condition==="within"?"selected":""}>±</option>
-                    </select>
-                    <input class="test-param-input" type="number" value="${sa.target??0}"
-                      onchange="_sbSetLoopAction(${lp.id},${sa.id},'target',+this.value)">
-                  </div></div>
-                ${sa.condition==="within"?`
-                <div class="test-param-row"><span class="test-param-label">Tolerance</span>
-                  <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-                    value="${sa.tolerance??0.5}" min="0" step="0.1"
-                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'tolerance',+this.value)"></div></div>`:""}
-                <div class="test-param-row"><span class="test-param-label">Poll every</span>
-                  <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-                    value="${sa.interval??5}" min="0.5" step="1"
-                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'interval',+this.value)">
-                    <span class="test-param-unit">s</span></div></div>
-                <div class="test-param-row"><span class="test-param-label">Timeout</span>
-                  <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-                    value="${sa.timeout??300}" min="0" step="30"
-                    onchange="_sbSetLoopAction(${lp.id},${sa.id},'timeout',+this.value)">
-                    <span class="test-param-unit">s (0=∞)</span></div></div>
-              </div>`;
-            return "";
-          }).join("")}
-
-          <div style="margin-top:4px;padding-top:6px;border-top:1px solid var(--border);display:flex;gap:4px;flex-wrap:wrap;">
-            <span style="font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-faint);align-self:center;flex-shrink:0;">Per step:</span>
-            <button class="sb-add-btn" style="flex:1;min-width:50px;" onclick="sbAddLoopAction(${lp.id},'set')">+ Set</button>
-            <button class="sb-add-btn" style="flex:1;min-width:50px;" onclick="sbAddLoopAction(${lp.id},'wait')">+ Wait</button>
-            <button class="sb-add-btn" style="flex:1;min-width:50px;border-color:var(--purple);color:var(--purple);" onclick="sbAddLoopAction(${lp.id},'wait_for')">+ Wait for</button>
-          </div>
-        </div>
-      </div>`;
-  });
-
-  // Actions column
-  let actHtml = _sb.actions.map(ac => {
-    if (ac.type === "set") { const acMode = ac.mode||"single"; return `
-      <div class="sb-block sb-block-set">
-        <div class="sb-block-title">Set
-          <select class="test-param-input sel" style="font-size:10px;padding:1px 4px;height:auto;width:auto;margin-left:4px;"
-            onchange="_sbSetRe('action',${ac.id},'mode',this.value)">
-            <option value="single" ${acMode==="single"?"selected":""}>Single</option>
-            <option value="sweep"  ${acMode==="sweep" ?"selected":""}>Sweep</option>
-          </select>
-          <button class="sb-rm" onclick="sbRemoveAction(${ac.id})">✕</button></div>
-        <div class="test-param-row"><span class="test-param-label">Instrument</span>
-          <div class="test-param-input-wrap"><select class="test-param-input sel"
-            onchange="_sbSetInstrAndParam('action',${ac.id},this.value)">${iOpts(ac.instrument)}</select></div></div>
-        <div class="test-param-row"><span class="test-param-label">Channel</span>
-          <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-            value="${ac.ch||1}" min="1" max="4" onchange="_sbSet('action',${ac.id},'ch',+this.value)"></div></div>
-        <div class="test-param-row"><span class="test-param-label">Parameter</span>
-          <div class="test-param-input-wrap"><select class="test-param-input sel"
-            onchange="_sbSet('action',${ac.id},'param',this.value)">${setOpts(ac.param, ac.instrument)}</select></div></div>
-        ${acMode === "sweep" ? `
-        <div class="test-param-row"><span class="test-param-label">Start</span>
-          <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-            value="${ac.start??0}" onchange="_sbSet('action',${ac.id},'start',+this.value)"></div></div>
-        <div class="test-param-row"><span class="test-param-label">Stop</span>
-          <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-            value="${ac.stop??1}" onchange="_sbSet('action',${ac.id},'stop',+this.value)"></div></div>
-        <div class="test-param-row"><span class="test-param-label">Step</span>
-          <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-            value="${ac.step??0.1}" min="0.0001" onchange="_sbSet('action',${ac.id},'step',+this.value)"></div></div>
-        ` : `
-        <div class="test-param-row"><span class="test-param-label">Value</span>
-          <div class="test-param-input-wrap"><input class="test-param-input" type="text"
-            value="${escHtml(String(ac.value??'0'))}" placeholder="0.001 or {var1}"
-            onchange="_sbSet('action',${ac.id},'value',this.value)"></div></div>
-        `}
-        <div class="test-param-row"><span class="test-param-label">Settle</span>
-          <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-            value="${ac.settle??0.1}" min="0" step="0.01" onchange="_sbSet('action',${ac.id},'settle',+this.value)">
-            <span class="test-param-unit">s</span></div></div>
-      </div>`; }
-    if (ac.type === "measure") return `
-      <div class="sb-block sb-block-meas">
-        <div class="sb-block-title">Measure
-          <button class="sb-rm" onclick="sbRemoveAction(${ac.id})">✕</button></div>
-        <div class="test-param-row"><span class="test-param-label">Label</span>
-          <div class="test-param-input-wrap"><input class="test-param-input" type="text"
-            value="${escHtml(ac.label||'value')}"
-            onchange="_sbSet('action',${ac.id},'label',this.value)"></div></div>
-        <div class="test-param-row"><span class="test-param-label">Instrument</span>
-          <div class="test-param-input-wrap"><select class="test-param-input sel"
-            onchange="_sbSetRe('action',${ac.id},'instrument',this.value)">${iOpts(ac.instrument)}</select></div></div>
-        <div class="test-param-row"><span class="test-param-label">Channel</span>
-          <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-            value="${ac.ch||1}" min="1" max="4" onchange="_sbSet('action',${ac.id},'ch',+this.value)"></div></div>
-        <div class="test-param-row"><span class="test-param-label">Parameter</span>
-          <div class="test-param-input-wrap"><select class="test-param-input sel"
-            onchange="_sbSet('action',${ac.id},'param',this.value)">${measOpts(ac.param, ac.instrument)}</select></div></div>
-        <div class="test-param-row"><span class="test-param-label">Settle</span>
-          <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-            value="${ac.settle||0}" min="0" step="0.01" onchange="_sbSet('action',${ac.id},'settle',+this.value)">
-            <span class="test-param-unit">s</span></div></div>
-        <div class="test-param-row"><span class="test-param-label">Samples</span>
-          <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-            value="${ac.samples||1}" min="1" max="100" onchange="_sbSet('action',${ac.id},'samples',+this.value)"></div></div>
-      </div>`;
-    if (ac.type === "wait") return `
-      <div class="sb-block sb-block-wait">
-        <div class="sb-block-title">Wait
-          <button class="sb-rm" onclick="sbRemoveAction(${ac.id})">✕</button></div>
-        <div class="test-param-row"><span class="test-param-label">Duration</span>
-          <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-            value="${ac.duration||0.1}" min="0.001" step="0.05" onchange="_sbSet('action',${ac.id},'duration',+this.value)">
-            <span class="test-param-unit">s</span></div></div>
-      </div>`;
-    if (ac.type === "wait_for") return `
-      <div class="sb-block" style="border-left:3px solid var(--purple);">
-        <div class="sb-block-title" style="color:var(--purple);">Wait for State
-          <button class="sb-rm" onclick="sbRemoveAction(${ac.id})">✕</button></div>
-        <div class="test-param-row"><span class="test-param-label">Instrument</span>
-          <div class="test-param-input-wrap"><select class="test-param-input sel"
-            onchange="_sbSetRe('action',${ac.id},'instrument',this.value)">${iOpts(ac.instrument)}</select></div></div>
-        <div class="test-param-row"><span class="test-param-label">Channel</span>
-          <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-            value="${ac.ch||1}" min="1" max="4" onchange="_sbSet('action',${ac.id},'ch',+this.value)"></div></div>
-        <div class="test-param-row"><span class="test-param-label">Parameter</span>
-          <div class="test-param-input-wrap"><select class="test-param-input sel"
-            onchange="_sbSet('action',${ac.id},'param',this.value)">${measOpts(ac.param, ac.instrument)}</select></div></div>
-        <div class="test-param-row"><span class="test-param-label">Condition</span>
-          <div class="test-param-input-wrap">
-            <select class="test-param-input sel" style="flex:0 0 auto;width:60px;"
-              onchange="_sbSetRe('action',${ac.id},'condition',this.value)">
-              <option value=">=" ${ac.condition===">="?"selected":""}>≥</option>
-              <option value="<=" ${ac.condition==="<="?"selected":""}>≤</option>
-              <option value="within" ${ac.condition==="within"?"selected":""}>±</option>
-            </select>
-            <input class="test-param-input" type="number" value="${ac.target??0}" style="flex:1;"
-              onchange="_sbSet('action',${ac.id},'target',+this.value)">
-          </div></div>
-        ${ac.condition==="within"?`
-        <div class="test-param-row"><span class="test-param-label">Tolerance</span>
-          <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-            value="${ac.tolerance??0.5}" min="0" step="0.1" onchange="_sbSet('action',${ac.id},'tolerance',+this.value)"></div></div>`:""}
-        <div class="test-param-row"><span class="test-param-label">Poll every</span>
-          <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-            value="${ac.interval??5}" min="0.5" step="1" onchange="_sbSet('action',${ac.id},'interval',+this.value)">
-            <span class="test-param-unit">s</span></div></div>
-        <div class="test-param-row"><span class="test-param-label">Timeout</span>
-          <div class="test-param-input-wrap"><input class="test-param-input" type="number"
-            value="${ac.timeout??300}" min="0" step="30" onchange="_sbSet('action',${ac.id},'timeout',+this.value)">
-            <span class="test-param-unit">s (0=∞)</span></div></div>
-      </div>`;
-    return "";
-  }).join("");
-
-  const loopVars = _sb.loops.map(l => `{${l.var}}`).join(", ");
-  html += `
-    <div class="sb-col sb-col-actions">
-      <div class="sb-col-hdr">
-        <span>Actions <span>(innermost body)</span></span>
-        ${loopVars ? `<span style="font-size:9px;opacity:.55;">vars: ${escHtml(loopVars)}</span>` : ""}
-      </div>
-      <div class="sb-col-body">
-        ${actHtml}
-        <div class="sb-add-actions">
-          <button class="sb-add-btn" onclick="sbAddAction('set')">+ Set</button>
-          <button class="sb-add-btn" onclick="sbAddAction('measure')">+ Measure</button>
-          <button class="sb-add-btn" onclick="sbAddAction('wait')">+ Wait</button>
-          <button class="sb-add-btn" onclick="sbAddAction('wait_for')" style="border-color:var(--purple);color:var(--purple);">+ Wait for State</button>
-        </div>
-      </div>
-    </div>`;
-
-  el.innerHTML = "";  // old sbRender stub body — does nothing
-}
 
 async function sbRun() {
   if (state.autoRunning) { toast("A test is already running", "error"); return; }
@@ -7642,6 +7404,76 @@ async function checkForUpdates() {
   }
   btn.disabled = false;
 }
+
+// ── Test metadata modal ────────────────────────────────────────────
+function openTestMetaModal() {
+  const modal = document.getElementById("test-meta-modal");
+  modal.classList.remove("hidden");
+
+  document.getElementById("tmeta-timestamp").textContent = new Date().toISOString().replace("T", " ").substring(0, 19) + " UTC";
+
+  const wbName = state.workbench ? state.workbench : "—";
+  document.getElementById("tmeta-workbench").textContent = wbName;
+
+  const eqEl = document.getElementById("tmeta-equipment");
+  if (!state.instruments || state.instruments.length === 0) {
+    eqEl.innerHTML = `<span style="color:var(--text-faint);font-style:italic;">No instruments connected</span>`;
+  } else {
+    eqEl.innerHTML = state.instruments.map(i => {
+      const label = i.model || i.idn || i.resource || "Unknown";
+      const type  = i.type ? `<span style="color:var(--text-faint);"> (${i.type})</span>` : "";
+      return `<div>${escHtml(label)}${type}</div>`;
+    }).join("");
+  }
+}
+
+function closeTestMetaModal() {
+  document.getElementById("test-meta-modal").classList.add("hidden");
+}
+
+function exportTestMeta() {
+  const ts = document.getElementById("tmeta-timestamp").textContent;
+  const equipment = (state.instruments || []).map(i => ({
+    model:     i.model || i.idn || null,
+    type:      i.type  || null,
+    family_id: i.family_id || null,
+    resource:  i.resource  || null,
+  }));
+
+  const tv = id => document.getElementById(id).value.trim() || null;
+  const meta = {
+    timestamp:           ts,
+    workbench:           state.workbench || null,
+    project:             tv("tmeta-project"),
+    tested_by:           tv("tmeta-person"),
+    location:            tv("tmeta-location"),
+    software_version:    tv("tmeta-sw-version"),
+    sensor_id:           tv("tmeta-sensor-id"),
+    board_revision:      tv("tmeta-board-rev"),
+    firmware_version:    tv("tmeta-firmware"),
+    room_temp_c:         _parseNumField("tmeta-room-temp"),
+    dut_temp_c:          _parseNumField("tmeta-dut-temp"),
+    illumination:        tv("tmeta-illumination"),
+    acquisition_settings: tv("tmeta-acq-settings"),
+    notes:               tv("tmeta-notes"),
+    equipment,
+  };
+
+  const safe     = ts.substring(0, 19).replace(/[: ]/g, "-");
+  const filename = `test_meta_${safe}.json`;
+  POST("/api/save-json", { filename, data: meta, output_path: state.outputPath || "" })
+    .then(r => toast(`Saved → ${r.path}`, "ok"))
+    .catch(e => toast("Export failed: " + e.message, "error"));
+}
+
+function _parseNumField(id) {
+  const v = parseFloat(document.getElementById(id).value);
+  return isNaN(v) ? null : v;
+}
+
+document.getElementById("test-meta-modal").addEventListener("click", e => {
+  if (e.target === document.getElementById("test-meta-modal")) closeTestMetaModal();
+});
 
 // ── Init ──────────────────────────────────────────────────────────
 (async () => { await loadWorkbenches(); refreshAutoTests(); })();
