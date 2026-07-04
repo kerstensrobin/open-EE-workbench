@@ -2208,6 +2208,7 @@ function switchTab(name) {
   if (name === "automation") refreshAutoTab();
   if (name === "sandbox")    sbRefreshTab();
   if (name === "testspec")   { refreshTestSpecTab(); setTimeout(ivChartDraw, 30); }
+  if (name === "python")     setTimeout(() => _pyEditor.refresh(), 0);
 }
 
 // ── Polling toggle ─────────────────────────────────────────────────
