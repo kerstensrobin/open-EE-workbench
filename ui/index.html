@@ -311,7 +311,7 @@
     .dmm-actions .btn { flex:1; }
 
     /* ── Battery chart ──────────────────────────────────────────── */
-    #batt-canvas { display:block; width:100%; height:240px; margin-top:6px; }
+    #batt-chart  { width:100%; height:240px; margin-top:6px; }
 
     /* ── ELoad Card ─────────────────────────────────────────────── */
     .card-icon.eload { background:rgba(220,38,38,.13); color:#ef4444; }
@@ -350,7 +350,8 @@
     .dmml-chart-toggle-btn.active { background:rgba(180,83,9,.18); color:var(--amber); }
     .dmml-hist-bins { display:flex; align-items:center; gap:6px; font-size:10px; color:var(--text-dim); margin-left:auto; }
     .dmml-hist-bins input[type=range] { width:80px; accent-color:var(--amber); cursor:pointer; }
-    #dmml-canvas { display:block; width:100%; height:300px; }
+    #dmml-chart  { width:100%; height:300px; }
+    #dmml-canvas { width:100%; height:300px; }
 
     /* ── Log panel ───────────────────────────────────────────────── */
     #log-panel { width:var(--sidebar-w); min-width:150px; background:var(--surface); border-left:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
@@ -814,7 +815,7 @@
       border-radius:var(--radius); color:var(--text);
       font-family:var(--mono); font-size:10px; padding:2px 5px; cursor:pointer;
     }
-    #iv-canvas { display:block; width:100%; height:340px; cursor:grab; }
+    #iv-chart { width:100%; height:340px; }
     .iv-note {
       display:flex; align-items:flex-start; gap:8px;
       padding:8px 10px; border-radius:var(--radius);
@@ -822,7 +823,17 @@
       font-size:11px; color:var(--text-dim); line-height:1.55;
     }
     .iv-note svg { flex-shrink:0; margin-top:1px; color:var(--amber); }
-    #iv-canvas.dragging { cursor:grabbing; }
+    /* uPlot theme */
+    .u-wrap { font-family: inherit; }
+    .u-legend { background:transparent; border:none; font-size:10px; font-family:'JetBrains Mono',monospace; color:var(--text-dim); padding:2px 8px 4px; }
+    .u-legend td, .u-legend tr, .u-legend th { background:transparent !important; border:none; }
+    .u-legend .u-value { color:var(--text-dim); }
+    .u-select { background:rgba(100,120,200,0.08); }
+    #iv-chart .u-wrap, #dmml-chart .u-wrap, #batt-chart .u-wrap { width:100%; height:100%; }
+    #iv-chart:empty::before, #dmml-chart:empty::before, #batt-chart:empty::before {
+      content: attr(data-placeholder); display:flex; align-items:center; justify-content:center;
+      height:100%; color:rgba(120,132,154,0.55); font-size:12px; font-family:Inter,system-ui;
+    }
     .ts-chart-footer {
       padding:7px 16px; font-size:11px; color:var(--text-dim);
       border-top:1px solid var(--border); background:var(--surface2);
@@ -1755,7 +1766,7 @@
             <button class="btn btn-ghost" id="ts-zoom-reset-btn" style="font-size:11px;display:none;" onclick="tsResetZoom()">↺ Reset</button>
             <button class="btn btn-ghost" style="font-size:11px;" onclick="tsClearChart()">Clear</button>
           </div>
-          <canvas id="iv-canvas"></canvas>
+          <div id="iv-chart" data-placeholder="Run the sweep to see the IV curve"></div>
           <div class="ts-chart-footer">
             <span id="ts-chart-footer">Ready — configure and press Run</span>
             <button class="btn btn-ghost" style="font-size:11px;" onclick="tsExportImage()">⬇ PNG</button>
@@ -2129,6 +2140,8 @@ if scope:
 </div>
 
 <!-- ── Scripts ────────────────────────────────────────────────────── -->
+<link rel="stylesheet" href="/ui/uplot.min.css" />
+<script src="/ui/uplot.iife.min.js"></script>
 <script src="/ui/socket.io.min.js"></script>
 <script>
 "use strict";
@@ -4009,7 +4022,7 @@ function buildTestCard(test) {
         <div class="progress-track"><div class="progress-fill" id="tprog-fill-${test.id}"></div></div>
         <div class="progress-label" id="tprog-label-${test.id}">Running…</div>
       </div>
-      ${test.id === "battery_capacity" ? `<canvas id="batt-canvas"></canvas>` : ""}
+      ${test.id === "battery_capacity" ? `<div id="batt-chart" data-placeholder="Run the test to see live data"></div>` : ""}
       <div class="test-actions">
         <button class="btn btn-primary" id="trun-${test.id}" onclick="runTest('${test.id}')">
           ▶ Run
@@ -5508,6 +5521,7 @@ const _dmmLog = {
   view:     "series",  // "series" | "histogram"
   histBins: 20,
   status:   "idle",   // "idle" | "running" | "done" | "error"
+  uplot:    null,
 };
 
 function buildDmmLoggerCard(test) {
@@ -5603,7 +5617,8 @@ function buildDmmLoggerCard(test) {
         <button class="btn btn-ghost" style="margin-left:auto;font-size:10px;padding:4px 10px;"
                 onclick="_dmmLogExportPng()">↓ PNG</button>
       </div>
-      <canvas id="dmml-canvas"></canvas>
+      <div id="dmml-chart" data-placeholder="Run the logger to see live data"></div>
+      <canvas id="dmml-canvas" style="display:none;"></canvas>
 
       <div class="test-progress" id="tprog-dmm_logger">
         <div class="progress-track"><div class="progress-fill" id="tprog-fill-dmm_logger"></div></div>
@@ -5647,12 +5662,20 @@ function _dmmLogSetBins(val) {
 }
 
 function _dmmLogExportPng() {
-  const c = document.getElementById("dmml-canvas");
-  if (!c || !_dmmLog.elapsed.length) { toast("No chart data to export", "error"); return; }
+  if (!_dmmLog.elapsed.length) { toast("No chart data to export", "error"); return; }
   const view = _dmmLog.view === "histogram" ? "histogram" : "time_series";
+  let dataUrl;
+  if (_dmmLog.view === "histogram") {
+    const c = document.getElementById("dmml-canvas");
+    if (!c) { toast("No chart data to export", "error"); return; }
+    dataUrl = c.toDataURL("image/png");
+  } else {
+    if (!_dmmLog.uplot) { toast("No chart data to export", "error"); return; }
+    dataUrl = _dmmLog.uplot.ctx.canvas.toDataURL("image/png");
+  }
   POST("/api/plot/save-image", {
     filename: `dmm_logger_${view}`,
-    data: c.toDataURL("image/png"),
+    data: dataUrl,
     output_path: state.outputPath || "",
   }).then(r => toast(`Saved → ${r.path}`, "ok"))
     .catch(e => toast("Image save failed: " + e.message, "error"));
@@ -5680,15 +5703,78 @@ function getDmmLoggerParams() {
   };
 }
 
-// ── DMM logger canvas drawing ─────────────────────────────────────────
+// ── DMM logger drawing (uPlot for series, canvas for histogram) ───────
 
 function _dmmLogDraw() {
-  const c = document.getElementById("dmml-canvas");
-  if (!c) return;
-  if (_dmmLog.view === "histogram") _dmmLogDrawHistogram(c);
-  else _dmmLogDrawSeries(c);
+  const chartDiv = document.getElementById("dmml-chart");
+  const canvas   = document.getElementById("dmml-canvas");
+  if (_dmmLog.view === "histogram") {
+    if (chartDiv) chartDiv.style.display = "none";
+    if (canvas)   { canvas.style.display = "block"; _dmmLogDrawHistogram(canvas); }
+  } else {
+    if (chartDiv) chartDiv.style.display = "";
+    if (canvas)   canvas.style.display = "none";
+    _dmmLogDrawSeriesUplot();
+  }
 }
 
+function _dmmLogDrawSeriesUplot() {
+  const container = document.getElementById("dmml-chart");
+  if (!container) return;
+  const W = container.offsetWidth, H = container.offsetHeight;
+  if (W < 20 || H < 20) return;
+
+  const activeDmms = _dmmLog.dmms.filter(d => d.enabled && _dmmLog.data[d.label]?.length);
+  if (!_dmmLog.elapsed.length || !activeDmms.length) {
+    if (_dmmLog.uplot) { _dmmLog.uplot.destroy(); _dmmLog.uplot = null; }
+    return;
+  }
+
+  const xs = _dmmLog.elapsed;
+  const ys = activeDmms.map(d => {
+    const arr = _dmmLog.data[d.label] || [];
+    return xs.map((_, i) => arr[i] ?? null);
+  });
+  const data = [xs, ...ys];
+
+  const needRebuild = !_dmmLog.uplot ||
+    _dmmLog.uplot.series.length - 1 !== activeDmms.length;
+
+  if (needRebuild) {
+    if (_dmmLog.uplot) _dmmLog.uplot.destroy();
+    const series = [{}];
+    activeDmms.forEach(d => series.push({
+      label: d.label,
+      stroke: d.color,
+      width: 1.5,
+      alpha: 0.75,
+      points: { show: true, size: 3, fill: d.color },
+    }));
+    const axStyle = _uplotAxisStyle();
+    const opts = {
+      width: W, height: H, series,
+      axes: [
+        { ...axStyle, label: "Elapsed (s)" },
+        { ...axStyle, label: "Value" },
+      ],
+      scales: { x: { time: false } },
+      legend: { show: false },
+      cursor: { x: false, y: false },
+      select: { show: false },
+      hooks: {
+        draw: [u => {
+          _uplotDrawLegend(u, activeDmms.map(d => ({ color: d.color, label: d.label })));
+        }],
+      },
+    };
+    _dmmLog.uplot = new uPlot(opts, data, container);
+  } else {
+    _dmmLog.uplot.setSize({ width: W, height: H });
+    _dmmLog.uplot.setData(data);
+  }
+}
+
+// Canvas setup helpers used by histogram only
 function _dmmLogSetupCanvas(c) {
   const dpr = window.devicePixelRatio || 1;
   const W = c.offsetWidth, H = c.offsetHeight;
@@ -5702,6 +5788,7 @@ function _dmmLogSetupCanvas(c) {
   return { ctx, W, H };
 }
 
+// placeholder drawing helper used by histogram
 function _dmmLogPlaceholder(ctx, W, H, ML, MR, MT, MB, msg) {
   ctx.clearRect(0, 0, W, H);
   const pw = W-ML-MR, ph = H-MT-MB;
@@ -5713,117 +5800,6 @@ function _dmmLogPlaceholder(ctx, W, H, ML, MR, MT, MB, msg) {
   ctx.font = "12px 'Inter', system-ui";
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillText(msg, ML + pw/2, MT + ph/2);
-}
-
-function _dmmLogDrawSeries(c) {
-  const setup = _dmmLogSetupCanvas(c);
-  if (!setup) return;
-  const { ctx, W, H } = setup;
-  const ML=64, MR=18, MT=14, MB=44;
-  const pw=W-ML-MR, ph=H-MT-MB;
-
-  const activeDmms = _dmmLog.dmms.filter(d => d.enabled && _dmmLog.data[d.label]?.length);
-  if (!_dmmLog.elapsed.length || !activeDmms.length) {
-    _dmmLogPlaceholder(ctx, W, H, ML, MR, MT, MB,
-      _dmmLog.status === "running" ? "Waiting for first measurement…" : "Run the logger to see live data");
-    return;
-  }
-
-  ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = "rgba(0,0,0,0.025)";
-  ctx.fillRect(ML, MT, pw, ph);
-
-  // Axis bounds
-  const xMax = Math.max(..._dmmLog.elapsed, 1);
-  const xTicks = _niceTicks(0, xMax, 6);
-  const axMin = xTicks[0], axMax = xTicks[xTicks.length-1];
-
-  let yMin = Infinity, yMax = -Infinity;
-  for (const d of activeDmms) {
-    for (const v of _dmmLog.data[d.label]) {
-      if (v != null) { yMin = Math.min(yMin, v); yMax = Math.max(yMax, v); }
-    }
-  }
-  if (!isFinite(yMin)) { yMin = 0; yMax = 1; }
-  if (yMin === yMax) { const dd = Math.abs(yMin)*0.05 || 0.001; yMin -= dd; yMax += dd; }
-  const yTicks = _niceTicks(yMin, yMax, 5);
-  const ayMin = yTicks[0], ayMax = yTicks[yTicks.length-1];
-
-  const xR = (axMax - axMin) || 1, yR = (ayMax - ayMin) || 1;
-  const toX = v => ML + (v - axMin) / xR * pw;
-  const toY = v => MT + ph - (v - ayMin) / yR * ph;
-
-  // Grid
-  ctx.strokeStyle = "rgba(150,156,169,0.22)"; ctx.lineWidth = 1;
-  for (const t of xTicks) { const x=toX(t); ctx.beginPath(); ctx.moveTo(x,MT); ctx.lineTo(x,MT+ph); ctx.stroke(); }
-  for (const t of yTicks) { const y=toY(t); ctx.beginPath(); ctx.moveTo(ML,y); ctx.lineTo(ML+pw,y); ctx.stroke(); }
-  ctx.strokeStyle = "rgba(120,132,154,0.4)"; ctx.lineWidth = 1;
-  ctx.strokeRect(ML, MT, pw, ph);
-
-  // Tick labels
-  const yStep = yTicks.length >= 2 ? yTicks[1] - yTicks[0] : 0;
-  ctx.font = "10px 'JetBrains Mono', monospace"; ctx.fillStyle = "#78849a";
-  ctx.textAlign = "center"; ctx.textBaseline = "top";
-  for (const t of xTicks) ctx.fillText(_fmtTick(t), toX(t), MT+ph+5);
-  ctx.textAlign = "right"; ctx.textBaseline = "middle";
-  for (const t of yTicks) ctx.fillText(_fmtTick(t, yStep), ML-5, toY(t));
-
-  // Axis labels
-  ctx.font = "11px 'Inter', system-ui"; ctx.fillStyle = "#48526a";
-  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
-  ctx.fillText("Elapsed (s)", ML+pw/2, MT+ph+36);
-  ctx.save(); ctx.translate(14, MT+ph/2); ctx.rotate(-Math.PI/2);
-  ctx.fillText("Value", 0, 0); ctx.restore();
-
-  // Clip to plot area
-  ctx.save();
-  ctx.beginPath(); ctx.rect(ML, MT, pw, ph); ctx.clip();
-
-  for (const d of activeDmms) {
-    const vals = _dmmLog.data[d.label];
-    const pts  = _dmmLog.elapsed
-      .map((e, i) => ({ x: e, y: vals[i] }))
-      .filter(p => p.y != null);
-    if (!pts.length) continue;
-
-    // Line
-    if (pts.length > 1) {
-      ctx.beginPath();
-      ctx.strokeStyle = d.color; ctx.lineWidth = 1.5; ctx.lineJoin = "round"; ctx.globalAlpha = 0.75;
-      ctx.moveTo(toX(pts[0].x), toY(pts[0].y));
-      for (let i = 1; i < pts.length; i++) ctx.lineTo(toX(pts[i].x), toY(pts[i].y));
-      ctx.stroke();
-    }
-    // Dots
-    ctx.globalAlpha = 1; ctx.fillStyle = d.color;
-    for (const p of pts) { ctx.beginPath(); ctx.arc(toX(p.x), toY(p.y), 2, 0, Math.PI*2); ctx.fill(); }
-    // Live ring
-    if (_dmmLog.status === "running" && pts.length) {
-      const last = pts[pts.length-1];
-      ctx.beginPath(); ctx.arc(toX(last.x), toY(last.y), 5.5, 0, Math.PI*2);
-      ctx.strokeStyle = d.color; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.6; ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-  }
-  ctx.restore();
-
-  // Legend
-  if (activeDmms.length > 1) {
-    ctx.font = "10px 'JetBrains Mono', monospace";
-    const rowH=14, pad=6, swW=10;
-    let maxW = 0;
-    for (const d of activeDmms) maxW = Math.max(maxW, ctx.measureText(d.label).width);
-    const boxW=maxW+swW+pad*3, boxH=activeDmms.length*rowH+pad*2;
-    const bx=ML+pw-boxW-6, by=MT+6;
-    ctx.fillStyle = "rgba(205,209,215,0.88)";
-    ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 4); ctx.fill();
-    activeDmms.forEach((d, ci) => {
-      const ry = by+pad+ci*rowH;
-      ctx.fillStyle = d.color; ctx.fillRect(bx+pad, ry+2, swW, rowH-5);
-      ctx.fillStyle = "#1a1d25"; ctx.textAlign = "left"; ctx.textBaseline = "top";
-      ctx.fillText(d.label, bx+pad+swW+5, ry+1);
-    });
-  }
 }
 
 function _dmmLogDrawHistogram(c) {
@@ -5944,7 +5920,7 @@ function _dmmLogDrawHistogram(c) {
 
 // ── Battery capacity live chart ───────────────────────────────────────
 
-const _batt = { elapsed: [], voltage: [], capacity: [], cutoff: null, status: "idle" };
+const _batt = { elapsed: [], voltage: [], capacity: [], cutoff: null, status: "idle", uplot: null };
 
 function _battReset(cutoff) {
   _batt.elapsed  = [];
@@ -5965,134 +5941,80 @@ function _battPush(row, cutoff) {
 }
 
 function _battDraw() {
-  const c = document.getElementById("batt-canvas");
-  if (!c) return;
-
-  const dpr = window.devicePixelRatio || 1;
-  const W = c.offsetWidth, H = c.offsetHeight;
+  const container = document.getElementById("batt-chart");
+  if (!container) return;
+  const W = container.offsetWidth, H = container.offsetHeight;
   if (W < 20 || H < 20) return;
-  if (c.width !== Math.round(W*dpr) || c.height !== Math.round(H*dpr)) {
-    c.width = Math.round(W*dpr); c.height = Math.round(H*dpr);
-  }
-  const ctx = c.getContext("2d");
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  const ML=52, MR=58, MT=14, MB=42;
-  const pw=W-ML-MR, ph=H-MT-MB;
-
-  ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = "rgba(0,0,0,0.025)";
-  ctx.fillRect(ML, MT, pw, ph);
 
   if (!_batt.elapsed.length) {
-    ctx.strokeStyle = "rgba(120,132,154,0.4)"; ctx.lineWidth = 1;
-    ctx.strokeRect(ML, MT, pw, ph);
-    ctx.fillStyle = "rgba(120,132,154,0.55)";
-    ctx.font = "12px 'Inter', system-ui";
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(_batt.status === "running" ? "Waiting for first sample…" : "Run the test to see live data",
-                 ML+pw/2, MT+ph/2);
+    if (_batt.uplot) { _batt.uplot.destroy(); _batt.uplot = null; }
     return;
   }
 
-  const xMax   = Math.max(..._batt.elapsed, 1);
-  const xTicks = _niceTicks(0, xMax, 5);
-  const axMin  = xTicks[0], axMax = xTicks[xTicks.length-1];
+  const data = [_batt.elapsed, _batt.voltage, _batt.capacity];
 
-  const vMin0  = Math.min(..._batt.voltage), vMax0 = Math.max(..._batt.voltage);
-  const vPad   = Math.max((vMax0 - vMin0) * 0.1, 0.2);
-  const vTicks = _niceTicks(Math.max(0, vMin0 - vPad), vMax0 + vPad, 5);
-  const avMin  = vTicks[0], avMax = vTicks[vTicks.length-1];
-
-  const capMax   = Math.max(..._batt.capacity, 1);
-  const capTicks = _niceTicks(0, capMax, 5);
-  const acMax    = capTicks[capTicks.length-1];
-
-  const xR = (axMax - axMin) || 1;
-  const vR = (avMax - avMin) || 1;
-  const cR = acMax || 1;
-
-  const toX  = v   => ML + (v - axMin) / xR * pw;
-  const toYv = v   => MT + ph - (v - avMin) / vR * ph;
-  const toYc = mah => MT + ph - mah / cR * ph;
-
-  // Grid
-  ctx.strokeStyle = "rgba(150,156,169,0.18)"; ctx.lineWidth = 1;
-  for (const t of xTicks) { const x=toX(t);  ctx.beginPath(); ctx.moveTo(x,MT);  ctx.lineTo(x,MT+ph);   ctx.stroke(); }
-  for (const t of vTicks) { const y=toYv(t); ctx.beginPath(); ctx.moveTo(ML,y);  ctx.lineTo(ML+pw,y);   ctx.stroke(); }
-  ctx.strokeStyle = "rgba(120,132,154,0.4)"; ctx.lineWidth = 1;
-  ctx.strokeRect(ML, MT, pw, ph);
-
-  // Cutoff voltage dashed reference line
-  if (_batt.cutoff != null && _batt.cutoff >= avMin && _batt.cutoff <= avMax) {
-    const yc = toYv(_batt.cutoff);
-    ctx.save();
-    ctx.strokeStyle = "rgba(220,38,38,0.45)"; ctx.lineWidth = 1.2;
-    ctx.setLineDash([5, 4]);
-    ctx.beginPath(); ctx.moveTo(ML, yc); ctx.lineTo(ML+pw, yc); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = "rgba(220,38,38,0.6)"; ctx.font = "9px 'JetBrains Mono',monospace";
-    ctx.textAlign = "left"; ctx.textBaseline = "middle";
-    ctx.fillText(`cutoff ${_batt.cutoff} V`, ML+4, yc-6);
-    ctx.restore();
+  if (_batt.uplot) {
+    _batt.uplot.setSize({ width: W, height: H });
+    _batt.uplot.setData(data);
+    return;
   }
 
-  ctx.save();
-  ctx.beginPath(); ctx.rect(ML, MT, pw, ph); ctx.clip();
+  const axStyle = _uplotAxisStyle();
+  const opts = {
+    width: W, height: H,
+    series: [
+      {},
+      { label: "Voltage (V)",      scale: "vol", stroke: "#ef4444", width: 2,
+        points: { show: true, size: 4, fill: "#ef4444" } },
+      { label: "Capacity (mAh)",   scale: "cap", stroke: "#3b82f6", width: 1.5,
+        points: { show: false }, alpha: 0.65 },
+    ],
+    scales: {
+      x:   { time: false },
+      vol: {},
+      cap: { range: (u, min, max) => [0, Math.max(max, 1)] },
+    },
+    axes: [
+      { ...axStyle, label: "Elapsed (s)" },
+      { ...axStyle, scale: "vol", label: "Voltage (V)",    stroke: "#ef4444",
+        labelFont: "11px Inter, system-ui",
+        values: (u, vals) => vals.map(v => _fmtTick(v)) },
+      { ...axStyle, scale: "cap", label: "Capacity (mAh)", stroke: "#3b82f6",
+        labelFont: "11px Inter, system-ui",
+        side: 1, grid: { show: false }, ticks: { show: false },
+        values: (u, vals) => vals.map(v => _fmtTick(v)) },
+    ],
+    legend: { show: false },
+    cursor: { show: false },
+    select: { show: false },
+    hooks: {
+      draw: [u => {
+        const dpr = devicePixelRatio || 1;
+        _uplotDrawLegend(u, [
+          { color: "#ef4444", label: "Voltage (V)" },
+          { color: "#3b82f6", label: "Capacity (mAh)" },
+        ]);
+        if (_batt.cutoff == null) return;
+        const yc = u.valToPos(_batt.cutoff, "vol", true);  // physical px
+        if (yc == null) return;
+        const left  = u.bbox.left;   // already physical px
+        const width = u.bbox.width;  // already physical px
+        const ctx = u.ctx;
+        ctx.save();
+        ctx.strokeStyle = "rgba(220,38,38,0.45)";
+        ctx.lineWidth = 1.2 * dpr;
+        ctx.setLineDash([5 * dpr, 4 * dpr]);
+        ctx.beginPath();
+        ctx.moveTo(left, yc);
+        ctx.lineTo(left + width, yc);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }],
+    },
+  };
 
-  // Capacity line (right axis, blue)
-  if (_batt.capacity.length > 1) {
-    ctx.beginPath();
-    ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 1.5; ctx.lineJoin = "round"; ctx.globalAlpha = 0.65;
-    ctx.moveTo(toX(_batt.elapsed[0]), toYc(_batt.capacity[0]));
-    for (let i = 1; i < _batt.elapsed.length; i++)
-      ctx.lineTo(toX(_batt.elapsed[i]), toYc(_batt.capacity[i]));
-    ctx.stroke(); ctx.globalAlpha = 1;
-  }
-
-  // Voltage line (left axis, red)
-  if (_batt.voltage.length > 1) {
-    ctx.beginPath();
-    ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 2; ctx.lineJoin = "round"; ctx.globalAlpha = 0.85;
-    ctx.moveTo(toX(_batt.elapsed[0]), toYv(_batt.voltage[0]));
-    for (let i = 1; i < _batt.elapsed.length; i++)
-      ctx.lineTo(toX(_batt.elapsed[i]), toYv(_batt.voltage[i]));
-    ctx.stroke(); ctx.globalAlpha = 1;
-  }
-
-  // Dots on voltage line
-  ctx.fillStyle = "#ef4444";
-  for (let i = 0; i < _batt.elapsed.length; i++) {
-    ctx.beginPath(); ctx.arc(toX(_batt.elapsed[i]), toYv(_batt.voltage[i]), 2, 0, Math.PI*2); ctx.fill();
-  }
-  // Live ring on last point
-  if (_batt.status === "running" && _batt.elapsed.length) {
-    const n = _batt.elapsed.length - 1;
-    ctx.beginPath(); ctx.arc(toX(_batt.elapsed[n]), toYv(_batt.voltage[n]), 5.5, 0, Math.PI*2);
-    ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.6; ctx.stroke(); ctx.globalAlpha = 1;
-  }
-
-  ctx.restore();
-
-  // Tick labels
-  const yVStep = vTicks.length >= 2 ? vTicks[1] - vTicks[0] : 0;
-  const yCStep = capTicks.length >= 2 ? capTicks[1] - capTicks[0] : 0;
-  ctx.font = "10px 'JetBrains Mono', monospace";
-  ctx.fillStyle = "#78849a"; ctx.textAlign = "center"; ctx.textBaseline = "top";
-  for (const t of xTicks) ctx.fillText(_fmtTick(t), toX(t), MT+ph+5);
-  ctx.fillStyle = "#ef4444"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
-  for (const t of vTicks) ctx.fillText(_fmtTick(t, yVStep), ML-5, toYv(t));
-  ctx.fillStyle = "#3b82f6"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
-  for (const t of capTicks) ctx.fillText(_fmtTick(t, yCStep), ML+pw+5, toYc(t));
-
-  // Axis labels
-  ctx.font = "11px 'Inter', system-ui"; ctx.textBaseline = "alphabetic";
-  ctx.fillStyle = "#78849a"; ctx.textAlign = "center";
-  ctx.fillText("Elapsed (s)", ML+pw/2, MT+ph+36);
-  ctx.fillStyle = "#ef4444"; ctx.save(); ctx.translate(13, MT+ph/2); ctx.rotate(-Math.PI/2);
-  ctx.fillText("Voltage (V)", 0, 0); ctx.restore();
-  ctx.fillStyle = "#3b82f6"; ctx.save(); ctx.translate(W-12, MT+ph/2); ctx.rotate(Math.PI/2);
-  ctx.fillText("Capacity (mAh)", 0, 0); ctx.restore();
+  _batt.uplot = new uPlot(opts, data, container);
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -6693,10 +6615,12 @@ const _ivChart = {
   xLim:         null,  // drain/gate sweep stop  — X axis ceiling
   devType:      "bjt", // "fet" | "bjt" — controls axis/legend labels
   gateMode:     "cc",  // "cc" | "cv" — only meaningful when devType === "bjt"
+  uplot:        null,
+  _buildXIdx:   -1,
+  _buildYIdx:   -1,
 };
 
-let _ivDrag          = null;   // {startX, startY, startBounds, canvas}
-let _ivEventsAttached = false;
+let _ivDrag = null;   // {startX, startY, bounds}
 
 function refreshTestSpecTab() {
   const noWb   = document.getElementById("ts-empty-nowb");
@@ -7071,6 +6995,7 @@ function tsUpdateAxes() {
 }
 
 function tsClearChart() {
+  if (_ivChart.uplot) { _ivChart.uplot.destroy(); _ivChart.uplot = null; }
   _ivChart.curves       = [];
   _ivChart.currentGateV = null;
   _ivChart.cols         = [];
@@ -7083,6 +7008,8 @@ function tsClearChart() {
   _ivChart.iLim         = null;
   _ivChart.xStart       = 0;
   _ivChart.xLim         = null;
+  _ivChart._buildXIdx   = -1;
+  _ivChart._buildYIdx   = -1;
   document.getElementById("ts-zoom-reset-btn").style.display = "none";
   document.getElementById("ts-autoscale-btn").style.display  = "none";
   const row = document.getElementById("ts-axis-row");
@@ -7207,69 +7134,76 @@ function _ivGetCurrentBounds() {
   return { xMin: xT[0], xMax: xT[xT.length - 1], yMin: yT[0], yMax: yT[yT.length - 1] };
 }
 
-function _ivChartInitEvents(canvas) {
-  const ML = () => 64, MR = () => 18, MT = () => 14, MB = () => 44;
+function _ivAttachUplotEvents(u) {
+  const over = u.over;
+  over.style.cursor = "grab";
 
-  canvas.addEventListener("wheel", e => {
+  over.addEventListener("wheel", e => {
     e.preventDefault();
-    // Disable zoom during live sweep — accidental scrolling freezes auto-scale
     if (_ivChart.status === "running") return;
     if (!_ivChart.curves.some(c => c.points.length)) return;
-    const rect  = canvas.getBoundingClientRect();
-    const mx    = e.clientX - rect.left;
-    const my    = e.clientY - rect.top;
-    const pw    = canvas.offsetWidth  - ML() - MR();
-    const ph    = canvas.offsetHeight - MT() - MB();
-    if (mx < ML() || mx > ML() + pw || my < MT() || my > MT() + ph) return;
-    const b = _ivGetCurrentBounds();
-    const factor   = e.deltaY > 0 ? 1.18 : 1 / 1.18;
-    const xRatio   = (mx - ML()) / pw;
-    const yRatio   = 1 - (my - MT()) / ph;
+    const rect   = over.getBoundingClientRect();
+    const mx     = e.clientX - rect.left;
+    const my     = e.clientY - rect.top;
+    const W      = over.offsetWidth, H = over.offsetHeight;
+    const b      = _ivGetCurrentBounds();
+    const factor = e.deltaY > 0 ? 1.18 : 1 / 1.18;
+    const xRatio = mx / W;
+    const yRatio = 1 - my / H;
     const xCenter  = b.xMin + xRatio * (b.xMax - b.xMin);
     const yCenter  = b.yMin + yRatio * (b.yMax - b.yMin);
     const newXSpan = (b.xMax - b.xMin) * factor;
     const newYSpan = (b.yMax - b.yMin) * factor;
     _ivSetView({
-      xMin: xCenter - xRatio         * newXSpan,
-      xMax: xCenter + (1 - xRatio)   * newXSpan,
-      yMin: yCenter - yRatio         * newYSpan,
-      yMax: yCenter + (1 - yRatio)   * newYSpan,
+      xMin: xCenter - xRatio       * newXSpan,
+      xMax: xCenter + (1 - xRatio) * newXSpan,
+      yMin: yCenter - yRatio       * newYSpan,
+      yMax: yCenter + (1 - yRatio) * newYSpan,
     });
   }, { passive: false });
 
-  canvas.addEventListener("mousedown", e => {
+  over.addEventListener("mousedown", e => {
     if (e.button !== 0) return;
-    // Disable drag during live sweep — same reason as wheel above
     if (_ivChart.status === "running") return;
     if (!_ivChart.curves.some(c => c.points.length)) return;
     _ivDrag = { startX: e.clientX, startY: e.clientY, bounds: _ivGetCurrentBounds() };
-    canvas.classList.add("dragging");
+    over.style.cursor = "grabbing";
   });
-
-  canvas.addEventListener("mousemove", e => {
+  document.addEventListener("mousemove", e => {
     if (!_ivDrag) return;
-    const pw = canvas.offsetWidth  - 64 - 18;
-    const ph = canvas.offsetHeight - 14 - 44;
-    const b  = _ivDrag.bounds;
-    const dx = -(e.clientX - _ivDrag.startX) / pw * (b.xMax - b.xMin);
-    const dy =  (e.clientY - _ivDrag.startY) / ph * (b.yMax - b.yMin);
-    _ivSetView({ xMin: b.xMin + dx, xMax: b.xMax + dx, yMin: b.yMin + dy, yMax: b.yMax + dy });
+    const W = over.offsetWidth, H = over.offsetHeight;
+    const b = _ivDrag.bounds;
+    const dx = -(e.clientX - _ivDrag.startX) / W * (b.xMax - b.xMin);
+    const dy =  (e.clientY - _ivDrag.startY) / H * (b.yMax - b.yMin);
+    _ivSetView({ xMin: b.xMin+dx, xMax: b.xMax+dx, yMin: b.yMin+dy, yMax: b.yMax+dy });
   });
+  const endDrag = () => { _ivDrag = null; over.style.cursor = "grab"; };
+  document.addEventListener("mouseup", endDrag);
+  over.addEventListener("dblclick", tsResetZoom);
+}
 
-  const endDrag = () => { _ivDrag = null; canvas.classList.remove("dragging"); };
-  canvas.addEventListener("mouseup",    endDrag);
-  canvas.addEventListener("mouseleave", endDrag);
-
-  canvas.addEventListener("dblclick", tsResetZoom);
+function _ivApplyViewToUplot(u, v) {
+  if (v) {
+    u.setScale("x", { min: v.xMin, max: v.xMax });
+    u.setScale("y", { min: v.yMin, max: v.yMax });
+  } else {
+    const allPts = _ivChart.curves.flatMap(c => c.points);
+    const xA = _ivChart.xStart ?? 0;
+    const xB = _ivChart.xLim ?? (allPts.length ? Math.max(...allPts.map(p => p.x)) : 1);
+    const yB = _ivChart.iLim ?? (allPts.length ? Math.max(...allPts.map(p => p.y)) : 1);
+    const xT = _niceTicks(xA, xB, 6);
+    const yT = _niceTicks(0, yB, 5);
+    u.setScale("x", { min: xT[0], max: xT[xT.length - 1] });
+    u.setScale("y", { min: yT[0], max: yT[yT.length - 1] });
+  }
 }
 
 function tsExportImage() {
-  const c = document.getElementById("iv-canvas");
-  if (!c || !_ivChart.curves.some(cv => cv.points.length)) {
+  if (!_ivChart.uplot || !_ivChart.curves.some(cv => cv.points.length)) {
     toast("No chart data to export", "error"); return;
   }
   const prefix = _tsActivePlot === "transfer" ? "transfer_char" : "static_char";
-  const dataUrl = c.toDataURL("image/png");
+  const dataUrl = _ivChart.uplot.ctx.canvas.toDataURL("image/png");
   POST("/api/plot/save-image", { filename: prefix, data: dataUrl, output_path: state.outputPath || "" })
     .then(r => toast(`Saved → ${r.path}`, "ok"))
     .catch(e => toast("Image save failed: " + e.message, "error"));
@@ -7303,196 +7237,158 @@ function tsExportCSV() {
 }
 
 function ivChartDraw() {
-  const c = document.getElementById("iv-canvas");
-  if (!c) return;
-  if (!_ivEventsAttached) { _ivChartInitEvents(c); _ivEventsAttached = true; }
-  const dpr = window.devicePixelRatio || 1;
-  const W   = c.offsetWidth;
-  const H   = c.offsetHeight;
+  const container = document.getElementById("iv-chart");
+  if (!container) return;
+  const W = container.offsetWidth, H = container.offsetHeight;
   if (W < 20 || H < 20) return;
-  if (c.width !== Math.round(W * dpr) || c.height !== Math.round(H * dpr)) {
-    c.width  = Math.round(W * dpr);
-    c.height = Math.round(H * dpr);
-  }
-  const ctx = c.getContext("2d");
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  const ML = 64, MR = 18, MT = 14, MB = 44;
-  const pw = W - ML - MR;
-  const ph = H - MT - MB;
-
-  ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = "rgba(0,0,0,0.025)";
-  ctx.fillRect(ML, MT, pw, ph);
 
   const curves = _ivChart.curves;
-  const cols   = _ivChart.cols;
   const allPts = curves.flatMap(c => c.points);
 
   if (!allPts.length) {
-    ctx.fillStyle    = "rgba(120,132,154,0.55)";
-    ctx.font         = "12px 'Inter', system-ui";
-    ctx.textAlign    = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(
-      _ivChart.status === "running" ? "Waiting for first measurement…" : "Run the sweep to see the IV curve",
-      ML + pw / 2, MT + ph / 2
-    );
+    if (_ivChart.uplot) { _ivChart.uplot.destroy(); _ivChart.uplot = null; }
+    container.setAttribute("data-placeholder",
+      _ivChart.status === "running" ? "Waiting for first measurement…" : "Run the sweep to see the IV curve");
     return;
   }
+  container.removeAttribute("data-placeholder");
 
-  // Axis bounds: zoomed/auto-fit view, or fixed 0..I_limit range
-  let axMin, axMax, ayMin, ayMax;
-  if (_ivChart.view) {
-    ({ xMin: axMin, xMax: axMax, yMin: ayMin, yMax: ayMax } = _ivChart.view);
-  } else {
-    const xA = _ivChart.xStart ?? 0;
-    const xB = _ivChart.xLim   ?? (allPts.length ? Math.max(...allPts.map(p => p.x)) : 1);
-    const yB = _ivChart.iLim   ?? (allPts.length ? Math.max(...allPts.map(p => p.y)) : 1);
-    const xT = _niceTicks(xA, xB, 6);
-    const yT = _niceTicks(0,  yB, 5);
-    axMin = xT[0]; axMax = xT[xT.length - 1];
-    ayMin = yT[0]; ayMax = yT[yT.length - 1];
-  }
-  const xTicks = _niceTicks(axMin, axMax, 6);
-  const yTicks = _niceTicks(ayMin, ayMax, 5);
-  const xRange = (axMax - axMin) || 1;
-  const yRange = (ayMax - ayMin) || 1;
-  const toX = v => ML + (v - axMin) / xRange * pw;
-  const toY = v => MT + ph - (v - ayMin) / yRange * ph;
+  // Build unified x array and aligned y arrays for each curve
+  const xSet = new Set();
+  for (const c of curves) for (const p of c.points) xSet.add(p.x);
+  const xs = [...xSet].sort((a, b) => a - b);
+  const ys = curves.map(c => {
+    const map = new Map(c.points.map(p => [p.x, p.y]));
+    return xs.map(x => map.has(x) ? map.get(x) : null);
+  });
+  const data = [xs, ...ys];
 
-  // Grid
-  ctx.strokeStyle = "rgba(150,156,169,0.22)";
-  ctx.lineWidth   = 1;
-  for (const t of xTicks) { const x = toX(t); ctx.beginPath(); ctx.moveTo(x, MT); ctx.lineTo(x, MT + ph); ctx.stroke(); }
-  for (const t of yTicks) { const y = toY(t); ctx.beginPath(); ctx.moveTo(ML, y); ctx.lineTo(ML + pw, y); ctx.stroke(); }
+  const gColName = (_ivChart.cols[_ivChart.gIdx] || "");
+  const gIsCurr  = gColName.startsWith("i_") || gColName.endsWith("_A");
+  const gLabel   = _ivDevLabels().g;
+  const makeLbl  = cv =>
+    cv.ib != null ? `I_B=${_fmtIb(cv.ib)}` :
+    gIsCurr       ? `I_B=${_fmtIb(cv.gateV)}` :
+                    `${gLabel}=${_fmtTick(cv.gateV)}V`;
 
-  // Border
-  ctx.strokeStyle = "rgba(120,132,154,0.4)";
-  ctx.lineWidth   = 1;
-  ctx.strokeRect(ML, MT, pw, ph);
+  const needRebuild = !_ivChart.uplot ||
+    _ivChart.uplot.series.length - 1 !== curves.length ||
+    _ivChart._buildXIdx !== _ivChart.xIdx ||
+    _ivChart._buildYIdx !== _ivChart.yIdx;
 
-  // Tick labels
-  ctx.font         = "10px 'JetBrains Mono', monospace";
-  ctx.fillStyle    = "#78849a";
-  ctx.textAlign    = "center";
-  ctx.textBaseline = "top";
-  for (const t of xTicks) ctx.fillText(_fmtTick(t), toX(t), MT + ph + 5);
-  ctx.textAlign    = "right";
-  ctx.textBaseline = "middle";
-  for (const t of yTicks) ctx.fillText(_fmtTick(t), ML - 5, toY(t));
-
-  // Axis names
-  ctx.font         = "11px 'Inter', system-ui";
-  ctx.fillStyle    = "#48526a";
-  ctx.textAlign    = "center";
-  ctx.textBaseline = "alphabetic";
-  const _devLabels = _plotLabels();
-  // Always use physical quantity labels derived from active plot + device type
-  const xLabel = _devLabels.x;
-  const yLabel = _devLabels.y;
-  ctx.fillText(xLabel, ML + pw / 2, MT + ph + 36);
-  ctx.save();
-  ctx.translate(14, MT + ph / 2);
-  ctx.rotate(-Math.PI / 2);
-  ctx.fillText(yLabel, 0, 0);
-  ctx.restore();
-
-  // Clip to plot area
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(ML, MT, pw, ph);
-  ctx.clip();
-
-  // Draw each curve
-  for (let ci = 0; ci < curves.length; ci++) {
-    const curve = curves[ci];
-    const pts   = curve.points;
-    const color = _CURVE_COLORS[ci % _CURVE_COLORS.length];
-    if (!pts.length) continue;
-
-    // Line
-    if (pts.length > 1) {
-      ctx.beginPath();
-      ctx.strokeStyle = color;
-      ctx.lineWidth   = 1.5;
-      ctx.lineJoin    = "round";
-      ctx.globalAlpha = 0.7;
-      ctx.moveTo(toX(pts[0].x), toY(pts[0].y));
-      for (let i = 1; i < pts.length; i++) ctx.lineTo(toX(pts[i].x), toY(pts[i].y));
-      ctx.stroke();
-    }
-
-    // Dots
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = color;
-    for (const p of pts) {
-      ctx.beginPath();
-      ctx.arc(toX(p.x), toY(p.y), 2, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Live ring on last point of the active (last) curve
-    if (_ivChart.status === "running" && ci === curves.length - 1) {
-      const last = pts[pts.length - 1];
-      ctx.beginPath();
-      ctx.arc(toX(last.x), toY(last.y), 5.5, 0, Math.PI * 2);
-      ctx.strokeStyle = color;
-      ctx.lineWidth   = 1.5;
-      ctx.globalAlpha = 0.6;
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-  }
-
-  ctx.restore();
-
-  // Legend (top-right, inside plot area)
-  if (curves.length) {
-    const gLabel   = _ivDevLabels().g;
-    const gColName = (_ivChart.cols[_ivChart.gIdx] || "");
-    const gIsCurr  = gColName.startsWith("i_") || gColName.endsWith("_A");
-    ctx.font = "10px 'JetBrains Mono', monospace";
-    const rowH = 14, pad = 6, swW = 10;
-
-    const makeLbl = cv =>
-      (cv.ib != null) ? `I_B=${_fmtIb(cv.ib)}` :
-      gIsCurr         ? `I_B=${_fmtIb(cv.gateV)}` :
-                        `${gLabel}=${_fmtTick(cv.gateV)}V`;
-
-    // Fit as many rows as the plot height allows
-    const maxRows  = Math.max(1, Math.floor((ph - pad * 2) / rowH));
-    const rows     = Math.min(curves.length, maxRows);
-    let maxW = 0;
-    for (let ci = 0; ci < rows; ci++)
-      maxW = Math.max(maxW, ctx.measureText(makeLbl(curves[ci])).width);
-
-    const boxW = maxW + swW + pad * 3;
-    const boxH = rows * rowH + pad * 2;
-    const bx = ML + pw - boxW - 6;
-    const by = MT + 6;
-
-    ctx.fillStyle = "rgba(205,209,215,0.88)";
-    ctx.beginPath();
-    ctx.roundRect(bx, by, boxW, boxH, 4);
-    ctx.fill();
-
-    for (let ci = 0; ci < rows; ci++) {
+  if (needRebuild) {
+    if (_ivChart.uplot) _ivChart.uplot.destroy();
+    const devLabels = _plotLabels();
+    const series = [{}];
+    curves.forEach((cv, ci) => {
       const color = _CURVE_COLORS[ci % _CURVE_COLORS.length];
-      const ry    = by + pad + ci * rowH;
-      ctx.fillStyle = color;
-      ctx.fillRect(bx + pad, ry + 2, swW, rowH - 5);
-      ctx.fillStyle    = "#1a1d25";
-      ctx.textAlign    = "left";
-      ctx.textBaseline = "top";
-      ctx.fillText(makeLbl(curves[ci]), bx + pad + swW + 5, ry + 1);
-    }
-    if (curves.length > rows) {
-      ctx.fillStyle    = "#78849a";
-      ctx.textBaseline = "top";
-      ctx.fillText(`+${curves.length - rows} more`, bx + pad, by + boxH + 2);
-    }
+      series.push({
+        label: makeLbl(cv),
+        stroke: color,
+        width: 1.5,
+        alpha: 0.85,
+        points: { show: true, size: 4, fill: color },
+      });
+    });
+    const axStyle = _uplotAxisStyle();
+    const opts = {
+      width: W, height: H, series,
+      axes: [
+        { ...axStyle, label: devLabels.x },
+        { ...axStyle, label: devLabels.y },
+      ],
+      scales: { x: { time: false, auto: false }, y: { auto: false } },
+      legend: { show: false },
+      cursor: { show: false },
+      select: { show: false },
+      hooks: {
+        draw: [u => {
+          // in-plot legend (top-right) — entries built from current curve state
+          const cs = _ivChart.curves;
+          _uplotDrawLegend(u, cs.map((cv, ci) => ({
+            color: _CURVE_COLORS[ci % _CURVE_COLORS.length],
+            label: makeLbl(cv),
+          })));
+          // live ring on last point of running curve
+          if (_ivChart.status !== "running" || !cs.length) return;
+          const last = cs[cs.length - 1];
+          if (!last.points.length) return;
+          const lp    = last.points[last.points.length - 1];
+          const dpr   = devicePixelRatio || 1;
+          const cx    = u.valToPos(lp.x, "x", true);  // physical px
+          const cy    = u.valToPos(lp.y, "y", true);  // physical px
+          const color = _CURVE_COLORS[(cs.length - 1) % _CURVE_COLORS.length];
+          u.ctx.save();
+          u.ctx.beginPath();
+          u.ctx.arc(cx, cy, 5.5 * dpr, 0, Math.PI * 2);
+          u.ctx.strokeStyle = color;
+          u.ctx.lineWidth   = 1.5 * dpr;
+          u.ctx.globalAlpha = 0.6;
+          u.ctx.stroke();
+          u.ctx.globalAlpha = 1;
+          u.ctx.restore();
+        }],
+      },
+    };
+    _ivChart.uplot = new uPlot(opts, data, container);
+    _ivChart._buildXIdx = _ivChart.xIdx;
+    _ivChart._buildYIdx = _ivChart.yIdx;
+    _ivAttachUplotEvents(_ivChart.uplot);
+  } else {
+    _ivChart.uplot.setSize({ width: W, height: H });
+    _ivChart.uplot.setData(data, false);
   }
+
+  _ivApplyViewToUplot(_ivChart.uplot, _ivChart.view);
+}
+
+function _uplotAxisStyle() {
+  return {
+    font:      "10px 'JetBrains Mono', monospace",
+    labelFont: "11px Inter, system-ui",
+    labelGap:  6,
+    stroke:    "#78849a",
+    grid:  { stroke: "rgba(150,156,169,0.18)", width: 1 },
+    ticks: { stroke: "rgba(150,156,169,0.22)", width: 1, size: 4 },
+    values: (u, vals) => vals.map(v => _fmtTick(v)),
+  };
+}
+
+// Draw a legend box in the top-right corner of the uPlot canvas area.
+// entries: [{color, label}]
+function _uplotDrawLegend(u, entries) {
+  if (!entries || !entries.length) return;
+  const ctx = u.ctx;
+  const dpr = devicePixelRatio || 1;
+  const { left, top, width } = u.bbox;  // physical px
+
+  ctx.save();
+  ctx.font = `${10 * dpr}px 'JetBrains Mono', monospace`;
+
+  const rowH = 14 * dpr, pad = 6 * dpr, swW = 10 * dpr, gap = 4 * dpr;
+  let maxW = 0;
+  for (const e of entries) maxW = Math.max(maxW, ctx.measureText(e.label).width);
+
+  const boxW = maxW + swW + gap + pad * 2;
+  const boxH = entries.length * rowH + pad * 2;
+  const bx = left + width - boxW - 6 * dpr;
+  const by = top  + 6 * dpr;
+
+  ctx.fillStyle = "rgba(205,209,215,0.88)";
+  ctx.beginPath();
+  ctx.roundRect(bx, by, boxW, boxH, 4 * dpr);
+  ctx.fill();
+
+  for (let i = 0; i < entries.length; i++) {
+    const ry = by + pad + i * rowH;
+    ctx.fillStyle = entries[i].color;
+    ctx.fillRect(bx + pad, ry + 2 * dpr, swW, rowH - 5 * dpr);
+    ctx.fillStyle = "#1a1d25";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(entries[i].label, bx + pad + swW + gap, ry + dpr);
+  }
+  ctx.restore();
 }
 
 function _niceTicks(min, max, count) {
@@ -7546,6 +7442,10 @@ function _fmtTick(v, step) {
 window.addEventListener("resize", () => {
   if (state.activeTab === "testspec") ivChartDraw();
   if (state.selectedTestId === "dmm_logger") _dmmLogDraw();
+  if (state.selectedTestId === "battery_capacity" && _batt.uplot) {
+    const el = document.getElementById("batt-chart");
+    if (el) _batt.uplot.setSize({ width: el.offsetWidth, height: el.offsetHeight });
+  }
 });
 
 // ── Help menu ────────────────────────────────────────────────────
