@@ -34,10 +34,11 @@ python core/nachoVisa.py --fix-udev   # then re-plug USB instruments
 
 | | |
 |---|---|
-| **Workbench GUI** | Instrument cards with live controls for scope, PSU, AWG, DMM, and electronic load. Save / load / reset instrument state snapshots. Unrecognised instruments can be manually assigned a family. |
-| **Automation** | Parametric tests: DC sweep (single / simultaneous / nested), PSU interrupt transient, AC frequency sweep, DMM logger, battery capacity discharge test (with live voltage/capacity chart). |
-| **Plot Specific** | Purpose-built tests that produce specific, well-defined plots — the kind that appear in a component datasheet. Currently: Static Characteristic (IV Curve) and Transfer Characteristic for BJT / FET. |
+| **Workbench** | Instrument cards with live controls for scope, PSU, AWG, DMM, and electronic load. Save / load / reset instrument state snapshots. Unrecognised instruments can be manually assigned a family. |
+| **Automation** | Parametric tests: DC sweep (single / simultaneous / nested), PSU interrupt transient, AC frequency sweep, DMM logger, waveform & harmonic analysis, battery capacity discharge (with live voltage/capacity chart). |
+| **Plot Specific** | Purpose-built tests that produce specific, well-defined plots — the kind that appear in a component datasheet. Currently: IV Curve (Static Characteristic) and Transfer Characteristic for BJT / FET. |
 | **Sandbox** | Build arbitrary test sequences with a no-code column-based pipeline editor. |
+| **Python** | Full Python scripting console with syntax highlighting. Instruments, families, and helper functions are pre-injected into scope — no boilerplate needed. |
 | **CLI scripts** | Standalone Python scripts for screenshots, sweeps, and waveform analysis. |
 
 ![Workbench tab](screenshots/workbench.png)
@@ -95,6 +96,7 @@ To add a new instrument, add an entry to `core/eewBackbone.json` — no code cha
 | [GUI - Automation](https://github.com/kerstensrobin/open-EE-workbench/wiki/GUI---Automation) | Built-in parametric tests |
 | [GUI - Plot Specific](https://github.com/kerstensrobin/open-EE-workbench/wiki/GUI---Plot-Specific) | Datasheet-style plots — IV Curve, Transfer Characteristic |
 | [GUI - Sandbox](https://github.com/kerstensrobin/open-EE-workbench/wiki/GUI---Sandbox) | Custom test builder |
+| [Python Scripting](https://github.com/kerstensrobin/open-EE-workbench/wiki/Python-Scripting) | Python console — available objects, examples |
 | [About Testing](https://github.com/kerstensrobin/open-EE-workbench/wiki/About-Testing) | Engineering context for every test |
 
 ---
