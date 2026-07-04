@@ -110,3 +110,7 @@ Made with love by [nacho.works](https://nacho.works)
 ## Acknowledgements
 
 - **[Gert Lauritsen](https://github.com/gert-lauritsen)** — battery capacity test logic and Korad KEL103 SCPI command reference ([KE103](https://github.com/gert-lauritsen/KE103), MIT licence, used with permission); OWON XDM multimeter SCPI dialect ([OWON_SCPI_PY](https://github.com/gert-lauritsen/OWON_SCPI_PY), used with permission)
+- **[PyVISA](https://pyvisa.readthedocs.io/)** (PyVISA team) — Python VISA instrument communication layer (MIT licence)
+- **[pyvisa-py](https://pyvisa-py.readthedocs.io/)** (PyVISA team) — pure-Python VISA backend enabling USB/LAN instrument access without NI-VISA (MIT licence)
+- **[CodeMirror](https://codemirror.net/)** (Marijn Haverbeke et al.) — code editor used in the Python Console tab (MIT licence)
+- **[uPlot](https://github.com/leeoniya/uPlot)** (Leon Sorokin) — lightweight canvas charting library used for IV Curve, DMM Logger, and Battery Capacity plots (MIT licence)
