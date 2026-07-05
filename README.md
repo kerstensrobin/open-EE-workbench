@@ -26,7 +26,7 @@ On Linux, USB instruments need a one-time udev rule:
 python core/nachoVisa.py --fix-udev   # then re-plug USB instruments
 ```
 
-**[Note for Windows users]** If no USB instruments are found and you don't already have a vendor VISA implementation installed, your instrument's USB interface is likely claimed by Windows' in-box USBTMC driver, which `pyvisa-py`'s USB backend can't share. Use [Zadig](https://zadig.akeo.ie/) to rebind that specific device to WinUSB (Options → List All Devices → select the instrument → WinUSB → Replace Driver), then reconnect. This is a one-time step per instrument. Most users with any vendor VISA software already installed won't hit this.
+**[Note for Windows users]** If no USB instruments are found and you don't already have a vendor VISA implementation installed, your instrument's USB interface is likely claimed by Windows' in-box USBTMC driver, which `pyvisa-py`'s USB backend can't share. Use [Zadig](https://zadig.akeo.ie/) to rebind that specific device to WinUSB (Options → List All Devices → select the instrument → WinUSB → Replace Driver), then reconnect. This is a one-time step per instrument. Most users with any vendor VISA software already installed won't hit this. Or, if possible, connecting your equipment using LAN will bypass this issue. 
 
 → See the **[Wiki](https://github.com/kerstensrobin/open-EE-workbench/wiki)** for the full walkthrough.
 
