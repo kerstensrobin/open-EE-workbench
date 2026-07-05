@@ -37,13 +37,12 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-import pyvisa
-
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT / "core"))
 
 from workbench import load_workbench, open_by_role
 from eewBackbone import classify, get_command
+from nachoVisa import open_resource_manager
 
 
 # ── Configuration ─────────────────────────────────────────────────────────────
@@ -266,7 +265,7 @@ def main():
         print(f"Error: {exc}")
         sys.exit(1)
 
-    rm = pyvisa.ResourceManager("@py")
+    rm = open_resource_manager()
     try:
         scope = open_by_role(rm, wb, "scope")
     except RuntimeError as exc:

@@ -601,7 +601,8 @@ def main():
         extra_hosts = workflow.get("hosts", [])
 
     try:
-        rm = pyvisa.ResourceManager("@py")
+        from nachoVisa import open_resource_manager
+        rm = open_resource_manager()
     except Exception as exc:
         print(f"Error opening VISA resource manager: {exc}")
         sys.exit(1)

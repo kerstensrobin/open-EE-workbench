@@ -295,10 +295,12 @@ def build_arg_parser():
     )
     parser.add_argument(
         "--backend",
-        default="@py",
+        default=None,
         help=(
-            "PyVISA backend to use. Defaults to '@py'. "
-            "Use an empty string to let PyVISA choose automatically."
+            "PyVISA backend to use. Defaults to auto-detect: tries a system VISA "
+            "implementation (NI-VISA, Keysight IO Libraries, ...) first, falling back "
+            "to 'pyvisa-py' (@py). Pass an explicit value (e.g. '@py') to force one "
+            "specific backend with no fallback."
         ),
     )
     parser.add_argument(
@@ -367,7 +369,20 @@ def build_arg_parser():
     return parser
 
 
-def open_resource_manager(backend: str):
+def open_resource_manager(backend: str = None):
+    """Open a PyVISA ResourceManager.
+
+    backend=None (default): plain `pyvisa.ResourceManager()`. PyVISA already
+    picks a system VISA implementation if one is installed and otherwise
+    falls back to `pyvisa-py` on its own (see `open_visa_library()` in
+    pyvisa/highlevel.py) — there's nothing to reimplement here. Never pass
+    "@py" explicitly unless you specifically want to bypass that and force
+    the pure-Python backend, since that also forces its libusb USB transport
+    even when it isn't the only or best option available.
+
+    Pass an explicit backend string (e.g. "@py") to force one specific
+    backend with no fallback — used by --backend for troubleshooting.
+    """
     if pyvisa is None:
         raise RuntimeError("PyVISA is not installed.")
 

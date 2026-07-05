@@ -2,11 +2,11 @@
 """Workbench utilities shared across nacho.works scripts.
 
 Typical usage in a test script:
-    import pyvisa
+    from nachoVisa import open_resource_manager
     from workbench import load_workbench, open_by_role
 
     wb    = load_workbench()
-    rm    = pyvisa.ResourceManager("@py")
+    rm    = open_resource_manager()
     psu   = open_by_role(rm, wb, "psu")
     dmm   = open_by_role(rm, wb, "dmm")
 

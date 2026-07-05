@@ -189,7 +189,7 @@ def api_scan():
         # 1 — open VISA RM
         _emit("Opening VISA resource manager…")
         try:
-            rm = open_resource_manager("@py")
+            rm = open_resource_manager()
         except Exception as exc:
             _sh.sio.emit("scan_result",
                          {"error": str(exc), "instruments": [], "errors": []})

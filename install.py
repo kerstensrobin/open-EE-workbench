@@ -11,9 +11,22 @@ What it does:
 """
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+from core.browser import find_chrome
+
+# cmd.exe defaults to a legacy codepage (e.g. cp1252) that can't encode "→"/"…" —
+# reconfigure so a print() with those characters can't crash the installer.
+if sys.platform == "win32":
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
 
 ROOT   = Path(__file__).parent.resolve()
 PYTHON = sys.executable
@@ -74,6 +87,48 @@ def install_deps():
         if ans == "y":
             subprocess.check_call([str(VENV_PYTHON), "-m", "pip", "install", pkg])
 
+    ensure_libusb_windows()
+
+
+# ── 1b. libusb DLL (Windows only) ─────────────────────────────────────────────
+#
+# pyvisa-py's USB transport calls pyusb's `usb.core.find()` with no backend
+# argument, so it falls back to `ctypes.util.find_library()`. On Windows that
+# function only checks directories literally listed in the PATH env var — it
+# does not consult the running executable's own directory. Without libusb-1.0
+# somewhere on PATH, PyVISA-py silently finds zero USB instruments.
+#
+# The `libusb` PyPI package ships a prebuilt libusb-1.0.dll for every Windows
+# arch, so we can stage it next to python.exe and have the launcher put that
+# directory on PATH — no manual DLL hunting, no admin rights needed.
+#
+# NOTE: this does not replace Zadig. If an instrument's USB interface is
+# already claimed by another driver (Windows' in-box USBTMC class driver, or
+# a vendor IO Suite), libusb still cannot open it — that rebind is a manual,
+# per-device, admin-elevated step (see README) that can't be done safely by
+# a generic installer.
+def ensure_libusb_windows():
+    if sys.platform != "win32":
+        return
+
+    print("\nInstalling libusb (Windows USB backend for pyvisa-py)…")
+    try:
+        subprocess.check_call([str(VENV_PYTHON), "-m", "pip", "install", "--upgrade", "libusb"])
+        dll_path = subprocess.check_output(
+            [str(VENV_PYTHON), "-c", "from libusb._platform import DLL_PATH; print(DLL_PATH)"],
+            text=True,
+        ).strip()
+        dest = VENV_PYTHON.parent / "libusb-1.0.dll"
+        shutil.copyfile(dll_path, dest)
+        print(f"[install] libusb DLL staged → {dest}")
+    except (subprocess.CalledProcessError, OSError) as exc:
+        print(
+            f"[install] Could not stage libusb-1.0.dll ({exc}).\n"
+            "          USB instruments may not be found unless a vendor VISA "
+            "implementation (NI-VISA, Keysight IO Libraries, etc.) is installed.",
+            file=sys.stderr,
+        )
+
 
 # ── 2. Desktop launcher (Linux only) ─────────────────────────────────────────
 
@@ -95,6 +150,7 @@ def patch_launchers():
         "@echo off\n"
         'cd /d "%~dp0"\n'
         'if exist .venv\\Scripts\\python.exe (\n'
+        '    set "PATH=%~dp0.venv\\Scripts;%PATH%"\n'
         '    .venv\\Scripts\\python.exe app.py %*\n'
         ") else (\n"
         "    python app.py %*\n"
@@ -168,10 +224,24 @@ def print_pywebview_apt_note():
     )
 
 
+def print_chrome_note():
+    """The app opens as a standalone window via a Chromium browser's --app mode.
+    Without one, it falls back to a regular browser tab instead of its own window."""
+    if find_chrome():
+        return
+    print(
+        "\n[install] No Chrome, Edge, Brave, or Chromium install found.\n"
+        "          The app will still work, but will open in a regular browser tab\n"
+        "          instead of its own standalone window. Install one of those\n"
+        "          browsers for the full app-window experience.\n"
+    )
+
+
 if __name__ == "__main__":
     print(f"open-EE-workbench installer\nProject root: {ROOT}\n")
     install_deps()
     patch_launchers()
     print_pywebview_apt_note()
+    print_chrome_note()
     make_desktop()
     print("\nDone.")

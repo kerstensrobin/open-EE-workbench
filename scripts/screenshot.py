@@ -13,6 +13,7 @@ import pyvisa
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'core'))
 
 from workbench import load_workbench, open_by_role
+from nachoVisa import open_resource_manager
 
 try:
     from eewBackbone import classify, get_command
@@ -247,8 +248,9 @@ def main():
                         help="Output filename (default: screenshot, extension auto-detected)")
     parser.add_argument("--workbench", metavar="NAME",
                         help="Workbench to use (default: active workbench)")
-    parser.add_argument("--backend", default="@py", metavar="BACKEND",
-                        help="PyVISA backend (default: @py)")
+    parser.add_argument("--backend", default=None, metavar="BACKEND",
+                        help="PyVISA backend (default: auto-detect system VISA, "
+                             "falling back to pyvisa-py)")
     args = parser.parse_args()
 
     try:
@@ -259,7 +261,7 @@ def main():
 
     print(f"Workbench : {wb['name']}")
 
-    rm = pyvisa.ResourceManager(args.backend)
+    rm = open_resource_manager(args.backend)
     try:
         scope = open_by_role(rm, wb, "scope")
     except RuntimeError as exc:

@@ -69,7 +69,8 @@ def api_connect():
 
             try:
                 if rm is None:
-                    rm = _sh.pyvisa.ResourceManager("@py")
+                    from nachoVisa import open_resource_manager
+                    rm = open_resource_manager()
                 res = rm.open_resource(rstr)
                 res.timeout    = 8000
                 res._visa_lock = threading.Lock()   # serialise concurrent VISA ops

@@ -15,7 +15,6 @@ Usage
 import argparse
 import atexit
 import logging
-import shutil
 import subprocess
 import sys
 import threading
@@ -27,6 +26,8 @@ UI_DIR = ROOT / "ui"
 
 # core/ and its siblings must be importable by bare module name
 sys.path.insert(0, str(ROOT / "core"))
+
+from core.browser import find_chrome
 
 # ── PyVISA-Py USBTMC bug fix ──────────────────────────────────────────────────
 # pyvisa-py ≤ 0.8.1: USBTMC.read() inner while uses `or` instead of `and`,
@@ -197,27 +198,9 @@ atexit.register(_cleanup)   # covers Ctrl-C, sys.exit(), and normal process end
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
-# Chromium-family browsers that support --app= standalone-window mode
-_CHROME_CANDIDATES = [
-    "google-chrome-stable", "google-chrome",
-    "chromium-browser", "chromium",
-    "brave-browser", "brave",
-    "microsoft-edge-stable", "microsoft-edge",
-]
-
-
-def _find_chrome() -> str | None:
-    """Return the first available Chromium-family browser binary, or None."""
-    for name in _CHROME_CANDIDATES:
-        p = shutil.which(name)
-        if p:
-            return p
-    return None
-
-
 def _open_chrome_app(url: str, width: int = 1300, height: int = 840) -> subprocess.Popen:
     """Open url in Chromium app-mode (no address bar / tabs)."""
-    chrome = _find_chrome()
+    chrome = find_chrome()
     if not chrome:
         raise FileNotFoundError("No Chromium-family browser found")
     return subprocess.Popen([
@@ -284,8 +267,21 @@ def main():
     # 1. Chrome / Brave --app mode: best rendering, real Chromium, no browser UI
     try:
         proc = _open_chrome_app(url)
+        started = time.monotonic()
         proc.wait()   # block until user closes the window
-        _cleanup()
+        # If a Chrome/Brave/Edge instance is already running elsewhere, --app
+        # just hands the request to that instance's single-instance mediator
+        # and exits almost immediately — the window ends up owned by the
+        # pre-existing process, not `proc`. Treating that as "window closed"
+        # would kill the server the moment it starts. Only tear down if this
+        # really was a standalone process that ran for a while.
+        if time.monotonic() - started < 2:
+            try:
+                t.join()
+            finally:
+                _cleanup()
+        else:
+            _cleanup()
         return
     except FileNotFoundError:
         pass
