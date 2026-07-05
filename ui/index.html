@@ -1995,6 +1995,9 @@ if scope:
         <p style="color:var(--text-faint);font-size:11px;margin-top:6px;">
           LAN scan probes your local /24 subnet — takes ~10 seconds.
         </p>
+        <p id="scan-windows-note" class="hidden" style="color:var(--text-dim);font-size:11px;margin-top:10px;padding:8px 10px;background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);line-height:1.6;">
+          <strong style="color:var(--text);">On Windows:</strong> make sure you have the correct drivers installed for your equipment. If your instrument supports it, connecting over <strong style="color:var(--text);">LAN</strong> avoids USB driver issues entirely.
+        </p>
       </div>
       <div id="scan-running" class="hidden">
         <div class="scan-phase" id="scan-phase-row">
@@ -4806,6 +4809,7 @@ function openScanModal() {
   document.getElementById("scan-udev-hint").classList.add("hidden");
   document.getElementById("scan-udev-result").classList.add("hidden");
   document.getElementById("scan-udev-result").textContent="";
+  showWindowsNoteIfNeeded();
   document.getElementById("scan-modal").classList.remove("hidden");
 }
 function closeScanModal() { document.getElementById("scan-modal").classList.add("hidden"); }
@@ -4905,6 +4909,11 @@ async function getAppInfo() {
     if (r.ok) _appInfo = await r.json();
   } catch (_) {}
   return _appInfo || {};
+}
+
+async function showWindowsNoteIfNeeded() {
+  const { platform } = await getAppInfo();
+  document.getElementById("scan-windows-note").classList.toggle("hidden", platform !== "win32");
 }
 
 async function showUsbNotFoundHint() {
