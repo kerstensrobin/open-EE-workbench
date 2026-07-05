@@ -2015,7 +2015,8 @@ if scope:
         </div>
         <div id="scan-udev-hint" class="hidden" style="margin-top:10px;padding:9px 12px;background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
           <span style="font-size:12px;color:var(--text-dim);flex:1;min-width:160px;">USB device not found?</span>
-          <button class="btn btn-ghost" style="font-size:11px;padding:3px 10px;flex-shrink:0;" onclick="fixUdev()">Fix udev permissions</button>
+          <button class="btn btn-ghost hidden" id="scan-fix-linux-btn" style="font-size:11px;padding:3px 10px;flex-shrink:0;" onclick="fixUdev()">Fix udev permissions</button>
+          <a class="btn btn-ghost hidden" id="scan-fix-windows-link" style="font-size:11px;padding:3px 10px;flex-shrink:0;" href="https://github.com/kerstensrobin/open-EE-workbench/wiki/Windows-USB-Setup" target="_blank" rel="noopener">Windows USB setup guide</a>
           <div id="scan-udev-result" class="hidden" style="width:100%;font-family:var(--mono);font-size:10px;color:var(--text-dim);white-space:pre-wrap;line-height:1.6;margin-top:2px;"></div>
         </div>
       </div>
@@ -4860,7 +4861,7 @@ socket.on("scan_result", ({ instruments, errors, error }) => {
     empty.style.cssText="text-align:center;padding:24px;color:var(--text-faint);font-size:12px;";
     empty.textContent="No VISA instruments responded. Check connections and try again.";
     list.appendChild(empty);
-    document.getElementById("scan-udev-hint").classList.remove("hidden");
+    showUsbNotFoundHint();
   } else {
     document.getElementById("scan-udev-hint").classList.add("hidden");
   }
@@ -4896,15 +4897,39 @@ function buildScanInstrRow(instr,live) {
   return div;
 }
 
+let _appInfo = null;
+async function getAppInfo() {
+  if (_appInfo) return _appInfo;
+  try {
+    const r = await fetch("/api/info");
+    if (r.ok) _appInfo = await r.json();
+  } catch (_) {}
+  return _appInfo || {};
+}
+
+async function showUsbNotFoundHint() {
+  const hint = document.getElementById("scan-udev-hint");
+  const linuxBtn = document.getElementById("scan-fix-linux-btn");
+  const winLink = document.getElementById("scan-fix-windows-link");
+  hint.classList.remove("hidden");
+  linuxBtn.classList.add("hidden");
+  winLink.classList.add("hidden");
+  const { platform } = await getAppInfo();
+  if ((platform || "").startsWith("linux")) {
+    linuxBtn.classList.remove("hidden");
+  } else if (platform === "win32") {
+    winLink.classList.remove("hidden");
+  } else {
+    hint.classList.add("hidden");   // macOS / unknown: neither fix applies
+  }
+}
+
 async function fixUdev() {
   const out = document.getElementById("scan-udev-result");
   out.classList.remove("hidden");
   out.style.color = "var(--text-dim)";
-  let path = "core/nachoVisa.py";
-  try {
-    const r = await fetch("/api/info");
-    if (r.ok) path = (await r.json()).nachovisa_path;
-  } catch (_) {}
+  const { nachovisa_path } = await getAppInfo();
+  const path = nachovisa_path || "core/nachoVisa.py";
   out.textContent = `Run in your terminal:\n\npython ${path} --fix-udev\n\nThen replug your USB instruments.`;
 }
 

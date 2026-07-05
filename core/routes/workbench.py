@@ -4,6 +4,7 @@ routes/workbench.py — workbench CRUD, scan, bench state, families, assign, inf
 import datetime
 import json as _json
 import os
+import sys
 import time
 from pathlib import Path
 
@@ -303,7 +304,10 @@ def api_scan_save():
 
 @bp.route("/api/info")
 def api_info():
-    return jsonify({"nachovisa_path": str(_ROOT / "core" / "nachoVisa.py")})
+    return jsonify({
+        "nachovisa_path": str(_ROOT / "nachoVisa.py"),
+        "platform": sys.platform,
+    })
 
 
 # ── Bench state save / load / delete / reset ──────────────────────────────────
