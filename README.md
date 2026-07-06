@@ -3,7 +3,7 @@
 A non-proprietary, cross-compatible VISA toolset for automating the modern electronic engineering workbench.
 Works out of the box with any combination of supported instruments — no vendor lock-in.
 
-Built on PyVISA and PyVISA-py with SCPI dialect coverage across **73 instrument families** from **15 vendors**: Keysight, Rigol, Rohde & Schwarz, Tektronix, Siglent, Agilent, and more.
+Built on PyVISA and PyVISA-py with SCPI dialect coverage across **149 instrument families** spanning **19 instrument types** and **40+ vendors**: Keysight, Rigol, Rohde & Schwarz, Tektronix, Siglent, Agilent, Keithley, SRS, Lake Shore, Anritsu, and more.
 
 > Forever a work in progress.
 
@@ -54,7 +54,7 @@ open-EE-workbench/
 ├── open-eew            launch script (Linux / Mac)
 ├── open-eew.bat        launch script (Windows)
 ├── core/
-│   ├── eewBackbone.json    SCPI command database (73 families, 15 vendors)
+│   ├── eewBackbone.json    SCPI command database (149 families, 40+ vendors)
 │   ├── eewBackbone.py      classify() + get_command()
 │   ├── helpers.py          shared VISA helpers used by all routes
 │   ├── nachoVisa.py        instrument discovery CLI
@@ -74,12 +74,25 @@ open-EE-workbench/
 
 | Type | Families |
 |---|---|
-| Oscilloscope | 26 |
-| AWG / Function generator | 15 |
-| Power supply | 15 |
-| Multimeter | 11 |
-| Electronic load | 3 |
-| SMU | 3 |
+| Oscilloscope | 33 |
+| Power supply | 28 |
+| AWG / Function generator | 21 |
+| Multimeter | 15 |
+| Lock-in amplifier | 7 |
+| Spectrum analyzer | 7 |
+| SMU / Source meter | 6 |
+| Electronic load | 5 |
+| Temperature controller | 4 |
+| RF signal generator | 4 |
+| Vector network analyzer | 4 |
+| LCR / Impedance meter | 3 |
+| Laser source | 3 |
+| Thermostream / environmental chamber | 2 |
+| Gaussmeter | 2 |
+| Vacuum gauge | 2 |
+| Optical power meter | 1 |
+| Frequency counter | 1 |
+| Motion controller | 1 |
 
 To add a new instrument, add an entry to `core/eewBackbone.json` — no code changes needed.
 → **[eewBackbone](https://github.com/kerstensrobin/open-EE-workbench/wiki/eewBackbone)**
@@ -116,3 +129,4 @@ Made with love by [nacho.works](https://nacho.works)
 - **[pyvisa-py](https://pyvisa-py.readthedocs.io/)** (PyVISA team) — pure-Python VISA backend enabling USB/LAN instrument access without NI-VISA (MIT licence)
 - **[CodeMirror](https://codemirror.net/)** (Marijn Haverbeke et al.) — code editor used in the Python Console tab (MIT licence)
 - **[uPlot](https://github.com/leeoniya/uPlot)** (Leon Sorokin) — lightweight canvas charting library used for IV Curve, DMM Logger, and Battery Capacity plots (MIT licence)
+- **[PyMeasure](https://github.com/pymeasure/pymeasure)** (PyMeasure contributors) — open-source scientific instrument library; SCPI command references for 70+ instrument families were derived from PyMeasure drivers and incorporated into eewBackbone.json (MIT licence)

@@ -649,61 +649,81 @@
           ":MEASurement{slot}:ENABle ON",
           ":MEASurement{slot}:SOURce CH{ch}",
           ":MEASurement{slot}:MAIN PEAK",
-          {"query": ":MEASurement{slot}:RESult?"}
+          {
+            "query": ":MEASurement{slot}:RESult?"
+          }
         ],
         "measure_freq": [
           ":MEASurement{slot}:ENABle ON",
           ":MEASurement{slot}:SOURce CH{ch}",
           ":MEASurement{slot}:MAIN FREQuency",
-          {"query": ":MEASurement{slot}:RESult?"}
+          {
+            "query": ":MEASurement{slot}:RESult?"
+          }
         ],
         "measure_period": [
           ":MEASurement{slot}:ENABle ON",
           ":MEASurement{slot}:SOURce CH{ch}",
           ":MEASurement{slot}:MAIN PERiod",
-          {"query": ":MEASurement{slot}:RESult?"}
+          {
+            "query": ":MEASurement{slot}:RESult?"
+          }
         ],
         "measure_vavg": [
           ":MEASurement{slot}:ENABle ON",
           ":MEASurement{slot}:SOURce CH{ch}",
           ":MEASurement{slot}:MAIN MEAN",
-          {"query": ":MEASurement{slot}:RESult?"}
+          {
+            "query": ":MEASurement{slot}:RESult?"
+          }
         ],
         "measure_vrms": [
           ":MEASurement{slot}:ENABle ON",
           ":MEASurement{slot}:SOURce CH{ch}",
           ":MEASurement{slot}:MAIN RMS",
-          {"query": ":MEASurement{slot}:RESult?"}
+          {
+            "query": ":MEASurement{slot}:RESult?"
+          }
         ],
         "measure_vmax": [
           ":MEASurement{slot}:ENABle ON",
           ":MEASurement{slot}:SOURce CH{ch}",
           ":MEASurement{slot}:MAIN UPEakvalue",
-          {"query": ":MEASurement{slot}:RESult?"}
+          {
+            "query": ":MEASurement{slot}:RESult?"
+          }
         ],
         "measure_vmin": [
           ":MEASurement{slot}:ENABle ON",
           ":MEASurement{slot}:SOURce CH{ch}",
           ":MEASurement{slot}:MAIN LPEakvalue",
-          {"query": ":MEASurement{slot}:RESult?"}
+          {
+            "query": ":MEASurement{slot}:RESult?"
+          }
         ],
         "measure_risetime": [
           ":MEASurement{slot}:ENABle ON",
           ":MEASurement{slot}:SOURce CH{ch}",
           ":MEASurement{slot}:MAIN RTIMe",
-          {"query": ":MEASurement{slot}:RESult?"}
+          {
+            "query": ":MEASurement{slot}:RESult?"
+          }
         ],
         "measure_falltime": [
           ":MEASurement{slot}:ENABle ON",
           ":MEASurement{slot}:SOURce CH{ch}",
           ":MEASurement{slot}:MAIN FTIMe",
-          {"query": ":MEASurement{slot}:RESult?"}
+          {
+            "query": ":MEASurement{slot}:RESult?"
+          }
         ],
         "measure_dutycycle": [
           ":MEASurement{slot}:ENABle ON",
           ":MEASurement{slot}:SOURce CH{ch}",
           ":MEASurement{slot}:MAIN PDCYcle",
-          {"query": ":MEASurement{slot}:RESult?"}
+          {
+            "query": ":MEASurement{slot}:RESult?"
+          }
         ]
       }
     },
@@ -930,7 +950,7 @@
       ],
       "commands": {
         "reset": "*RST",
-        "input_on":  ":INP 1",
+        "input_on": ":INP 1",
         "input_off": ":INP 0",
         "input_state": {
           "write": ":INP {value}",
@@ -1242,13 +1262,38 @@
         "XDM3048"
       ],
       "overrides": {
-        "measure_vdc":  ["CONF:VOLT:DC AUTO", {"query": "MEAS:VOLT?"}],
-        "measure_vac":  ["CONF:VOLT:AC AUTO", {"query": "MEAS:VOLT?"}],
-        "measure_idc":  ["CONF:CURR:DC AUTO", {"query": "MEAS:CURRENT?"}],
-        "measure_iac":  ["CONF:CURR:AC AUTO", {"query": "MEAS:CURRENT?"}],
-        "measure_resistance": ["CONF:RES AUTO", {"query": "MEAS:RES?"}],
+        "measure_vdc": [
+          "CONF:VOLT:DC AUTO",
+          {
+            "query": "MEAS:VOLT?"
+          }
+        ],
+        "measure_vac": [
+          "CONF:VOLT:AC AUTO",
+          {
+            "query": "MEAS:VOLT?"
+          }
+        ],
+        "measure_idc": [
+          "CONF:CURR:DC AUTO",
+          {
+            "query": "MEAS:CURRENT?"
+          }
+        ],
+        "measure_iac": [
+          "CONF:CURR:AC AUTO",
+          {
+            "query": "MEAS:CURRENT?"
+          }
+        ],
+        "measure_resistance": [
+          "CONF:RES AUTO",
+          {
+            "query": "MEAS:RES?"
+          }
+        ],
         "remote_mode": "SYST:REM",
-        "local_mode":  "SYST:LOC",
+        "local_mode": "SYST:LOC",
         "measure_rate": {
           "write": "RATE {value}",
           "query": "RATE?"
@@ -1662,7 +1707,10 @@
         "SPD1305X",
         "SPD3303C",
         "SPD3303X",
-        "SPD3303X-E"
+        "SPD3303X-E",
+        "SPD1168X",
+        "SPD1305X-E",
+        "SPD3303S"
       ],
       "overrides": {
         "reset": "*RST",
@@ -2018,7 +2066,9 @@
         },
         "output_on": "OUTP ON",
         "output_off": "OUTP OFF",
-        "query_output": {"query": "OUTP?"},
+        "query_output": {
+          "query": "OUTP?"
+        },
         "set_duty_cycle": {
           "write": "SOUR{ch}:SQU:DCYC {value}",
           "query": "SOUR{ch}:SQU:DCYC?"
@@ -2119,7 +2169,9 @@
           "write": "COUN:STAT {value}",
           "query": "COUN:STAT?"
         },
-        "counter_value": {"query": "COUN:VAL?"},
+        "counter_value": {
+          "query": "COUN:VAL?"
+        },
         "save_state": "*SAV {value}",
         "recall_state": "*RCL {value}"
       }
@@ -2909,6 +2961,1842 @@
           "SYSTem:PROTection:VOLTage:CLEAr",
           "SYSTem:PROTection:CURRent:CLEAr"
         ]
+      }
+    },
+    {
+      "id": "keithley_2260b",
+      "vendor": "Keithley",
+      "series": "2260B DC Power Supply",
+      "type": "psu",
+      "patterns": [
+        "2260B"
+      ],
+      "commands": {
+        "reset": [
+          "*RST",
+          "*CLS"
+        ],
+        "set_voltage": ":SOUR:VOLT {value}",
+        "set_current_limit": ":SOUR:CURR {value}",
+        "output_on": "OUTPut 1",
+        "output_off": "OUTPut 0",
+        "output_state": {
+          "write": "OUTPut {value}",
+          "query": "OUTPut?"
+        },
+        "measure_voltage": {
+          "query": ":MEAS:VOLT?"
+        },
+        "measure_current": {
+          "query": ":MEAS:CURR?"
+        },
+        "measure_power": {
+          "query": ":MEAS:POW?"
+        }
+      }
+    },
+    {
+      "id": "texio_psw",
+      "vendor": "Texio",
+      "series": "PSW Series Programmable DC Power Supply",
+      "type": "psu",
+      "inherits": "keithley_2260b",
+      "patterns": [
+        "PSW-360",
+        "PSW360",
+        "PSW-250",
+        "PSW-800"
+      ]
+    },
+    {
+      "id": "keysight_n5767a",
+      "vendor": "Keysight",
+      "series": "N5700 Series DC Power Supply",
+      "type": "psu",
+      "patterns": [
+        "N5767A",
+        "N5770A",
+        "N5771A",
+        "N5772A",
+        "N5745A",
+        "N5750A",
+        "N5751A",
+        "N5752A"
+      ],
+      "commands": {
+        "reset": [
+          "*RST",
+          "*CLS"
+        ],
+        "set_voltage": ":VOLT {value}",
+        "set_current_limit": ":CURR {value}",
+        "output_on": ":OUTP 1",
+        "output_off": ":OUTP 0",
+        "output_state": {
+          "write": ":OUTP {value}",
+          "query": ":OUTP?"
+        },
+        "measure_voltage": {
+          "query": ":MEAS:VOLT?"
+        },
+        "measure_current": {
+          "query": ":MEAS:CURR?"
+        }
+      }
+    },
+    {
+      "id": "keysight_e3631a",
+      "vendor": "Keysight",
+      "series": "E3631A Triple-Output DC Power Supply",
+      "type": "psu",
+      "patterns": [
+        "E3631A"
+      ],
+      "channels": 3,
+      "commands": {
+        "reset": [
+          "*RST",
+          "*CLS"
+        ],
+        "set_voltage": "INST:NSEL {ch};:VOLT {value}",
+        "set_current_limit": "INST:NSEL {ch};:CURR {value}",
+        "output_on": "OUTPut 1",
+        "output_off": "OUTPut 0",
+        "output_state": {
+          "write": "OUTPut {value}",
+          "query": "OUTPut?"
+        },
+        "measure_voltage": {
+          "query": "INST:NSEL {ch};:MEAS:VOLT?"
+        },
+        "measure_current": {
+          "query": "INST:NSEL {ch};:MEAS:CURR?"
+        }
+      }
+    },
+    {
+      "id": "kepco_bop",
+      "vendor": "Kepco",
+      "series": "BOP Series Bipolar Power Supply",
+      "type": "psu",
+      "patterns": [
+        "BOP"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "set_voltage": "VOLTage {value}",
+        "set_current_limit": "CURRent {value}",
+        "output_on": "OUTPut 1",
+        "output_off": "OUTPut 0",
+        "output_state": {
+          "write": "OUTPut {value}",
+          "query": "OUTPut?"
+        },
+        "measure_voltage": {
+          "query": "MEASure:VOLTage?"
+        },
+        "measure_current": {
+          "query": "MEASure:CURRent?"
+        }
+      }
+    },
+    {
+      "id": "bkprecision_9130b",
+      "vendor": "BK Precision",
+      "series": "9130B Triple-Output DC Power Supply",
+      "type": "psu",
+      "patterns": [
+        "9130B"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "select_channel": "INSTrument:SELect CH{ch}",
+        "set_voltage": "SOURce:VOLTage:LEVel:IMMediate:AMPLitude {value}",
+        "set_current_limit": "SOURce:CURRent:LEVel:IMMediate:AMPLitude {value}",
+        "output_on": "SOURce:CHANnel:OUTPut:STATe 1",
+        "output_off": "SOURce:CHANnel:OUTPut:STATe 0",
+        "measure_voltage": {
+          "query": "MEASure:SCALar:VOLTage:DC?"
+        },
+        "measure_current": {
+          "query": "MEASure:SCALar:CURRent:DC?"
+        }
+      }
+    },
+    {
+      "id": "delta_sm7045d",
+      "vendor": "Delta Elektronika",
+      "series": "SM Series DC Power Supply",
+      "type": "psu",
+      "patterns": [
+        "SM 70-45",
+        "SM70-45",
+        "SM7045",
+        "SM 15-200",
+        "SM15-200",
+        "SM 30-100"
+      ],
+      "commands": {
+        "reset": [
+          "*RST"
+        ],
+        "set_voltage": "SO:VO {value}",
+        "set_current_limit": "SO:CU {value}",
+        "output_on": "SO:FU:RSD 0",
+        "output_off": "SO:FU:RSD 1",
+        "measure_voltage": {
+          "query": "ME:VO?"
+        },
+        "measure_current": {
+          "query": "ME:CU?"
+        }
+      }
+    },
+    {
+      "id": "rohdeschwarz_hmp",
+      "vendor": "Rohde & Schwarz",
+      "series": "HMP Series Programmable DC Power Supply",
+      "type": "psu",
+      "patterns": [
+        "HMP2020",
+        "HMP2030",
+        "HMP4030",
+        "HMP4040"
+      ],
+      "channels": 4,
+      "commands": {
+        "reset": "*RST",
+        "select_channel": "INST:NSEL {ch}",
+        "set_voltage": "VOLT {value}",
+        "set_current_limit": "CURR {value}",
+        "output_on": "OUTP:GEN 1",
+        "output_off": "OUTP:GEN 0",
+        "channel_on": "OUTP:SEL 1",
+        "channel_off": "OUTP:SEL 0",
+        "measure_voltage": {
+          "query": "MEAS:VOLT?"
+        },
+        "measure_current": {
+          "query": "MEAS:CURR?"
+        }
+      }
+    },
+    {
+      "id": "tdk_genesys",
+      "vendor": "TDK-Lambda",
+      "series": "Genesys Series Programmable DC Power Supply",
+      "type": "psu",
+      "patterns": [
+        "GENESYS",
+        "GEN40-38",
+        "GEN80-65",
+        "GEN60-32",
+        "GEN100-15",
+        "GEN150"
+      ],
+      "commands": {
+        "set_voltage": "PV {value}",
+        "set_current_limit": "PC {value}",
+        "output_on": "OUT ON",
+        "output_off": "OUT OFF",
+        "output_state": {
+          "write": "OUT {value}",
+          "query": "OUT?"
+        },
+        "measure_voltage": {
+          "query": "MV?"
+        },
+        "measure_current": {
+          "query": "MC?"
+        }
+      }
+    },
+    {
+      "id": "hp_6632a",
+      "vendor": "Hewlett-Packard",
+      "series": "HP 663xA System Power Supply",
+      "type": "psu",
+      "patterns": [
+        "HP6632A",
+        "HP6633A",
+        "HP6634A",
+        "6632A",
+        "6633A",
+        "6634A"
+      ],
+      "commands": {
+        "reset": "CLR",
+        "set_voltage": "VSET {value}",
+        "set_current_limit": "ISET {value}",
+        "output_on": "OUT 1",
+        "output_off": "OUT 0",
+        "measure_voltage": {
+          "query": "VOUT?"
+        },
+        "measure_current": {
+          "query": "IOUT?"
+        }
+      }
+    },
+    {
+      "id": "keithley_2281s",
+      "vendor": "Keithley",
+      "series": "2281S Battery Simulator / Precision DC Power Supply",
+      "type": "psu",
+      "patterns": [
+        "2281S"
+      ],
+      "commands": {
+        "reset": [
+          "*RST",
+          "*CLS"
+        ],
+        "set_voltage": ":VOLT {value}",
+        "set_current_limit": ":CURR {value}",
+        "output_on": ":OUTP:STAT 1",
+        "output_off": ":OUTP:STAT 0",
+        "output_state": {
+          "write": ":OUTP:STAT {value}",
+          "query": ":OUTP:STAT?"
+        },
+        "measure_voltage": {
+          "query": ":MEAS:VOLT?"
+        },
+        "measure_current": {
+          "query": ":MEAS:CURR?"
+        }
+      }
+    },
+    {
+      "id": "hp_34401a",
+      "vendor": "Hewlett-Packard",
+      "series": "HP / Agilent 34401A Digital Multimeter",
+      "type": "dmm",
+      "patterns": [
+        "34401A"
+      ],
+      "commands": {
+        "reset": [
+          "*RST",
+          "*CLS"
+        ],
+        "measure_voltage_dc": {
+          "query": "MEAS:VOLT:DC? DEF,DEF"
+        },
+        "measure_voltage_ac": {
+          "query": "MEAS:VOLT:AC? DEF,DEF"
+        },
+        "measure_current_dc": {
+          "query": "MEAS:CURR:DC? DEF,DEF"
+        },
+        "measure_current_ac": {
+          "query": "MEAS:CURR:AC? DEF,DEF"
+        },
+        "measure_resistance": {
+          "query": "MEAS:RES? DEF,DEF"
+        },
+        "measure_resistance_4w": {
+          "query": "MEAS:FRES? DEF,DEF"
+        },
+        "measure_frequency": {
+          "query": "MEAS:FREQ? DEF,DEF"
+        },
+        "read": {
+          "query": ":READ?"
+        }
+      }
+    },
+    {
+      "id": "agilent_34450a",
+      "vendor": "Agilent",
+      "series": "34450A 5.5-Digit Digital Multimeter",
+      "type": "dmm",
+      "patterns": [
+        "34450A"
+      ],
+      "commands": {
+        "reset": [
+          "*RST",
+          "*CLS"
+        ],
+        "measure_voltage_dc": {
+          "query": "MEAS:VOLT:DC?"
+        },
+        "measure_voltage_ac": {
+          "query": "MEAS:VOLT:AC?"
+        },
+        "measure_current_dc": {
+          "query": "MEAS:CURR:DC?"
+        },
+        "measure_resistance": {
+          "query": "MEAS:RES?"
+        },
+        "read": {
+          "query": ":READ?"
+        }
+      }
+    },
+    {
+      "id": "keithley_2182",
+      "vendor": "Keithley",
+      "series": "2182 / 2182A Nanovoltmeter",
+      "type": "dmm",
+      "patterns": [
+        "MODEL 2182",
+        "2182"
+      ],
+      "commands": {
+        "reset": [
+          "*RST",
+          "*CLS"
+        ],
+        "measure_voltage": {
+          "query": ":READ?"
+        },
+        "set_nplc": ":SENS:VOLT:NPLC {value}",
+        "set_range": ":SENS:VOLT:CHAN1:RANG {value}",
+        "auto_range": ":SENS:VOLT:CHAN1:RANG:AUTO 1"
+      }
+    },
+    {
+      "id": "keithley_dmm6500",
+      "vendor": "Keithley",
+      "series": "DMM6500 6.5-Digit Multimeter",
+      "type": "dmm",
+      "patterns": [
+        "DMM6500"
+      ],
+      "commands": {
+        "reset": [
+          "*RST",
+          "*CLS"
+        ],
+        "measure_voltage_dc": {
+          "query": "MEAS:VOLT:DC?"
+        },
+        "measure_current_dc": {
+          "query": "MEAS:CURR:DC?"
+        },
+        "measure_resistance": {
+          "query": "MEAS:RES?"
+        },
+        "read": {
+          "query": ":READ?"
+        }
+      }
+    },
+    {
+      "id": "keithley_6517b",
+      "vendor": "Keithley",
+      "series": "6517B Electrometer / High Resistance Meter",
+      "type": "smu",
+      "patterns": [
+        "6517B",
+        "6517A"
+      ],
+      "commands": {
+        "reset": [
+          "*RST",
+          "*CLS"
+        ],
+        "set_voltage": ":SOUR:VOLT {value}",
+        "output_on": ":OUTP ON",
+        "output_off": ":OUTP OFF",
+        "measure_current": {
+          "query": ":MEAS?"
+        },
+        "measure_voltage": {
+          "query": ":MEAS:VOLT?"
+        },
+        "set_current_range": ":SENS:CURR:RANG {value}",
+        "auto_range_current": ":SENS:CURR:RANG:AUTO 1"
+      }
+    },
+    {
+      "id": "yokogawa_gs200",
+      "vendor": "Yokogawa",
+      "series": "GS200 DC Voltage / Current Source",
+      "type": "smu",
+      "patterns": [
+        "GS200"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "set_source_mode": ":SOURce:FUNCtion {mode}",
+        "set_level": ":SOURce:LEVel {value}",
+        "set_range": ":SOURce:RANGe {value}",
+        "output_on": ":OUTPut:STATe ON",
+        "output_off": ":OUTPut:STATe OFF",
+        "output_state": {
+          "write": ":OUTPut:STATe {value}",
+          "query": ":OUTPut:STATe?"
+        }
+      }
+    },
+    {
+      "id": "keithley_2306",
+      "vendor": "Keithley",
+      "series": "2306 Battery / Charger Simulator",
+      "type": "smu",
+      "patterns": [
+        "2306"
+      ],
+      "commands": {
+        "reset": [
+          "*RST",
+          "*CLS"
+        ],
+        "set_voltage": ":SOUR{ch}:VOLT {value}",
+        "set_current_limit": ":SOUR{ch}:CURR {value}",
+        "output_on": ":OUTPUT{ch}:STAT 1",
+        "output_off": ":OUTPUT{ch}:STAT 0",
+        "measure_voltage": {
+          "query": ":MEAS{ch}:VOLT?"
+        },
+        "measure_current": {
+          "query": ":MEAS{ch}:CURR?"
+        }
+      }
+    },
+    {
+      "id": "agilent_33500a",
+      "vendor": "Agilent",
+      "series": "33500A Series Waveform Generator",
+      "type": "awg",
+      "patterns": [
+        "33500A",
+        "33521A",
+        "33522A"
+      ],
+      "channels": 2,
+      "commands": {
+        "reset": [
+          "*RST",
+          "*CLS"
+        ],
+        "set_function": "SOUR{ch}:FUNC {shape}",
+        "set_frequency": "SOUR{ch}:FREQ {value}",
+        "set_amplitude": "SOUR{ch}:VOLT {value}",
+        "set_offset": "SOUR{ch}:VOLT:OFFS {value}",
+        "output_on": "OUTP{ch} ON",
+        "output_off": "OUTP{ch} OFF",
+        "output_state": {
+          "write": "OUTP{ch} {value}",
+          "query": "OUTP{ch}?"
+        },
+        "get_waveform": {
+          "query": "SOUR{ch}:FUNC?"
+        }
+      }
+    },
+    {
+      "id": "hp_33120a",
+      "vendor": "Hewlett-Packard",
+      "series": "HP 33120A Function / Arbitrary Waveform Generator",
+      "type": "awg",
+      "patterns": [
+        "33120A"
+      ],
+      "commands": {
+        "reset": [
+          "*RST",
+          "*CLS"
+        ],
+        "set_function": "FUNC {shape}",
+        "set_frequency": "FREQ {value}",
+        "set_amplitude": "VOLT {value}",
+        "set_offset": "VOLT:OFFS {value}",
+        "set_amplitude_unit": "VOLT:UNIT {unit}",
+        "get_waveform": {
+          "query": "FUNC?"
+        }
+      }
+    },
+    {
+      "id": "hp_8116a",
+      "vendor": "Hewlett-Packard",
+      "series": "HP 8116A Pulse / Function Generator",
+      "type": "awg",
+      "patterns": [
+        "8116A"
+      ],
+      "commands": {
+        "reset": "*RST"
+      }
+    },
+    {
+      "id": "activetechnologies_awg401x",
+      "vendor": "Active Technologies",
+      "series": "AWG-401x Arbitrary Waveform Generator",
+      "type": "awg",
+      "patterns": [
+        "AWG-4014",
+        "AWG-4021",
+        "AWG-4022",
+        "AWG401"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "output_state": {
+          "write": "OUTP{ch}:STAT {value}",
+          "query": "OUTP{ch}:STAT?"
+        }
+      }
+    },
+    {
+      "id": "keysight_81160a",
+      "vendor": "Keysight",
+      "series": "81160A Pulse / Pattern Generator",
+      "type": "awg",
+      "patterns": [
+        "81160A"
+      ],
+      "commands": {
+        "reset": "*RST"
+      }
+    },
+    {
+      "id": "teledyne_t3afg",
+      "vendor": "Teledyne",
+      "series": "T3AFG Series Arbitrary Function Generator",
+      "type": "awg",
+      "patterns": [
+        "T3AFG20",
+        "T3AFG40",
+        "T3AFG80",
+        "T3AFG120",
+        "T3AFG250"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "set_function": "C{ch}:BSWV WVTP,{shape}",
+        "set_frequency": "C{ch}:BSWV FRQ,{value}",
+        "set_amplitude": "C{ch}:BSWV AMP,{value}",
+        "set_offset": "C{ch}:BSWV OFST,{value}",
+        "output_on": "C{ch}:OUTP ON",
+        "output_off": "C{ch}:OUTP OFF",
+        "output_state": {
+          "write": "C{ch}:OUTP {value}",
+          "query": "C{ch}:OUTP?"
+        }
+      }
+    },
+    {
+      "id": "siglent_sds1000xhd",
+      "vendor": "Siglent",
+      "series": "SDS1000xHD Series Oscilloscope",
+      "type": "scope",
+      "patterns": [
+        "SDS1002X-HD",
+        "SDS1004X-HD",
+        "SDS1202X-HD",
+        "SDS1204X-HD"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "run": "ACQU:STATE RUN",
+        "stop": "ACQU:STATE STOP",
+        "autoscale": ":AUToset",
+        "channel_on": ":CHAN{ch}:DISP 1",
+        "channel_off": ":CHAN{ch}:DISP 0",
+        "channel_scale": {
+          "write": ":CHAN{ch}:VDIV {value}",
+          "query": ":CHAN{ch}:VDIV?"
+        },
+        "channel_offset": {
+          "write": ":CHAN{ch}:OFST {value}",
+          "query": ":CHAN{ch}:OFST?"
+        },
+        "timebase_scale": {
+          "write": ":TDIV {value}",
+          "query": ":TDIV?"
+        },
+        "trigger_level": {
+          "write": ":TRLV {value}",
+          "query": ":TRLV?"
+        }
+      }
+    },
+    {
+      "id": "siglent_sds1072cml",
+      "vendor": "Siglent",
+      "series": "SDS1000CML Series Oscilloscope",
+      "type": "scope",
+      "patterns": [
+        "SDS1072CML",
+        "SDS1102CML",
+        "SDS1152CML"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "autoscale": "ATOSC",
+        "run": "TRMD AUTO",
+        "stop": "STOP",
+        "timebase_scale": {
+          "write": "TDIV {value}",
+          "query": "TDIV?"
+        }
+      }
+    },
+    {
+      "id": "lecroy_t3dso",
+      "vendor": "Teledyne LeCroy",
+      "series": "T3DSO Series Digital Storage Oscilloscope",
+      "type": "scope",
+      "patterns": [
+        "T3DSO1204",
+        "T3DSO1104",
+        "T3DSO2204"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "autoscale": "ATOSC",
+        "run": "TRMD AUTO",
+        "stop": "STOP",
+        "channel_scale": {
+          "write": "C{ch}:VDIV {value}",
+          "query": "C{ch}:VDIV?"
+        },
+        "channel_offset": {
+          "write": "C{ch}:OFST {value}",
+          "query": "C{ch}:OFST?"
+        },
+        "timebase_scale": {
+          "write": "TDIV {value}",
+          "query": "TDIV?"
+        },
+        "trigger_level": {
+          "write": "TRLV {value}",
+          "query": "TRLV?"
+        }
+      }
+    },
+    {
+      "id": "teledyne_lecroy",
+      "vendor": "Teledyne LeCroy",
+      "series": "Teledyne LeCroy High-End Oscilloscope",
+      "type": "scope",
+      "patterns": [
+        "HDO4054",
+        "HDO6054",
+        "HDO9404",
+        "MDA803",
+        "WavePro 7",
+        "WavePro 9",
+        "WaveSurfer 3",
+        "SDA8Zi"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "autoscale": "ATOSC",
+        "run": "TRMD AUTO",
+        "stop": "STOP",
+        "channel_scale": {
+          "write": "C{ch}:VDIV {value}",
+          "query": "C{ch}:VDIV?"
+        },
+        "channel_offset": {
+          "write": "C{ch}:OFST {value}",
+          "query": "C{ch}:OFST?"
+        },
+        "channel_on": "C{ch}:TRA ON",
+        "channel_off": "C{ch}:TRA OFF",
+        "timebase_scale": {
+          "write": "TDIV {value}",
+          "query": "TDIV?"
+        },
+        "trigger_level": {
+          "write": "TRLV {value}",
+          "query": "TRLV?"
+        },
+        "trigger_coupling": "TRCP {coupling}",
+        "trigger_slope": "TRSL {slope}"
+      }
+    },
+    {
+      "id": "tektronix_tds2000",
+      "vendor": "Tektronix",
+      "series": "TDS 2000 Series Digital Storage Oscilloscope",
+      "type": "scope",
+      "patterns": [
+        "TDS 2002",
+        "TDS 2004",
+        "TDS 2012",
+        "TDS 2014",
+        "TDS 2022",
+        "TDS 2024",
+        "TDS2002",
+        "TDS2004",
+        "TDS2012",
+        "TDS2014",
+        "TDS2022",
+        "TDS2024"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "run": "ACQuire:STATE RUN",
+        "stop": "ACQuire:STATE STOP",
+        "autoscale": "AUTOSet EXECute",
+        "channel_on": "SELect:CH{ch} ON",
+        "channel_off": "SELect:CH{ch} OFF",
+        "channel_scale": {
+          "write": "CH{ch}:SCAle {value}",
+          "query": "CH{ch}:SCAle?"
+        },
+        "channel_offset": {
+          "write": "CH{ch}:POSition {value}",
+          "query": "CH{ch}:POSition?"
+        },
+        "timebase_scale": {
+          "write": "HORizontal:SCAle {value}",
+          "query": "HORizontal:SCAle?"
+        },
+        "trigger_level": {
+          "write": "TRIGger:EDGe:LEVel {value}",
+          "query": "TRIGger:EDGe:LEVel?"
+        },
+        "screenshot": {
+          "raw_query": "HARDCopy STARt"
+        }
+      }
+    },
+    {
+      "id": "temptronic_ats",
+      "vendor": "Temptronic",
+      "series": "ATS / ECO ThermoStream System",
+      "type": "thermal",
+      "patterns": [
+        "ATS-515",
+        "ATS-525",
+        "ATS-535",
+        "ATS-545",
+        "ATS-615",
+        "ATS-625",
+        "ATS-635",
+        "ATS-645",
+        "ECO-560",
+        "ECO-660"
+      ],
+      "commands": {
+        "reset": "RSTO",
+        "remote_on": "%RM",
+        "remote_off": "%GL",
+        "flow_on": "FLOW 1",
+        "flow_off": "FLOW 0",
+        "compressor_on": "COOL 1",
+        "compressor_off": "COOL 0",
+        "head_up": "HEAD 0",
+        "head_down": "HEAD 1",
+        "set_temperature": "SETP {value}",
+        "get_setpoint": {
+          "query": "SETP?"
+        },
+        "measure_temperature": {
+          "query": "TEMP?"
+        },
+        "measure_air_temperature": {
+          "query": "TMPA?"
+        },
+        "measure_dut_temperature": {
+          "query": "TMPD?"
+        },
+        "temperature_status": {
+          "query": "TECR?"
+        },
+        "error_status": {
+          "query": "EROR?"
+        },
+        "clear_errors": "CLER",
+        "set_ramp_rate": "RAMP {value}",
+        "get_ramp_rate": {
+          "query": "RAMP?"
+        },
+        "set_soak_time": "SOAK {value}",
+        "set_window": "WNDW {value}",
+        "set_upper_limit": "ULIM {value}",
+        "set_lower_limit": "LLIM {value}",
+        "enter_cycle": "RMPC 1",
+        "enter_ramp": "RMPS 0",
+        "next_setpoint": "NEXT"
+      }
+    },
+    {
+      "id": "thermotron_3800",
+      "vendor": "Thermotron",
+      "series": "3800 Environmental Chamber",
+      "type": "thermal",
+      "patterns": [
+        "Thermotron 3800",
+        "THERM-CON 3800"
+      ],
+      "commands": {
+        "get_id": {
+          "query": "IDEN?"
+        },
+        "initialize": "INIT",
+        "run": "RUNM",
+        "stop": "STOP",
+        "set_setpoint": "SETP1,{value}",
+        "get_setpoint": {
+          "query": "SETP1?"
+        },
+        "measure_temperature": {
+          "query": "PVAR1?"
+        },
+        "get_mode": {
+          "query": "MODE?"
+        }
+      }
+    },
+    {
+      "id": "srs_sr830",
+      "vendor": "Stanford Research Systems",
+      "series": "SR830 DSP Lock-in Amplifier",
+      "type": "lock_in",
+      "patterns": [
+        "SR830"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "measure_x": {
+          "query": "OUTP?1"
+        },
+        "measure_y": {
+          "query": "OUTP?2"
+        },
+        "measure_r": {
+          "query": "OUTP?3"
+        },
+        "measure_theta": {
+          "query": "OUTP?4"
+        },
+        "set_frequency": "FREQ {value}",
+        "get_frequency": {
+          "query": "FREQ?"
+        },
+        "set_sine_voltage": "SLVL {value}",
+        "get_sine_voltage": {
+          "query": "SLVL?"
+        },
+        "set_phase": "PHAS {value}",
+        "set_sensitivity": "SENS {value}",
+        "set_time_constant": "OFLT {value}",
+        "set_harmonic": "HARM {value}",
+        "aux_out_1": "AUXV 1,{value}",
+        "aux_in_1": {
+          "query": "OAUX?1"
+        }
+      }
+    },
+    {
+      "id": "srs_sr860",
+      "vendor": "Stanford Research Systems",
+      "series": "SR860 / SR865 DSP Lock-in Amplifier",
+      "type": "lock_in",
+      "patterns": [
+        "SR860",
+        "SR865"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "measure_x": {
+          "query": "OUTP? 0"
+        },
+        "measure_y": {
+          "query": "OUTP? 1"
+        },
+        "measure_r": {
+          "query": "OUTP? 2"
+        },
+        "measure_theta": {
+          "query": "OUTP? 3"
+        },
+        "set_frequency": "FREQ {value}",
+        "get_frequency": {
+          "query": "FREQ?"
+        },
+        "set_sine_voltage": "SLVL {value}",
+        "get_sine_voltage": {
+          "query": "SLVL?"
+        },
+        "set_phase": "PHAS {value}",
+        "set_sensitivity": "SCAL {value}",
+        "set_time_constant": "OFLT {value}",
+        "set_harmonic": "HARM {value}"
+      }
+    },
+    {
+      "id": "srs_sr510",
+      "vendor": "Stanford Research Systems",
+      "series": "SR510 Lock-in Amplifier",
+      "type": "lock_in",
+      "patterns": [
+        "SR510"
+      ],
+      "commands": {
+        "set_phase": "P {value}",
+        "get_phase": {
+          "query": "P"
+        },
+        "get_frequency": {
+          "query": "F"
+        },
+        "set_sensitivity": "G {value}",
+        "set_time_constant": "T1 {value}",
+        "measure_output": {
+          "query": "Q"
+        },
+        "status": {
+          "query": "Y"
+        }
+      }
+    },
+    {
+      "id": "srs_sr570",
+      "vendor": "Stanford Research Systems",
+      "series": "SR570 Low-Noise Current Preamplifier",
+      "type": "lock_in",
+      "patterns": [
+        "SR570"
+      ],
+      "commands": {
+        "set_sensitivity": "SENS {value}",
+        "set_filter_type": "FLTT {value}",
+        "set_low_freq": "LFRQ {value}",
+        "set_high_freq": "HFRQ {value}",
+        "set_bias_level": "BSLV {value}",
+        "bias_on": "BSON 1",
+        "bias_off": "BSON 0"
+      }
+    },
+    {
+      "id": "signalrecovery_dsp7265",
+      "vendor": "Signal Recovery",
+      "series": "DSP 7265 Lock-in Amplifier",
+      "type": "lock_in",
+      "patterns": [
+        "7265",
+        "DSP 7265",
+        "DSP7265"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "measure_x": {
+          "query": "X."
+        },
+        "measure_y": {
+          "query": "Y."
+        },
+        "measure_r": {
+          "query": "MAG"
+        },
+        "measure_theta": {
+          "query": "PHA"
+        },
+        "set_frequency": "OF {value}",
+        "set_sine_voltage": "OA {value}",
+        "set_sensitivity": "SEN {value}",
+        "set_time_constant": "TC {value}"
+      }
+    },
+    {
+      "id": "signalrecovery_dsp7225",
+      "vendor": "Signal Recovery",
+      "series": "DSP 7225 Lock-in Amplifier",
+      "type": "lock_in",
+      "inherits": "signalrecovery_dsp7265",
+      "patterns": [
+        "7225",
+        "DSP 7225",
+        "DSP7225"
+      ]
+    },
+    {
+      "id": "ametek_dsp7270",
+      "vendor": "Ametek",
+      "series": "DSP 7270 Lock-in Amplifier",
+      "type": "lock_in",
+      "patterns": [
+        "DSP 7270",
+        "7270",
+        "DSP7270"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "measure_x": {
+          "query": "X."
+        },
+        "measure_y": {
+          "query": "Y."
+        },
+        "measure_r": {
+          "query": "MAG"
+        },
+        "measure_theta": {
+          "query": "PHA"
+        },
+        "set_frequency": "OF {value}",
+        "set_sine_voltage": "OA {value}"
+      }
+    },
+    {
+      "id": "lakeshore_3xx",
+      "vendor": "Lake Shore",
+      "series": "3xx Series Temperature Controller",
+      "type": "temp_ctrl",
+      "patterns": [
+        "MODEL 331",
+        "MODEL 332",
+        "MODEL 335",
+        "MODEL 336",
+        "MODEL 340",
+        "MODEL 350",
+        "LSCI,331",
+        "LSCI,336",
+        "LSCI,350"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "measure_kelvin_a": {
+          "query": "KRDG? A"
+        },
+        "measure_kelvin_b": {
+          "query": "KRDG? B"
+        },
+        "measure_celsius_a": {
+          "query": "CRDG? A"
+        },
+        "measure_celsius_b": {
+          "query": "CRDG? B"
+        },
+        "set_setpoint_1": "SETP 1,{value}",
+        "get_setpoint_1": {
+          "query": "SETP? 1"
+        },
+        "set_setpoint_2": "SETP 2,{value}",
+        "get_setpoint_2": {
+          "query": "SETP? 2"
+        },
+        "set_heater_range_1": "RANGE 1,{value}",
+        "get_heater_output_1": {
+          "query": "HTR? 1"
+        }
+      }
+    },
+    {
+      "id": "lakeshore_224",
+      "vendor": "Lake Shore",
+      "series": "Model 224 Temperature Monitor",
+      "type": "temp_ctrl",
+      "patterns": [
+        "MODEL 224",
+        "LSCI,224"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "measure_kelvin_a": {
+          "query": "KRDG? A"
+        },
+        "measure_kelvin_b": {
+          "query": "KRDG? B"
+        },
+        "measure_celsius_a": {
+          "query": "CRDG? A"
+        }
+      }
+    },
+    {
+      "id": "lakeshore_211",
+      "vendor": "Lake Shore",
+      "series": "Model 211 Temperature Monitor",
+      "type": "temp_ctrl",
+      "patterns": [
+        "MODEL 211",
+        "LSCI,211"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "measure_kelvin": {
+          "query": "KRDG? 1"
+        },
+        "measure_celsius": {
+          "query": "CRDG? 1"
+        }
+      }
+    },
+    {
+      "id": "oxford_mercuryitc",
+      "vendor": "Oxford Instruments",
+      "series": "MercuryiTC Temperature Controller",
+      "type": "temp_ctrl",
+      "patterns": [
+        "Mercury iTC",
+        "MercuryiTC",
+        "MERCURY ITC"
+      ],
+      "commands": {
+        "measure_temperature": {
+          "query": "READ:DEV:MB1.T1:TEMP:SIG:TEMP"
+        },
+        "set_setpoint": "SET:DEV:MB1.T1:TEMP:LOOP:TSET:{value}",
+        "get_setpoint": {
+          "query": "READ:DEV:MB1.T1:TEMP:LOOP:TSET"
+        },
+        "set_ramp_rate": "SET:DEV:MB1.T1:TEMP:LOOP:RSET:{value}",
+        "enable_ramp": "SET:DEV:MB1.T1:TEMP:LOOP:RENA:ON",
+        "disable_ramp": "SET:DEV:MB1.T1:TEMP:LOOP:RENA:OFF",
+        "get_heater_power": {
+          "query": "READ:DEV:MB1.H1:HTR:SIG:POWR"
+        }
+      }
+    },
+    {
+      "id": "agilent_4284a",
+      "vendor": "Agilent",
+      "series": "4284A Precision LCR Meter",
+      "type": "lcr",
+      "patterns": [
+        "4284A"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "set_frequency": "FREQ {value}",
+        "get_frequency": {
+          "query": "FREQ?"
+        },
+        "set_ac_voltage": "VOLT:LEV {value}",
+        "set_ac_current": "CURR:LEV {value}",
+        "set_bias_voltage": "BIAS:VOLT {value}",
+        "bias_on": "BIAS:STAT 1",
+        "bias_off": "BIAS:STAT 0",
+        "set_impedance_mode": "FUNC:IMP {mode}",
+        "get_impedance_mode": {
+          "query": "FUNC:IMP?"
+        },
+        "auto_range": "FUNC:IMP:RANG:AUTO 1",
+        "trigger": "*TRG",
+        "fetch": {
+          "query": "FETC?"
+        }
+      }
+    },
+    {
+      "id": "agilent_e4980a",
+      "vendor": "Agilent",
+      "series": "E4980A / E4980AL Precision LCR Meter",
+      "type": "lcr",
+      "patterns": [
+        "E4980A",
+        "E4980AL"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "set_frequency": ":FREQ:CW {value}",
+        "get_frequency": {
+          "query": ":FREQ:CW?"
+        },
+        "set_ac_voltage": ":VOLT:LEV {value}",
+        "set_ac_current": ":CURR:LEV {value}",
+        "set_impedance_mode": "FUNCtion:IMPedance:TYPE {mode}",
+        "get_impedance_mode": {
+          "query": "FUNCtion:IMPedance:TYPE?"
+        },
+        "trigger": "*TRG",
+        "fetch": {
+          "query": ":FETCH?"
+        }
+      }
+    },
+    {
+      "id": "agilent_4294a",
+      "vendor": "Agilent",
+      "series": "4294A Precision Impedance Analyzer",
+      "type": "lcr",
+      "patterns": [
+        "4294A"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "set_start_frequency": "STAR {value}",
+        "set_stop_frequency": "STOP {value}",
+        "get_start_frequency": {
+          "query": "STAR?"
+        },
+        "get_stop_frequency": {
+          "query": "STOP?"
+        },
+        "trigger": "*TRG"
+      }
+    },
+    {
+      "id": "agilent_8257d",
+      "vendor": "Agilent",
+      "series": "8257D / E8257D RF Signal Generator",
+      "type": "rf_gen",
+      "patterns": [
+        "E8257D",
+        "8257D"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "set_frequency": ":FREQ {value}",
+        "get_frequency": {
+          "query": ":FREQ?"
+        },
+        "set_power": ":POW {value}",
+        "get_power": {
+          "query": ":POW?"
+        },
+        "output_on": ":OUTPut ON",
+        "output_off": ":OUTPut OFF",
+        "get_output": {
+          "query": ":OUTPut?"
+        }
+      }
+    },
+    {
+      "id": "srs_sg380",
+      "vendor": "Stanford Research Systems",
+      "series": "SG380 Series RF Signal Generator",
+      "type": "rf_gen",
+      "patterns": [
+        "SG380",
+        "SG382",
+        "SG384",
+        "SG386"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "set_frequency": "FREQ {value}",
+        "get_frequency": {
+          "query": "FREQ?"
+        },
+        "set_amplitude": "AMPR {value}",
+        "get_amplitude": {
+          "query": "AMPR?"
+        },
+        "output_on": "ENBR 1",
+        "output_off": "ENBR 0"
+      }
+    },
+    {
+      "id": "anritsu_mg3692c",
+      "vendor": "Anritsu",
+      "series": "MG369xC Synthesized Signal Generator",
+      "type": "rf_gen",
+      "patterns": [
+        "MG3692C",
+        "MG3693C",
+        "MG3694C",
+        "MG3695C",
+        "MG3696C"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "set_frequency": ":FREQ:CW {value}",
+        "get_frequency": {
+          "query": ":FREQ:CW?"
+        },
+        "set_power": ":POW:LEV {value}",
+        "output_on": ":OUTP:STAT ON",
+        "output_off": ":OUTP:STAT OFF"
+      }
+    },
+    {
+      "id": "anapico_apsin",
+      "vendor": "AnaPico",
+      "series": "APSIN Series Signal Generator",
+      "type": "rf_gen",
+      "patterns": [
+        "APSIN12G",
+        "APSIN6G",
+        "APSIN20G",
+        "APSIN26G",
+        "APSIN40G"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "set_frequency": ":FREQ {value}",
+        "get_frequency": {
+          "query": ":FREQ?"
+        },
+        "set_power": ":POW {value}",
+        "output_on": ":OUTP ON",
+        "output_off": ":OUTP OFF"
+      }
+    },
+    {
+      "id": "agilent_e4408b",
+      "vendor": "Agilent",
+      "series": "ESA-E Series Spectrum Analyzer",
+      "type": "spectrum",
+      "patterns": [
+        "E4401B",
+        "E4402B",
+        "E4404B",
+        "E4405B",
+        "E4407B",
+        "E4408B"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "set_center_frequency": ":SENS:FREQ:CENT {value}",
+        "get_center_frequency": {
+          "query": ":SENS:FREQ:CENT?"
+        },
+        "set_start_frequency": ":SENS:FREQ:STAR {value}",
+        "set_stop_frequency": ":SENS:FREQ:STOP {value}",
+        "set_span": ":SENS:FREQ:SPAN {value}",
+        "set_rbw": ":SENS:BAND:RES {value}",
+        "trigger": "*TRG",
+        "fetch_trace": {
+          "query": ":TRAC? TRACE1"
+        }
+      }
+    },
+    {
+      "id": "rohdeschwarz_fsl",
+      "vendor": "Rohde & Schwarz",
+      "series": "FSL / FSW Spectrum Analyzer",
+      "type": "spectrum",
+      "patterns": [
+        "FSL3",
+        "FSL6",
+        "FSW8",
+        "FSW13",
+        "FSW26",
+        "FSW43",
+        "FSW50",
+        "FSW67",
+        "FSW85"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "set_center_frequency": "FREQ:CENT {value}",
+        "get_center_frequency": {
+          "query": "FREQ:CENT?"
+        },
+        "set_span": "FREQ:SPAN {value}",
+        "get_span": {
+          "query": "FREQ:SPAN?"
+        },
+        "set_start_frequency": "FREQ:STAR {value}",
+        "set_stop_frequency": "FREQ:STOP {value}",
+        "set_rbw": "BAND:RES {value}",
+        "set_ref_level": "POW:RLEV {value}",
+        "continuous_sweep": "INIT:CONT 1",
+        "single_sweep": "INIT:CONT 0;INIT;*WAI",
+        "fetch_trace": {
+          "query": "TRAC? TRACE1"
+        }
+      }
+    },
+    {
+      "id": "anritsu_ms2090a",
+      "vendor": "Anritsu",
+      "series": "MS2090A Handheld Spectrum Analyzer",
+      "type": "spectrum",
+      "patterns": [
+        "MS2090A"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "set_center_frequency": "FREQuency:CENTer {value}",
+        "get_center_frequency": {
+          "query": "FREQuency:CENTer?"
+        },
+        "set_span": "FREQuency:SPAN {value}",
+        "get_span": {
+          "query": "FREQuency:SPAN?"
+        },
+        "set_start_frequency": "FREQuency:STARt {value}",
+        "set_stop_frequency": "FREQuency:STOP {value}",
+        "fetch_peak": {
+          "query": "FET:PEAK?"
+        }
+      }
+    },
+    {
+      "id": "anritsu_ms9710c",
+      "vendor": "Anritsu",
+      "series": "MS9710C Optical Spectrum Analyzer",
+      "type": "spectrum",
+      "patterns": [
+        "MS9710C"
+      ],
+      "commands": {
+        "reset": "*RST"
+      }
+    },
+    {
+      "id": "anritsu_ms9740a",
+      "vendor": "Anritsu",
+      "series": "MS9740A Optical Spectrum Analyzer",
+      "type": "spectrum",
+      "patterns": [
+        "MS9740A"
+      ],
+      "commands": {
+        "reset": "*RST"
+      }
+    },
+    {
+      "id": "yokogawa_aq6370",
+      "vendor": "Yokogawa",
+      "series": "AQ6370 Series Optical Spectrum Analyzer",
+      "type": "spectrum",
+      "patterns": [
+        "AQ6370",
+        "AQ6373",
+        "AQ6375",
+        "AQ6376",
+        "AQ6380"
+      ],
+      "commands": {
+        "reset": "*RST"
+      }
+    },
+    {
+      "id": "rohdeschwarz_sfm",
+      "vendor": "Rohde & Schwarz",
+      "series": "SFM Modulation Analyzer",
+      "type": "spectrum",
+      "patterns": [
+        "SFM"
+      ],
+      "commands": {
+        "reset": "*RST"
+      }
+    },
+    {
+      "id": "agilent_8722es",
+      "vendor": "Agilent",
+      "series": "8722ES Vector Network Analyzer",
+      "type": "vna",
+      "patterns": [
+        "8722ES",
+        "8719ES",
+        "8720ES"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "set_start_frequency": "STAR {value}",
+        "get_start_frequency": {
+          "query": "STAR?"
+        },
+        "set_stop_frequency": "STOP {value}",
+        "get_stop_frequency": {
+          "query": "STOP?"
+        },
+        "set_sweep_time": "SWET {value}",
+        "trigger": "*TRG"
+      }
+    },
+    {
+      "id": "agilent_e5062a",
+      "vendor": "Agilent",
+      "series": "E5062A / E5061A / E5063A Vector Network Analyzer",
+      "type": "vna",
+      "patterns": [
+        "E5062A",
+        "E5061A",
+        "E5063A"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "set_start_frequency": ":SENS:FREQ:STAR {value}",
+        "set_stop_frequency": ":SENS:FREQ:STOP {value}"
+      }
+    },
+    {
+      "id": "anritsu_ms464xb",
+      "vendor": "Anritsu",
+      "series": "MS464xB Vector Network Analyzer",
+      "type": "vna",
+      "patterns": [
+        "MS4642B",
+        "MS4644B",
+        "MS4645B",
+        "MS4647B"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "set_start_frequency": ":SENS{ch}:FREQ:STAR {value}",
+        "set_stop_frequency": ":SENS{ch}:FREQ:STOP {value}",
+        "set_points": "SENS{ch}:SWE:POIN {value}",
+        "trigger": "*TRG"
+      }
+    },
+    {
+      "id": "keysight_pna",
+      "vendor": "Keysight",
+      "series": "PNA / PNA-X Vector Network Analyzer",
+      "type": "vna",
+      "patterns": [
+        "E8361A",
+        "E8362B",
+        "E8363B",
+        "E8364B",
+        "N5230A",
+        "N5232A",
+        "N5242A"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "output_on": "OUTP ON",
+        "output_off": "OUTP OFF",
+        "trigger": "*TRG",
+        "set_start_frequency": "SENS{ch}:FREQ:STAR {value}",
+        "set_stop_frequency": "SENS{ch}:FREQ:STOP {value}"
+      }
+    },
+    {
+      "id": "lakeshore_421",
+      "vendor": "Lake Shore",
+      "series": "Model 421 Gaussmeter",
+      "type": "gaussmeter",
+      "patterns": [
+        "MODEL 421",
+        "LSCI,421"
+      ],
+      "commands": {
+        "measure_field": {
+          "query": "FIELD?"
+        },
+        "measure_field_multiplier": {
+          "query": "FIELDM?"
+        },
+        "set_unit": "UNIT {value}",
+        "get_unit": {
+          "query": "UNIT?"
+        },
+        "set_range": "RANGE {value}",
+        "auto_range": "AUTO 1"
+      }
+    },
+    {
+      "id": "lakeshore_425",
+      "vendor": "Lake Shore",
+      "series": "Model 425 Gaussmeter",
+      "type": "gaussmeter",
+      "patterns": [
+        "MODEL 425",
+        "LSCI,425"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "measure_field": {
+          "query": "RDGFIELD?"
+        },
+        "set_unit": "UNIT {value}",
+        "auto_range": "AUTO 1"
+      }
+    },
+    {
+      "id": "mks_937b",
+      "vendor": "MKS Instruments",
+      "series": "937B Multi-Sensor System",
+      "type": "vacuum",
+      "patterns": [
+        "937B",
+        "MKS937"
+      ],
+      "commands": {
+        "measure_pressure_1": {
+          "query": "PR1?"
+        },
+        "measure_pressure_2": {
+          "query": "PR2?"
+        },
+        "measure_pressure_3": {
+          "query": "PR3?"
+        },
+        "measure_all_pressures": {
+          "query": "PRZ?"
+        },
+        "enable_gauge_1": "EN1 ON",
+        "disable_gauge_1": "EN1 OFF",
+        "get_unit": {
+          "query": "U?"
+        },
+        "set_unit": "U {value}"
+      }
+    },
+    {
+      "id": "mks_974b",
+      "vendor": "MKS Instruments",
+      "series": "974B Vacuum Pressure Transducer",
+      "type": "vacuum",
+      "patterns": [
+        "974B",
+        "MKS974"
+      ],
+      "commands": {
+        "measure_pirani": {
+          "query": "PR1?"
+        },
+        "measure_piezo": {
+          "query": "PR2?"
+        },
+        "measure_pressure": {
+          "query": "PR4?"
+        },
+        "measure_temperature": {
+          "query": "TEM?"
+        },
+        "get_firmware": {
+          "query": "FV?"
+        }
+      }
+    },
+    {
+      "id": "thorlabs_pm100usb",
+      "vendor": "Thorlabs",
+      "series": "PM100 Series Optical Power Meter",
+      "type": "power_meter",
+      "patterns": [
+        "PM100USB",
+        "PM200",
+        "PM400"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "measure_power": {
+          "query": "MEAS:POW?"
+        },
+        "set_wavelength": "SENS:CORR:WAV {value}",
+        "get_wavelength": {
+          "query": "SENS:CORR:WAV?"
+        },
+        "auto_range": "SENS:POW:RANG:AUTO 1"
+      }
+    },
+    {
+      "id": "pendulum_cnt91",
+      "vendor": "Pendulum",
+      "series": "CNT-91 Frequency Counter / Analyzer",
+      "type": "freq_counter",
+      "patterns": [
+        "CNT-91",
+        "CNT91"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "measure_frequency": {
+          "query": ":MEAS:FREQ?"
+        },
+        "measure_period": {
+          "query": ":MEAS:PER?"
+        },
+        "set_gate_time": ":ACQ:APER {value}",
+        "get_gate_time": {
+          "query": ":ACQ:APER?"
+        },
+        "continuous": "INIT:CONT 1",
+        "single": "INIT:CONT 0"
+      }
+    },
+    {
+      "id": "keysight_n7776c",
+      "vendor": "Keysight",
+      "series": "N7776C Tunable Laser Source",
+      "type": "laser",
+      "patterns": [
+        "N7776C",
+        "N7779C"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "set_wavelength": ":SOUR:WAV {value}",
+        "get_wavelength": {
+          "query": ":SOUR:WAV?"
+        },
+        "set_power": ":SOUR:POW {value}",
+        "output_on": ":SOUR:POW:STAT 1",
+        "output_off": ":SOUR:POW:STAT 0"
+      }
+    },
+    {
+      "id": "santec_tsl",
+      "vendor": "Santec",
+      "series": "TSL Series Tunable Laser Source",
+      "type": "laser",
+      "patterns": [
+        "TSL-500",
+        "TSL-550",
+        "TSL-570",
+        "TSL500",
+        "TSL550",
+        "TSL570"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "set_wavelength": "WA {value}",
+        "get_wavelength": {
+          "query": "WA?"
+        },
+        "set_power": "OP {value}",
+        "output_on": "POWER 1",
+        "output_off": "POWER 0"
+      }
+    },
+    {
+      "id": "srs_ldc500",
+      "vendor": "Stanford Research Systems",
+      "series": "LDC500 Laser Diode Controller",
+      "type": "laser",
+      "patterns": [
+        "LDC500",
+        "LDC501",
+        "LDC502"
+      ],
+      "commands": {
+        "reset": "*RST"
+      }
+    },
+    {
+      "id": "newport_esp300",
+      "vendor": "Newport",
+      "series": "ESP300 / ESP301 / ESP302 Motion Controller",
+      "type": "motion",
+      "patterns": [
+        "ESP300",
+        "ESP301",
+        "ESP302"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "get_position": {
+          "query": "{ax}TP"
+        },
+        "move_absolute": "{ax}PA{value}",
+        "move_relative": "{ax}PR{value}",
+        "home": "{ax}OR",
+        "stop": "{ax}ST",
+        "motor_on": "{ax}MO",
+        "motor_off": "{ax}MF"
+      }
+    },
+    {
+      "id": "spellman_xrv",
+      "vendor": "Spellman",
+      "series": "XRV High Voltage Power Supply",
+      "type": "psu",
+      "patterns": [
+        "XRV"
+      ],
+      "commands": {
+        "reset": "*RST",
+        "set_voltage": "VS {value}",
+        "set_current": "IS {value}",
+        "output_on": "HVE 1",
+        "output_off": "HVE 0",
+        "measure_voltage": {
+          "query": "VM?"
+        },
+        "measure_current": {
+          "query": "IM?"
+        }
       }
     }
   ]
