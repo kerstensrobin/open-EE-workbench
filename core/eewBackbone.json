@@ -2369,7 +2369,49 @@
         },
         "measure_power": {
           "query": ":MEAS:POW?"
+        },
+        "measure_resistance": {
+          "query": ":MEAS:RES?"
+        },
+        "measure_capacity": {
+          "query": ":MEAS:CAP?"
+        },
+        "measure_watt_hours": {
+          "query": ":MEAS:WATT?"
         }
+      }
+    },
+    {
+      "id": "siglent_sdl",
+      "vendor": "Siglent",
+      "series": "SDL1000X Series Programmable DC Electronic Load",
+      "type": "load",
+      "inherits": "rigol_dl3000",
+      "patterns": [
+        "SDL1020",
+        "SDL1030"
+      ],
+      "overrides": {
+        "measure_voltage": {
+          "query": "MEAS:VOLT:DC?"
+        },
+        "measure_current": {
+          "query": "MEAS:CURR:DC?"
+        },
+        "measure_power": {
+          "query": "MEAS:POW:DC?"
+        },
+        "measure_resistance": {
+          "query": "MEAS:RES:DC?"
+        },
+        "measure_capacity": {
+          "query": ":SOUR:BATT:DISCHA:CAP?"
+        },
+        "battery_time": {
+          "query": ":SOUR:BATT:DISCHA:TIM?"
+        },
+        "short_on": ":SOUR:SHOR:STAT 1",
+        "short_off": ":SOUR:SHOR:STAT 0"
       }
     },
     {
