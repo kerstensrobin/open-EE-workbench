@@ -511,6 +511,7 @@ def api_assign_family():
     d         = request.json or {}
     resource  = (d.get("resource") or "").strip()
     family_id = (d.get("family_id") or "").strip()
+    nickname  = (d.get("nickname") or "").strip()
     if not resource or not family_id:
         return jsonify({"error": "resource and family_id required"}), 400
     try:
@@ -529,10 +530,18 @@ def api_assign_family():
         for instr in wb.get("instruments", []):
             if instr.get("resource") == resource:
                 instr.update(family_id=family_id, type=new_type, role=new_role)
+                if nickname:
+                    instr["nickname"] = nickname
+                else:
+                    instr.pop("nickname", None)
                 updated = instr
         for instr in wb.get("_unique", []):
             if instr.get("resource") == resource:
                 instr.update(family_id=family_id, type=new_type, role=new_role)
+                if nickname:
+                    instr["nickname"] = nickname
+                else:
+                    instr.pop("nickname", None)
 
         if updated is None:
             return jsonify({"error": "Instrument not found in workbench"}), 404

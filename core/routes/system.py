@@ -334,6 +334,11 @@ def api_python_run():
         }
         if _sh.PYVISA_OK:
             ns["pyvisa"] = _sh.pyvisa
+        try:
+            import pymeasure as _pymeasure
+            ns["pymeasure"] = _pymeasure
+        except ImportError:
+            pass
         if get_command:
             ns.update(get_command=get_command, _op=_op, _log=_log,
                       _run_steps=_run_steps, _find_instrument=_find_instrument)

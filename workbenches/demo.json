@@ -14,7 +14,8 @@
       "idn": "RIGOL TECHNOLOGIES,DS1054Z,DS1ZA000000001,00.04.04.SP4",
       "type": "scope",
       "role": "scope",
-      "family_id": "rigol_ds1000z"
+      "family_id": "rigol_ds1000z",
+      "write_ops": []
     },
     {
       "resource": "DEMO::PSU::INSTR",
@@ -26,7 +27,29 @@
       "idn": "RIGOL TECHNOLOGIES,DP811,DP8A000000002,00.01.14",
       "type": "psu",
       "role": "psu",
-      "family_id": "rigol_dp800"
+      "family_id": "rigol_dp800",
+      "write_ops": [
+        {
+          "op": "set_voltage",
+          "label": "Voltage",
+          "key": "value"
+        },
+        {
+          "op": "set_current_limit",
+          "label": "Current Limit",
+          "key": "value"
+        },
+        {
+          "op": "set_ovp",
+          "label": "Ovp",
+          "key": "value"
+        },
+        {
+          "op": "set_ocp",
+          "label": "Ocp",
+          "key": "value"
+        }
+      ]
     },
     {
       "resource": "DEMO::AWG::INSTR",
@@ -38,7 +61,34 @@
       "idn": "Rigol Technologies,DG811,DG8A000000003,00.01.14.01.00",
       "type": "awg",
       "role": "generator",
-      "family_id": "rigol_dg800"
+      "family_id": "rigol_dg800",
+      "write_ops": [
+        {
+          "op": "set_function",
+          "label": "Function",
+          "key": "func"
+        },
+        {
+          "op": "set_frequency",
+          "label": "Frequency",
+          "key": "freq"
+        },
+        {
+          "op": "set_amplitude",
+          "label": "Amplitude",
+          "key": "amp"
+        },
+        {
+          "op": "set_amplitude_unit",
+          "label": "Amplitude Unit",
+          "key": "unit"
+        },
+        {
+          "op": "set_offset",
+          "label": "Offset",
+          "key": "offset"
+        }
+      ]
     },
     {
       "resource": "DEMO::DMM0::INSTR",
@@ -50,7 +100,8 @@
       "idn": "Keysight Technologies,34461A,MY00000004,A.02.14-02.40",
       "type": "dmm",
       "role": "dmm",
-      "family_id": "keysight_34461a"
+      "family_id": "keysight_34461a",
+      "write_ops": []
     },
     {
       "resource": "DEMO::DMM1::INSTR",
@@ -62,7 +113,8 @@
       "idn": "RIGOL TECHNOLOGIES,DM3058,DM3A000000005,01.01.01",
       "type": "dmm",
       "role": "dmm",
-      "family_id": "rigol_dm3058"
+      "family_id": "rigol_dm3058",
+      "write_ops": []
     },
     {
       "resource": "DEMO::ELOAD::INSTR",
@@ -74,9 +126,339 @@
       "idn": "KORAD,KEL103,KEL0000000006,1.00",
       "type": "load",
       "role": "load",
-      "family_id": "korad_kel"
+      "family_id": "korad_kel",
+      "write_ops": [
+        {
+          "op": "set_mode",
+          "label": "Mode",
+          "key": "func"
+        },
+        {
+          "op": "set_current",
+          "label": "Current",
+          "key": "value"
+        },
+        {
+          "op": "set_voltage",
+          "label": "Voltage",
+          "key": "value"
+        },
+        {
+          "op": "set_resistance",
+          "label": "Resistance",
+          "key": "value"
+        },
+        {
+          "op": "set_power",
+          "label": "Power",
+          "key": "value"
+        }
+      ]
+    },
+    {
+      "resource": "DEMO::GAUSSMETER::INSTR",
+      "connection": "Demo",
+      "manufacturer": "Lake Shore Cryotronics",
+      "model": "MODEL 425",
+      "serial": "DEMO000007",
+      "firmware": "1.3",
+      "idn": "Lake Shore Cryotronics,MODEL 425,4250000007,1.3",
+      "type": "gaussmeter",
+      "role": "gaussmeter",
+      "family_id": "lakeshore_425",
+      "write_ops": [
+        {
+          "op": "set_unit",
+          "label": "Unit",
+          "key": "value"
+        }
+      ]
+    },
+    {
+      "resource": "DEMO::VACUUM::INSTR",
+      "connection": "Demo",
+      "manufacturer": "MKS Instruments",
+      "model": "974B",
+      "serial": "DEMO000008",
+      "firmware": "1.0",
+      "idn": "MKS Instruments,974B,974B0000008,1.0",
+      "type": "vacuum",
+      "role": "vacuum",
+      "family_id": "mks_974b",
+      "write_ops": []
+    },
+    {
+      "resource": "DEMO::POWERMETER::INSTR",
+      "connection": "Demo",
+      "manufacturer": "Thorlabs",
+      "model": "PM100USB",
+      "serial": "DEMO000009",
+      "firmware": "1.0",
+      "idn": "Thorlabs,PM100USB,P0000000009,1.0",
+      "type": "power_meter",
+      "role": "power_meter",
+      "family_id": "thorlabs_pm100usb",
+      "write_ops": [
+        {
+          "op": "set_wavelength",
+          "label": "Wavelength",
+          "key": "value"
+        }
+      ]
+    },
+    {
+      "resource": "DEMO::FREQCOUNTER::INSTR",
+      "connection": "Demo",
+      "manufacturer": "Pendulum",
+      "model": "CNT-91",
+      "serial": "DEMO000010",
+      "firmware": "1.0",
+      "idn": "Pendulum,CNT-91,CNT910000010,1.0",
+      "type": "freq_counter",
+      "role": "freq_counter",
+      "family_id": "pendulum_cnt91",
+      "write_ops": [
+        {
+          "op": "set_gate_time",
+          "label": "Gate Time",
+          "key": "value"
+        }
+      ]
+    },
+    {
+      "resource": "DEMO::TEMPCTRL::INSTR",
+      "connection": "Demo",
+      "manufacturer": "Lake Shore Cryotronics",
+      "model": "MODEL 211",
+      "serial": "DEMO000011",
+      "firmware": "1.0",
+      "idn": "Lake Shore Cryotronics,MODEL 211,2110000011,1.0",
+      "type": "temp_ctrl",
+      "role": "temp_ctrl",
+      "family_id": "lakeshore_211",
+      "write_ops": []
+    },
+    {
+      "resource": "DEMO::THERMAL::INSTR",
+      "connection": "Demo",
+      "manufacturer": "Thermotron",
+      "model": "3800",
+      "serial": "DEMO000012",
+      "firmware": "1.0",
+      "idn": "Thermotron 3800,THERM3800,38000000012,1.0",
+      "type": "thermal",
+      "role": "thermal",
+      "family_id": "thermotron_3800",
+      "write_ops": [
+        {
+          "op": "set_setpoint",
+          "label": "Setpoint",
+          "key": "value"
+        }
+      ]
+    },
+    {
+      "resource": "DEMO::LOCKIN::INSTR",
+      "connection": "Demo",
+      "manufacturer": "Stanford Research Systems",
+      "model": "SR830",
+      "serial": "DEMO000013",
+      "firmware": "ver1.07",
+      "idn": "Stanford Research Systems,SR830,s/n0000013,ver1.07",
+      "type": "lock_in",
+      "role": "lock_in",
+      "family_id": "srs_sr830",
+      "write_ops": [
+        {
+          "op": "set_frequency",
+          "label": "Frequency",
+          "key": "value"
+        },
+        {
+          "op": "set_sine_voltage",
+          "label": "Sine Voltage",
+          "key": "value"
+        },
+        {
+          "op": "set_phase",
+          "label": "Phase",
+          "key": "value"
+        },
+        {
+          "op": "set_sensitivity",
+          "label": "Sensitivity",
+          "key": "value"
+        },
+        {
+          "op": "set_time_constant",
+          "label": "Time Constant",
+          "key": "value"
+        },
+        {
+          "op": "set_harmonic",
+          "label": "Harmonic",
+          "key": "value"
+        }
+      ]
+    },
+    {
+      "resource": "DEMO::LCR::INSTR",
+      "connection": "Demo",
+      "manufacturer": "Agilent Technologies",
+      "model": "4284A",
+      "serial": "DEMO000014",
+      "firmware": "1.0",
+      "idn": "HEWLETT-PACKARD,4284A,JP0000000014,1.0",
+      "type": "lcr",
+      "role": "lcr",
+      "family_id": "agilent_4284a",
+      "write_ops": [
+        {
+          "op": "set_frequency",
+          "label": "Frequency",
+          "key": "value"
+        },
+        {
+          "op": "set_ac_voltage",
+          "label": "Ac Voltage",
+          "key": "value"
+        },
+        {
+          "op": "set_ac_current",
+          "label": "Ac Current",
+          "key": "value"
+        },
+        {
+          "op": "set_bias_voltage",
+          "label": "Bias Voltage",
+          "key": "value"
+        },
+        {
+          "op": "set_impedance_mode",
+          "label": "Impedance Mode",
+          "key": "mode"
+        }
+      ]
+    },
+    {
+      "resource": "DEMO::RFGEN::INSTR",
+      "connection": "Demo",
+      "manufacturer": "Agilent Technologies",
+      "model": "E8257D",
+      "serial": "DEMO000015",
+      "firmware": "A.01.62",
+      "idn": "Agilent Technologies,E8257D,MY0000000015,A.01.62",
+      "type": "rf_gen",
+      "role": "rf_gen",
+      "family_id": "agilent_8257d",
+      "write_ops": [
+        {
+          "op": "set_frequency",
+          "label": "Frequency",
+          "key": "value"
+        },
+        {
+          "op": "set_power",
+          "label": "Power",
+          "key": "value"
+        }
+      ]
+    },
+    {
+      "resource": "DEMO::SPECTRUM::INSTR",
+      "connection": "Demo",
+      "manufacturer": "Anritsu",
+      "model": "MS2090A",
+      "serial": "DEMO000016",
+      "firmware": "1.0",
+      "idn": "Anritsu,MS2090A,0000000016,1.0",
+      "type": "spectrum",
+      "role": "spectrum",
+      "family_id": "anritsu_ms2090a",
+      "write_ops": [
+        {
+          "op": "set_center_frequency",
+          "label": "Center Frequency",
+          "key": "value"
+        },
+        {
+          "op": "set_span",
+          "label": "Span",
+          "key": "value"
+        },
+        {
+          "op": "set_start_frequency",
+          "label": "Start Frequency",
+          "key": "value"
+        },
+        {
+          "op": "set_stop_frequency",
+          "label": "Stop Frequency",
+          "key": "value"
+        }
+      ]
+    },
+    {
+      "resource": "DEMO::VNA::INSTR",
+      "connection": "Demo",
+      "manufacturer": "Keysight Technologies",
+      "model": "N5242A",
+      "serial": "DEMO000017",
+      "firmware": "A.09.42",
+      "idn": "Keysight Technologies,N5242A,MY0000000017,A.09.42",
+      "type": "vna",
+      "role": "vna",
+      "family_id": "keysight_pna",
+      "write_ops": [
+        {
+          "op": "set_start_frequency",
+          "label": "Start Frequency",
+          "key": "value"
+        },
+        {
+          "op": "set_stop_frequency",
+          "label": "Stop Frequency",
+          "key": "value"
+        }
+      ]
+    },
+    {
+      "resource": "DEMO::LASER::INSTR",
+      "connection": "Demo",
+      "manufacturer": "Santec",
+      "model": "TSL-550",
+      "serial": "DEMO000018",
+      "firmware": "1.0",
+      "idn": "Santec,TSL-550,TSL0000000018,1.0",
+      "type": "laser",
+      "role": "laser",
+      "family_id": "santec_tsl",
+      "write_ops": [
+        {
+          "op": "set_wavelength",
+          "label": "Wavelength",
+          "key": "value"
+        },
+        {
+          "op": "set_power",
+          "label": "Power",
+          "key": "value"
+        }
+      ]
+    },
+    {
+      "resource": "DEMO::MOTION::INSTR",
+      "connection": "Demo",
+      "manufacturer": "Newport",
+      "model": "ESP300",
+      "serial": "DEMO000019",
+      "firmware": "1.0",
+      "idn": "Newport,ESP300,ESP3000000019,1.0",
+      "type": "motion",
+      "role": "motion",
+      "family_id": "newport_esp300",
+      "write_ops": []
     }
   ],
   "suggested_tests": []
 }
-

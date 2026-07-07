@@ -1789,6 +1789,10 @@ def api_automation_run():
         _MEAS_OPS = {
             "voltage": "measure_voltage", "current": "measure_current",
             "vac": "measure_vac", "r": "measure_r", "r4w": "measure_r4w",
+            "celsius": "measure_celsius", "temperature": "measure_temperature",
+            "pressure": "measure_pressure", "field": "measure_field",
+            "power": "measure_power", "frequency": "measure_frequency",
+            "x": "measure_x", "y": "measure_y",
         }
 
         def _sf(v):
@@ -1989,6 +1993,10 @@ def api_automation_run():
         _MEAS_OPS = {
             "voltage": "measure_voltage", "current": "measure_current",
             "vac": "measure_vac", "r": "measure_r", "r4w": "measure_r4w",
+            "celsius": "measure_celsius", "temperature": "measure_temperature",
+            "pressure": "measure_pressure", "field": "measure_field",
+            "power": "measure_power", "frequency": "measure_frequency",
+            "x": "measure_x", "y": "measure_y",
         }
 
         def _sf(v):
@@ -2032,6 +2040,10 @@ def api_automation_run():
             _MEAS_OPS_L = {
                 "voltage": "measure_voltage", "current": "measure_current",
                 "vac": "measure_vac", "r": "measure_r", "r4w": "measure_r4w",
+                "celsius": "measure_celsius", "temperature": "measure_temperature",
+                "pressure": "measure_pressure", "field": "measure_field",
+                "power": "measure_power", "frequency": "measure_frequency",
+                "x": "measure_x", "y": "measure_y",
             }
             t = s.get("type", "")
             if t == "wait":

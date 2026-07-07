@@ -44,6 +44,7 @@ REQUIRED = [
     "flask",
     "flask-socketio",
     "pywebview",
+    "pymeasure",
 ]
 
 OPTIONAL = {

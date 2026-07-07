@@ -188,24 +188,36 @@
     }
     #report-issue-btn {
       display:inline-flex; align-items:center; gap:7px; background:transparent;
-      color:var(--text-faint); border:1px solid var(--border); border-radius:var(--radius);
+      color:var(--text); border:1px solid var(--border2); border-radius:var(--radius);
       padding:7px 16px; font:inherit; font-size:12px; cursor:pointer; transition:all .15s;
     }
-    #report-issue-btn:hover { background:var(--surface3); color:var(--text-dim); border-color:var(--border2); }
+    #report-issue-btn:hover { background:var(--surface3); border-color:var(--text-dim); }
 
     /* ── Cards ───────────────────────────────────────────────────── */
     .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; transition:border-color .2s; }
     .card:hover { border-color:var(--border2); }
     .card-header { display:flex; align-items:center; gap:10px; padding:12px 16px; background:var(--surface2); border-bottom:1px solid var(--border); }
-    .card-edit-btn { padding:2px 5px; font-size:10px; opacity:0; transition:opacity .15s; flex-shrink:0; }
-    .card:hover .card-edit-btn { opacity:0.55; }
-    .card-edit-btn:hover { opacity:1 !important; }
+    .card-edit-btn { padding:2px 5px; font-size:10px; opacity:0.45; flex-shrink:0; }
+    .card-edit-btn:hover { opacity:1; }
     .card-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
     .card-icon.scope  { background:rgba(26,86,196,.14); color:var(--accent); }
     .card-icon.psu    { background:rgba(21,128,61,.14); color:var(--green); }
     .card-icon.awg    { background:rgba(109,40,217,.14); color:var(--purple); }
     .card-icon.dmm    { background:rgba(180,83,9,.14); color:var(--amber); }
-    .card-icon.eload  { background:rgba(220,38,38,.13); color:#ef4444; }
+    .card-icon.eload     { background:rgba(220,38,38,.13); color:#ef4444; }
+    .card-icon.gauss     { background:rgba(99,102,241,.14);  color:#6366f1; }
+    .card-icon.vac       { background:rgba(100,116,139,.14); color:#64748b; }
+    .card-icon.pm        { background:rgba(8,145,178,.14);   color:#0891b2; }
+    .card-icon.fc        { background:rgba(180,83,9,.14);    color:var(--amber); }
+    .card-icon.tc        { background:rgba(234,88,12,.12);   color:#ea580c; }
+    .card-icon.therm     { background:rgba(180,40,12,.12);   color:#c2410c; }
+    .card-icon.li        { background:rgba(67,56,202,.14);   color:#4338ca; }
+    .card-icon.lcr       { background:rgba(5,150,105,.14);   color:#059669; }
+    .card-icon.rfgen     { background:rgba(219,39,119,.14);  color:#db2777; }
+    .card-icon.sa        { background:rgba(13,148,136,.14);  color:#0d9488; }
+    .card-icon.vna-icon  { background:rgba(20,184,166,.14);  color:#14b8a6; }
+    .card-icon.laser     { background:rgba(220,38,38,.18);   color:#dc2626; }
+    .card-icon.mot       { background:rgba(21,128,61,.14);   color:var(--green); }
     .card-title-wrap { flex:1; min-width:0; }
     .card-title    { font-weight:600; font-size:13px; color:var(--text); }
     .card-subtitle { font-size:11px; color:var(--text-dim); margin-top:1px; font-family:var(--mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -1191,9 +1203,9 @@
         <div style="flex:1"></div>
         <button class="btn btn-ghost" id="poll-toggle-btn" style="font-size:12px;gap:5px;" onclick="togglePolling()" title="Pause or resume background instrument polling">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+            <polygon points="5 3 19 12 5 21 5 3"/>
           </svg>
-          Pause polling
+          Resume polling
         </button>
         <button class="btn btn-ghost" id="bench-reset-btn" style="font-size:12px;color:var(--text-dim);gap:5px;" onclick="resetBench()">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1817,7 +1829,7 @@
           </button>
         </div>
         <textarea id="py-editor" spellcheck="false"># Available in scope (no imports needed):
-#   print, time, json, math, Path, pyvisa
+#   print, time, json, math, Path, pyvisa, pymeasure
 #   resources  — dict[resource_str → pyvisa resource]
 #   families   — dict[resource_str → resolved family dict]
 #   wb         — active workbench dict, or None
@@ -1913,6 +1925,11 @@ if scope:
     </div>
     <div class="modal-body">
       <div style="font-size:11px;color:var(--text-dim);font-family:var(--mono);word-break:break-all;" id="assign-resource-lbl"></div>
+
+      <div class="assign-section">
+        <div class="assign-lbl">Nickname <span style="font-weight:400;color:var(--text-dim);font-size:10px;">(optional — shown as card title)</span></div>
+        <input id="assign-nickname-inp" class="assign-sel" type="text" placeholder="e.g. Bench 3 scope, DUT supply…" style="font-family:inherit;">
+      </div>
 
       <div class="assign-section">
         <div class="assign-lbl">Type</div>
@@ -2216,7 +2233,7 @@ function switchTab(name) {
 }
 
 // ── Polling toggle ─────────────────────────────────────────────────
-let _pollingPaused = false;
+let _pollingPaused = true;
 
 function togglePolling() {
   _pollingPaused = !_pollingPaused;
@@ -2555,12 +2572,13 @@ socket.on("disconnected", () => {
   $connectBtn.disabled    = !state.workbench;
   document.getElementById("bench-state-bar").classList.add("hidden");
   document.getElementById("demo-badge")?.classList.add("hidden");
-  _pollingPaused = false; // reset polling state on disconnect
+  _pollingPaused = true; // polling off by default on disconnect
+  _stopAllContPolling();
   const pollBtn = document.getElementById("poll-toggle-btn");
   if (pollBtn) {
     pollBtn.classList.remove("paused");
-    pollBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause polling`;
-    pollBtn.title = "Pause background instrument polling";
+    pollBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Resume polling`;
+    pollBtn.title = "Resume background instrument polling";
   }
   resetCardStatus();
   _scopeStopAuto();
@@ -2743,10 +2761,20 @@ function buildInstrumentGrid(instruments) {
   if (types.awg)   $grid.appendChild(buildAWGCard(types.awg[0]));
   if (types.dmm)   $grid.appendChild(buildDMMCard(types.dmm[0]));
   if (types.load) $grid.appendChild(buildELoadCard(types.load[0]));
+  const _typeBuilders = {
+    gaussmeter:   buildGaussmeterCard,   vacuum:      buildVacuumCard,
+    power_meter:  buildPowerMeterCard,   freq_counter:buildFreqCounterCard,
+    temp_ctrl:    buildTempCtrlCard,     thermal:     buildThermalCard,
+    lock_in:      buildLockInCard,       lcr:         buildLCRCard,
+    rf_gen:       buildRFGenCard,        spectrum:    buildSpectrumCard,
+    vna:          buildVNACard,          laser:       buildLaserCard,
+    motion:       buildMotionCard,
+  };
   for (const [t,instrs] of Object.entries(types)) {
-    if (!["scope","psu","awg","dmm","load"].includes(t)) {
-      for (const instr of instrs) $grid.appendChild(buildGenericCard(instr));
-    }
+    if (["scope","psu","awg","dmm","load"].includes(t)) continue;
+    const builder = _typeBuilders[t];
+    if (builder) $grid.appendChild(builder(instrs[0]));
+    else for (const instr of instrs) $grid.appendChild(buildGenericCard(instr));
   }
   // Cards are loaded but not yet connected — show amber pending dot
   $grid.querySelectorAll(".card").forEach(c => c.classList.add("pending"));
@@ -2995,10 +3023,7 @@ function buildScopeCard(instr) {
   div.innerHTML=`
     <div class="card-header">
       <div class="card-icon scope">⚡</div>
-      <div class="card-title-wrap">
-        <div class="card-title">Oscilloscope</div>
-        <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
-      </div>
+      ${_titleWrap(instr,"Oscilloscope")}
       <button class="btn btn-ghost" title="SCPI command reference" data-family="${escHtml(instr.family_id||'')}" data-model="${escHtml(instr.model||instr.idn||'')}" onclick="openScpiRefModal(this.dataset.family,this.dataset.model)" style="font-size:10px;padding:2px 6px;flex-shrink:0;">SCPI REF</button>
       <button class="btn btn-ghost card-edit-btn" title="Edit assignment" data-resource="${escHtml(instr.resource)}" data-family="${escHtml(instr.family_id||'')}" onclick="openAssignModal(this.dataset.resource,this.dataset.family)">✎</button>
       <div class="card-status-dot"></div>
@@ -3190,10 +3215,7 @@ function buildPSUCard(instr) {
   div.innerHTML=`
     <div class="card-header">
       <div class="card-icon psu">⚙</div>
-      <div class="card-title-wrap">
-        <div class="card-title">Power Supply</div>
-        <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
-      </div>
+      ${_titleWrap(instr,"Power Supply")}
       <button class="btn btn-ghost" title="SCPI command reference" data-family="${escHtml(instr.family_id||'')}" data-model="${escHtml(instr.model||instr.idn||'')}" onclick="openScpiRefModal(this.dataset.family,this.dataset.model)" style="font-size:10px;padding:2px 6px;flex-shrink:0;">SCPI REF</button>
       <button class="btn btn-ghost card-edit-btn" title="Edit assignment" data-resource="${escHtml(instr.resource)}" data-family="${escHtml(instr.family_id||'')}" onclick="openAssignModal(this.dataset.resource,this.dataset.family)">✎</button>
       <div class="card-status-dot"></div>
@@ -3279,10 +3301,7 @@ function buildAWGCard(instr) {
   div.innerHTML=`
     <div class="card-header">
       <div class="card-icon awg">〜</div>
-      <div class="card-title-wrap">
-        <div class="card-title">Waveform Generator</div>
-        <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
-      </div>
+      ${_titleWrap(instr,"Waveform Generator")}
       <button class="btn btn-ghost" title="SCPI command reference" data-family="${escHtml(instr.family_id||'')}" data-model="${escHtml(instr.model||instr.idn||'')}" onclick="openScpiRefModal(this.dataset.family,this.dataset.model)" style="font-size:10px;padding:2px 6px;flex-shrink:0;">SCPI REF</button>
       <button class="btn btn-ghost card-edit-btn" title="Edit assignment" data-resource="${escHtml(instr.resource)}" data-family="${escHtml(instr.family_id||'')}" onclick="openAssignModal(this.dataset.resource,this.dataset.family)">✎</button>
       <div class="card-status-dot"></div>
@@ -3304,6 +3323,10 @@ function buildAWGCard(instr) {
           <div class="param-row">
             <span class="param-label">Offset</span>
             <div class="param-input-wrap"><input class="param-input" id="awg-offs" type="number" step="any" placeholder="0.000" /><span class="param-unit">V</span></div>
+          </div>
+          <div class="param-row" id="awg-duty-row" style="display:none">
+            <span class="param-label">Duty</span>
+            <div class="param-input-wrap"><input class="param-input" id="awg-duty" type="number" step="1" min="0" max="100" placeholder="50" /><span class="param-unit">%</span></div>
           </div>
         </div>
       </div>
@@ -3330,15 +3353,19 @@ function awgSelectCh(btn) {
 function awgSelectFunc(btn) {
   document.querySelectorAll("#awg-func-pills .func-pill").forEach(b=>b.classList.remove("active"));
   btn.classList.add("active"); _awgFunc=btn.dataset.func;
+  const dr=document.getElementById("awg-duty-row");
+  if (dr) dr.style.display=(_awgFunc==="PULS"||_awgFunc==="SQU")?"":"none";
 }
 function awgApply() {
   const body={ch:_awgCh,function:_awgFunc};
   const freq=document.getElementById("awg-freq")?.value;
   const amp =document.getElementById("awg-amp")?.value;
   const offs=document.getElementById("awg-offs")?.value;
+  const duty=document.getElementById("awg-duty")?.value;
   if (freq) body.frequency=parseFloat(freq);
   if (amp)  body.amplitude=parseFloat(amp);
   if (offs) body.offset=parseFloat(offs);
+  if (duty && (_awgFunc==="PULS"||_awgFunc==="SQU")) body.duty_cycle=parseFloat(duty);
   POST("/api/awg/apply",body).catch(e=>toast(e.message,"error"));
 }
 function awgToggleOutput(btn) {
@@ -3361,13 +3388,19 @@ function awgReadState() {
           .replace(/^(TRI|TRIANGL|TRIANGLE)$/, "TRI")
           .replace(/^RAMP$/, "RAMP")
           .replace(/^(PULS|PULSE)$/, "PULS")
-          .replace(/^(NOIS|NOISE)$/, "NOIS")
+          .replace(/^(NOIS|NOISE|PRNOISE)$/, "NOIS")
           .replace(/^DC$/, "DC");
         document.querySelectorAll("#awg-func-pills .func-pill").forEach(b => {
           const match = b.dataset.func === func || func.startsWith(b.dataset.func);
           b.classList.toggle("active", match);
           if (match) _awgFunc = b.dataset.func;
         });
+        const dr=document.getElementById("awg-duty-row");
+        if (dr) dr.style.display=(_awgFunc==="PULS"||_awgFunc==="SQU")?"":"none";
+      }
+      if (d.duty_cycle !== undefined) {
+        const el=document.getElementById("awg-duty");
+        if (el) el.value=parseFloat(d.duty_cycle);
       }
       toast("State read from instrument", "ok");
     })
@@ -3389,10 +3422,7 @@ function buildDMMCard(instr) {
   div.innerHTML=`
     <div class="card-header">
       <div class="card-icon dmm">Ω</div>
-      <div class="card-title-wrap">
-        <div class="card-title">Multimeter</div>
-        <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
-      </div>
+      ${_titleWrap(instr,"Multimeter")}
       <button class="btn btn-ghost" title="SCPI command reference" data-family="${escHtml(instr.family_id||'')}" data-model="${escHtml(instr.model||instr.idn||'')}" onclick="openScpiRefModal(this.dataset.family,this.dataset.model)" style="font-size:10px;padding:2px 6px;flex-shrink:0;">SCPI REF</button>
       <button class="btn btn-ghost card-edit-btn" title="Edit assignment" data-resource="${escHtml(instr.resource)}" data-family="${escHtml(instr.family_id||'')}" onclick="openAssignModal(this.dataset.resource,this.dataset.family)">✎</button>
       <div class="card-status-dot"></div>
@@ -3535,10 +3565,7 @@ function buildELoadCard(instr) {
   div.innerHTML = `
     <div class="card-header">
       <div class="card-icon eload" style="font-size:12px;font-weight:700;">CC</div>
-      <div class="card-title-wrap">
-        <div class="card-title">Electronic Load</div>
-        <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
-      </div>
+      ${_titleWrap(instr,"Electronic Load")}
       <button class="btn btn-ghost" title="SCPI command reference" data-family="${escHtml(instr.family_id||'')}" data-model="${escHtml(instr.model||instr.idn||'')}" onclick="openScpiRefModal(this.dataset.family,this.dataset.model)" style="font-size:10px;padding:2px 6px;flex-shrink:0;">SCPI REF</button>
       <button class="btn btn-ghost card-edit-btn" title="Edit assignment" data-resource="${escHtml(instr.resource)}" data-family="${escHtml(instr.family_id||'')}" onclick="openAssignModal(this.dataset.resource,this.dataset.family)">✎</button>
       <div class="card-status-dot"></div>
@@ -3637,6 +3664,50 @@ socket.on("load_reading", ({ v, i, p }) => {
   }
 });
 
+// ── instrument_result — generic new-type handler ───────────────────
+socket.on("instrument_result", ({type, op, value, error}) => {
+  if (error) {
+    if (!String(error).includes("not supported") && !String(error).includes("not connected"))
+      toast(`${type}: ${error}`, "error");
+    return;
+  }
+  const v = value != null ? String(value).trim() : null;
+  switch (type) {
+    case "gaussmeter":
+      if (op === "measure_field" || op === "measure_field_multiplier") _setReading("gauss-value", v); break;
+    case "vacuum":
+      if (op.startsWith("measure_p")) _setReading("vac-value", v); break;
+    case "power_meter":
+      if (op === "measure_power")  _setReading("pm-value", v);
+      if (op === "get_wavelength") { const e=document.getElementById("pm-wl"); if(e&&!e.matches(":focus"))e.value=v; } break;
+    case "freq_counter":
+      if (op === "measure_frequency" || op === "measure_period") _setReading("fc-value", v); break;
+    case "temp_ctrl":
+      if (op.startsWith("measure_celsius") || op === "measure_temperature") _setReading("tc-value", v);
+      if (op === "get_setpoint" || op === "get_setpoint_1") { const e=document.getElementById("tc-sp"); if(e&&!e.matches(":focus"))e.value=v; } break;
+    case "thermal":
+      if (op.startsWith("measure_")) _setReading("therm-value", v); break;
+    case "lock_in": {
+      const ids = {measure_x:"li-x",measure_y:"li-y",measure_r:"li-r",measure_theta:"li-theta"};
+      if (ids[op]) _setReading(ids[op], v); break;
+    }
+    case "lcr":
+      if (op === "fetch")          _setReading("lcr-value", v);
+      if (op === "get_frequency") { const e=document.getElementById("lcr-freq"); if(e&&!e.matches(":focus"))e.value=parseFloat(v); } break;
+    case "rf_gen":
+      if (op === "get_frequency") { const e=document.getElementById("rfgen-freq"); if(e&&!e.matches(":focus"))e.value=parseFloat(v); }
+      if (op === "get_power")     { const e=document.getElementById("rfgen-pwr");  if(e&&!e.matches(":focus"))e.value=parseFloat(v); } break;
+    case "spectrum":
+      if (op === "fetch_peak")             _setReading("sa-peak", v);
+      if (op === "get_center_frequency") { const e=document.getElementById("sa-center"); if(e&&!e.matches(":focus"))e.value=parseFloat(v); }
+      if (op === "get_span")             { const e=document.getElementById("sa-span");   if(e&&!e.matches(":focus"))e.value=parseFloat(v); } break;
+    case "laser":
+      if (op === "get_wavelength") { const e=document.getElementById("laser-wl"); if(e&&!e.matches(":focus"))e.value=parseFloat(v); } break;
+    case "motion":
+      if (op === "get_position") _setReading("mot-pos", v); break;
+  }
+});
+
 // ── Generic card ───────────────────────────────────────────────────
 function buildGenericCard(instr) {
   const div=document.createElement("div");
@@ -3664,11 +3735,530 @@ function buildGenericCard(instr) {
   return div;
 }
 
+// ── Generic new-type card helpers ──────────────────────────────────────
+
+function instOp(type, op, kw) {
+  return POST("/api/instrument/op", {type, op, ...(kw||{})}).catch(e => toast(e.message, "error"));
+}
+
+function _setReading(id, raw) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (raw == null) { el.classList.add("dim"); el.textContent = "—"; return; }
+  el.classList.remove("dim");
+  const n = parseFloat(raw);
+  if (!isFinite(n)) { el.textContent = String(raw).trim(); return; }
+  const a = Math.abs(n);
+  el.textContent = a >= 1e6 ? n.toExponential(4)
+    : a >= 1e3              ? n.toFixed(2)
+    : a >= 1                ? n.toFixed(4)
+    : a >= 1e-3             ? n.toFixed(6)
+    :                         n.toExponential(4);
+}
+
+function _titleWrap(instr, typeLabel) {
+  if (instr.nickname) {
+    return `<div class="card-title-wrap">
+      <div class="card-title">${escHtml(instr.nickname)}</div>
+      <div class="card-subtitle">${escHtml(typeLabel)} · ${escHtml(instr.model||"—")}</div>
+    </div>`;
+  }
+  return `<div class="card-title-wrap">
+    <div class="card-title">${escHtml(typeLabel)}</div>
+    <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
+  </div>`;
+}
+function _chdr(instr, iCls, iChar, title) {
+  return `<div class="card-header">
+    <div class="card-icon ${iCls}">${iChar}</div>
+    ${_titleWrap(instr, title)}
+    <button class="btn btn-ghost" title="SCPI command reference" data-family="${escHtml(instr.family_id||'')}" data-model="${escHtml(instr.model||instr.idn||'')}" onclick="openScpiRefModal(this.dataset.family,this.dataset.model)" style="font-size:10px;padding:2px 6px;flex-shrink:0;">SCPI REF</button>
+    <button class="btn btn-ghost card-edit-btn" title="Edit assignment" data-resource="${escHtml(instr.resource)}" data-family="${escHtml(instr.family_id||'')}" onclick="openAssignModal(this.dataset.resource,this.dataset.family)">✎</button>
+    <div class="card-status-dot"></div>
+  </div>`;
+}
+
+function _scpiRow(type) {
+  return `<div class="scpi-row"><input class="scpi-inp" type="text" placeholder="Manual SCPI command…" onkeydown="if(event.key==='Enter')sendScpi('${type}',this)" spellcheck="false" autocomplete="off" /><button class="btn" style="padding:3px 8px;font-size:10px;flex-shrink:0;" onclick="sendScpi('${type}',this.previousElementSibling)">Send</button></div>`;
+}
+
+function _stopAllContPolling() {
+  [_gaussContID,_vacContID,_pmContID,_fcContID,_tcContID,_thermContID,_liContID].forEach(id => { if (id) clearInterval(id); });
+  _gaussContID=_vacContID=_pmContID=_fcContID=_tcContID=_thermContID=_liContID=null;
+}
+
+// ── Gaussmeter ────────────────────────────────────────────────────────
+function buildGaussmeterCard(instr) {
+  const d = document.createElement("div");
+  d.className = "card"; d.dataset.type = "gaussmeter"; d.dataset.model = instr.model||"";
+  d.innerHTML = _chdr(instr,"gauss","G","Gaussmeter") + `
+    <div class="card-body dmm-body">
+      <div class="dmm-display"><div class="dmm-value dim" id="gauss-value" style="color:#6366f1">—</div></div>
+      <div class="dmm-actions">
+        <button class="btn btn-primary" onclick="instOp('gaussmeter','measure_field')">Measure</button>
+        <button class="output-toggle" id="gauss-cont" data-on="false" onclick="_gaussCont(this)"><span class="tog-dot"></span>Continuous</button>
+        <button class="btn btn-ghost" style="font-size:11px;" onclick="instOp('gaussmeter','auto_range')">Auto</button>
+      </div>
+      ${_scpiRow("gaussmeter")}
+    </div>`;
+  return d;
+}
+let _gaussContID = null;
+function _gaussCont(btn) {
+  const on = btn.dataset.on !== "true"; btn.dataset.on = on;
+  btn.className = "output-toggle" + (on?" on":"");
+  btn.innerHTML = `<span class="tog-dot"></span>Continuous`;
+  if (on) _gaussContID = setInterval(() => instOp("gaussmeter","measure_field",{poll:true}), 1500);
+  else { clearInterval(_gaussContID); _gaussContID = null; }
+}
+
+// ── Vacuum Gauge ──────────────────────────────────────────────────────
+function buildVacuumCard(instr) {
+  const d = document.createElement("div");
+  d.className = "card"; d.dataset.type = "vacuum"; d.dataset.model = instr.model||"";
+  d.innerHTML = _chdr(instr,"vac","P","Vacuum Gauge") + `
+    <div class="card-body dmm-body">
+      <div class="dmm-display"><div class="dmm-value dim" id="vac-value" style="color:#64748b;font-size:22px">—</div></div>
+      <div class="dmm-actions">
+        <button class="btn btn-primary" onclick="instOp('vacuum','measure_pressure')">Measure</button>
+        <button class="output-toggle" id="vac-cont" data-on="false" onclick="_vacCont(this)"><span class="tog-dot"></span>Continuous</button>
+      </div>
+      ${_scpiRow("vacuum")}
+    </div>`;
+  return d;
+}
+let _vacContID = null;
+function _vacCont(btn) {
+  const on = btn.dataset.on !== "true"; btn.dataset.on = on;
+  btn.className = "output-toggle" + (on?" on":"");
+  btn.innerHTML = `<span class="tog-dot"></span>Continuous`;
+  if (on) _vacContID = setInterval(() => instOp("vacuum","measure_pressure",{poll:true}), 2000);
+  else { clearInterval(_vacContID); _vacContID = null; }
+}
+
+// ── Power Meter ───────────────────────────────────────────────────────
+function buildPowerMeterCard(instr) {
+  const d = document.createElement("div");
+  d.className = "card"; d.dataset.type = "power_meter"; d.dataset.model = instr.model||"";
+  d.innerHTML = _chdr(instr,"pm","W","Power Meter") + `
+    <div class="card-body dmm-body">
+      <div>
+        <div class="section-label">Wavelength</div>
+        <div class="param-row">
+          <div class="param-input-wrap" style="flex:1"><input class="param-input" id="pm-wl" type="number" step="1" placeholder="1550" /><span class="param-unit">nm</span></div>
+          <button class="btn btn-ghost" style="font-size:11px;flex-shrink:0;margin-left:6px;" onclick="instOp('power_meter','set_wavelength',{wavelength:document.getElementById('pm-wl').value})">Set</button>
+        </div>
+      </div>
+      <div class="dmm-display"><div class="dmm-value dim" id="pm-value" style="color:#0891b2">—</div></div>
+      <div class="dmm-actions">
+        <button class="btn btn-primary" onclick="instOp('power_meter','measure_power')">Measure</button>
+        <button class="output-toggle" id="pm-cont" data-on="false" onclick="_pmCont(this)"><span class="tog-dot"></span>Continuous</button>
+        <button class="btn btn-ghost" style="font-size:11px;" onclick="instOp('power_meter','auto_range')">Auto</button>
+      </div>
+      ${_scpiRow("power_meter")}
+    </div>`;
+  return d;
+}
+let _pmContID = null;
+function _pmCont(btn) {
+  const on = btn.dataset.on !== "true"; btn.dataset.on = on;
+  btn.className = "output-toggle" + (on?" on":"");
+  btn.innerHTML = `<span class="tog-dot"></span>Continuous`;
+  if (on) _pmContID = setInterval(() => instOp("power_meter","measure_power",{poll:true}), 1000);
+  else { clearInterval(_pmContID); _pmContID = null; }
+}
+
+// ── Frequency Counter ─────────────────────────────────────────────────
+let _fcMode = "measure_frequency";
+function buildFreqCounterCard(instr) {
+  const d = document.createElement("div");
+  d.className = "card"; d.dataset.type = "freq_counter"; d.dataset.model = instr.model||"";
+  d.innerHTML = _chdr(instr,"fc","Hz","Freq Counter") + `
+    <div class="card-body dmm-body">
+      <div><div class="section-label">Mode</div>
+        <div class="dmm-modes">
+          <button class="dmm-mode active" data-op="measure_frequency" onclick="fcSetMode(this)">Frequency</button>
+          <button class="dmm-mode" data-op="measure_period" onclick="fcSetMode(this)">Period</button>
+        </div>
+      </div>
+      <div class="dmm-display"><div class="dmm-value dim" id="fc-value" style="color:var(--amber)">—</div></div>
+      <div class="dmm-actions">
+        <button class="btn btn-primary" onclick="instOp('freq_counter',_fcMode)">Measure</button>
+        <button class="output-toggle" id="fc-cont" data-on="false" onclick="_fcCont(this)"><span class="tog-dot"></span>Continuous</button>
+      </div>
+      ${_scpiRow("freq_counter")}
+    </div>`;
+  return d;
+}
+let _fcContID = null;
+function fcSetMode(btn) {
+  document.querySelectorAll(".card[data-type='freq_counter'] .dmm-mode").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active"); _fcMode = btn.dataset.op;
+  _setReading("fc-value", null);
+}
+function _fcCont(btn) {
+  const on = btn.dataset.on !== "true"; btn.dataset.on = on;
+  btn.className = "output-toggle" + (on?" on":"");
+  btn.innerHTML = `<span class="tog-dot"></span>Continuous`;
+  if (on) _fcContID = setInterval(() => instOp("freq_counter",_fcMode,{poll:true}), 1000);
+  else { clearInterval(_fcContID); _fcContID = null; }
+}
+
+// ── Temperature Controller ────────────────────────────────────────────
+function buildTempCtrlCard(instr) {
+  const d = document.createElement("div");
+  d.className = "card"; d.dataset.type = "temp_ctrl"; d.dataset.model = instr.model||"";
+  d.innerHTML = _chdr(instr,"tc","T°","Temp Controller") + `
+    <div class="card-body dmm-body">
+      <div class="dmm-display"><div class="dmm-value dim" id="tc-value" style="color:#ea580c">—<span style="font-size:14px;margin-left:4px;opacity:.6">°C</span></div></div>
+      <div>
+        <div class="section-label">Setpoint</div>
+        <div class="param-row">
+          <div class="param-input-wrap" style="flex:1"><input class="param-input" id="tc-sp" type="number" step="0.1" placeholder="25.0" /><span class="param-unit">°C</span></div>
+          <button class="btn btn-ghost" style="font-size:11px;flex-shrink:0;margin-left:6px;" onclick="instOp('temp_ctrl','set_setpoint',{value:document.getElementById('tc-sp').value})">Set</button>
+        </div>
+      </div>
+      <div class="dmm-actions">
+        <button class="btn btn-primary" onclick="instOp('temp_ctrl','measure_celsius')">Measure</button>
+        <button class="output-toggle" id="tc-cont" data-on="false" onclick="_tcCont(this)"><span class="tog-dot"></span>Continuous</button>
+        <button class="btn btn-ghost" style="font-size:11px;" onclick="instOp('temp_ctrl','get_setpoint')">Read SP</button>
+      </div>
+      ${_scpiRow("temp_ctrl")}
+    </div>`;
+  return d;
+}
+let _tcContID = null;
+function _tcCont(btn) {
+  const on = btn.dataset.on !== "true"; btn.dataset.on = on;
+  btn.className = "output-toggle" + (on?" on":"");
+  btn.innerHTML = `<span class="tog-dot"></span>Continuous`;
+  if (on) _tcContID = setInterval(() => instOp("temp_ctrl","measure_celsius",{poll:true}), 2000);
+  else { clearInterval(_tcContID); _tcContID = null; }
+}
+
+// ── Thermostream ──────────────────────────────────────────────────────
+function buildThermalCard(instr) {
+  const d = document.createElement("div");
+  d.className = "card"; d.dataset.type = "thermal"; d.dataset.model = instr.model||"";
+  d.innerHTML = _chdr(instr,"therm","°C","Thermostream") + `
+    <div class="card-body dmm-body">
+      <div class="dmm-display"><div class="dmm-value dim" id="therm-value" style="color:#c2410c">—<span style="font-size:14px;margin-left:4px;opacity:.6">°C</span></div></div>
+      <div>
+        <div class="section-label">Setpoint</div>
+        <div class="param-row">
+          <div class="param-input-wrap" style="flex:1"><input class="param-input" id="therm-sp" type="number" step="0.5" placeholder="25.0" /><span class="param-unit">°C</span></div>
+          <button class="btn btn-ghost" style="font-size:11px;flex-shrink:0;margin-left:6px;" onclick="instOp('thermal','set_setpoint',{value:document.getElementById('therm-sp').value})">Set</button>
+        </div>
+      </div>
+      <div class="dmm-actions">
+        <button class="btn btn-primary" onclick="instOp('thermal','measure_temperature')">Measure</button>
+        <button class="output-toggle" id="therm-cont" data-on="false" onclick="_thermCont(this)"><span class="tog-dot"></span>Continuous</button>
+      </div>
+      <div class="dmm-actions">
+        <button class="btn btn-ghost" style="font-size:11px;" onclick="instOp('thermal','compressor_on')">Comp ON</button>
+        <button class="btn btn-ghost" style="font-size:11px;" onclick="instOp('thermal','compressor_off')">Comp OFF</button>
+        <button class="btn btn-ghost" style="font-size:11px;" onclick="instOp('thermal','flow_on')">Flow ON</button>
+        <button class="btn btn-ghost" style="font-size:11px;" onclick="instOp('thermal','flow_off')">Flow OFF</button>
+      </div>
+      ${_scpiRow("thermal")}
+    </div>`;
+  return d;
+}
+let _thermContID = null;
+function _thermCont(btn) {
+  const on = btn.dataset.on !== "true"; btn.dataset.on = on;
+  btn.className = "output-toggle" + (on?" on":"");
+  btn.innerHTML = `<span class="tog-dot"></span>Continuous`;
+  if (on) _thermContID = setInterval(() => instOp("thermal","measure_temperature",{poll:true}), 2000);
+  else { clearInterval(_thermContID); _thermContID = null; }
+}
+
+// ── Lock-in Amplifier ─────────────────────────────────────────────────
+function buildLockInCard(instr) {
+  const d = document.createElement("div");
+  d.className = "card"; d.dataset.type = "lock_in"; d.dataset.model = instr.model||"";
+  const cells = [["li-x","X"],["li-y","Y"],["li-r","R"],["li-theta","θ"]].map(([id,lbl]) =>
+    `<div class="dmm-display" style="flex-direction:column;gap:2px;padding:10px 8px">
+      <div style="font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--text-faint)">${lbl}</div>
+      <div class="dmm-value dim" id="${id}" style="color:#4338ca;font-size:20px">—</div>
+    </div>`).join("");
+  d.innerHTML = _chdr(instr,"li","LI","Lock-in Amp") + `
+    <div class="card-body dmm-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${cells}</div>
+      <div class="dmm-actions">
+        <button class="btn btn-primary" onclick="_liMeasureAll()">Measure All</button>
+        <button class="output-toggle" id="li-cont" data-on="false" onclick="_liCont(this)"><span class="tog-dot"></span>Continuous</button>
+      </div>
+      ${_scpiRow("lock_in")}
+    </div>`;
+  return d;
+}
+let _liContID = null;
+function _liMeasureAll() {
+  ["measure_x","measure_y","measure_r","measure_theta"].forEach(op => instOp("lock_in",op));
+}
+function _liCont(btn) {
+  const on = btn.dataset.on !== "true"; btn.dataset.on = on;
+  btn.className = "output-toggle" + (on?" on":"");
+  btn.innerHTML = `<span class="tog-dot"></span>Continuous`;
+  if (on) _liContID = setInterval(_liMeasureAll, 1500);
+  else { clearInterval(_liContID); _liContID = null; }
+}
+
+// ── LCR Meter ─────────────────────────────────────────────────────────
+const _LCR_MODES = ["Z","R","C","L","Q","D"];
+let _lcrMode = "Z";
+function buildLCRCard(instr) {
+  const modePills = _LCR_MODES.map((m,i) =>
+    `<button class="dmm-mode${i===0?" active":""}" data-mode="${m}" onclick="lcrSetMode(this)">${m}</button>`
+  ).join("");
+  const d = document.createElement("div");
+  d.className = "card"; d.dataset.type = "lcr"; d.dataset.model = instr.model||"";
+  d.innerHTML = _chdr(instr,"lcr","LC","LCR Meter") + `
+    <div class="card-body dmm-body">
+      <div><div class="section-label">Mode</div><div class="dmm-modes">${modePills}</div></div>
+      <div>
+        <div class="section-label">Frequency</div>
+        <div class="param-row">
+          <div class="param-input-wrap" style="flex:1"><input class="param-input" id="lcr-freq" type="number" step="any" placeholder="1000" /><span class="param-unit">Hz</span></div>
+          <button class="btn btn-ghost" style="font-size:11px;flex-shrink:0;margin-left:6px;" onclick="instOp('lcr','set_frequency',{freq:document.getElementById('lcr-freq').value})">Set</button>
+        </div>
+      </div>
+      <div class="dmm-display"><div class="dmm-value dim" id="lcr-value" style="color:#059669">—</div></div>
+      <div class="dmm-actions">
+        <button class="btn btn-primary" onclick="instOp('lcr','fetch')">Measure</button>
+        <button class="btn btn-ghost" style="font-size:11px;" onclick="instOp('lcr','auto_range')">Auto Range</button>
+      </div>
+      ${_scpiRow("lcr")}
+    </div>`;
+  return d;
+}
+function lcrSetMode(btn) {
+  document.querySelectorAll(".card[data-type='lcr'] .dmm-mode").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active"); _lcrMode = btn.dataset.mode;
+  instOp("lcr","set_impedance_mode",{mode:_lcrMode});
+}
+
+// ── RF Generator ──────────────────────────────────────────────────────
+function buildRFGenCard(instr) {
+  const d = document.createElement("div");
+  d.className = "card"; d.dataset.type = "rf_gen"; d.dataset.model = instr.model||"";
+  d.innerHTML = _chdr(instr,"rfgen","RF","RF Generator") + `
+    <div class="card-body dmm-body">
+      <div>
+        <div class="section-label">Parameters</div>
+        <div class="param-rows">
+          <div class="param-row">
+            <span class="param-label">Freq</span>
+            <div class="param-input-wrap"><input class="param-input" id="rfgen-freq" type="number" step="any" placeholder="1e9" /><span class="param-unit">Hz</span></div>
+          </div>
+          <div class="param-row">
+            <span class="param-label">Power</span>
+            <div class="param-input-wrap"><input class="param-input" id="rfgen-pwr" type="number" step="0.5" placeholder="0.0" /><span class="param-unit">dBm</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="dmm-actions">
+        <button class="btn btn-primary" onclick="_rfgenApply()">Apply</button>
+        <button class="output-toggle" id="rfgen-out" data-on="false" onclick="_rfgenOut(this)"><span class="tog-dot"></span>Output: OFF</button>
+      </div>
+      ${_scpiRow("rf_gen")}
+    </div>`;
+  return d;
+}
+function _rfgenApply() {
+  const freq = document.getElementById("rfgen-freq")?.value;
+  const pwr  = document.getElementById("rfgen-pwr")?.value;
+  if (freq) instOp("rf_gen","set_frequency",{freq:parseFloat(freq)});
+  if (pwr)  instOp("rf_gen","set_power",    {power:parseFloat(pwr)});
+}
+function _rfgenOut(btn) {
+  const on = btn.dataset.on !== "true"; btn.dataset.on = on;
+  btn.className = "output-toggle" + (on?" on":"");
+  btn.innerHTML = `<span class="tog-dot"></span>Output: ${on?"ON":"OFF"}`;
+  instOp("rf_gen", on ? "output_on" : "output_off");
+}
+
+// ── Spectrum Analyzer ─────────────────────────────────────────────────
+function buildSpectrumCard(instr) {
+  const d = document.createElement("div");
+  d.className = "card"; d.dataset.type = "spectrum"; d.dataset.model = instr.model||"";
+  d.innerHTML = _chdr(instr,"sa","SA","Spectrum Analyzer") + `
+    <div class="card-body dmm-body">
+      <div>
+        <div class="section-label">Span</div>
+        <div class="param-rows">
+          <div class="param-row">
+            <span class="param-label">Center</span>
+            <div class="param-input-wrap"><input class="param-input" id="sa-center" type="number" step="any" placeholder="1e9" /><span class="param-unit">Hz</span></div>
+          </div>
+          <div class="param-row">
+            <span class="param-label">Span</span>
+            <div class="param-input-wrap"><input class="param-input" id="sa-span" type="number" step="any" placeholder="1e6" /><span class="param-unit">Hz</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="dmm-display" style="flex-direction:column;gap:4px;padding:10px">
+        <div style="font-size:10px;font-weight:600;letter-spacing:.06em;color:var(--text-faint)">Peak</div>
+        <div class="dmm-value dim" id="sa-peak" style="color:#0d9488;font-size:22px">—</div>
+      </div>
+      <div class="dmm-actions">
+        <button class="btn btn-primary" onclick="_saApply()">Apply</button>
+        <button class="btn btn-ghost" style="font-size:11px;" onclick="instOp('spectrum','fetch_peak')">Fetch Peak</button>
+        <button class="btn btn-ghost" style="font-size:11px;" onclick="instOp('spectrum','single_sweep')">Single</button>
+      </div>
+      ${_scpiRow("spectrum")}
+    </div>`;
+  return d;
+}
+function _saApply() {
+  const c = document.getElementById("sa-center")?.value;
+  const s = document.getElementById("sa-span")?.value;
+  if (c) instOp("spectrum","set_center_frequency",{freq:parseFloat(c)});
+  if (s) instOp("spectrum","set_span",            {span:parseFloat(s)});
+}
+
+// ── VNA ───────────────────────────────────────────────────────────────
+function buildVNACard(instr) {
+  const d = document.createElement("div");
+  d.className = "card"; d.dataset.type = "vna"; d.dataset.model = instr.model||"";
+  d.innerHTML = _chdr(instr,"vna-icon","VNA","VNA") + `
+    <div class="card-body dmm-body">
+      <div>
+        <div class="section-label">Sweep</div>
+        <div class="param-rows">
+          <div class="param-row">
+            <span class="param-label">Start</span>
+            <div class="param-input-wrap"><input class="param-input" id="vna-start" type="number" step="any" placeholder="1e6" /><span class="param-unit">Hz</span></div>
+          </div>
+          <div class="param-row">
+            <span class="param-label">Stop</span>
+            <div class="param-input-wrap"><input class="param-input" id="vna-stop" type="number" step="any" placeholder="3e9" /><span class="param-unit">Hz</span></div>
+          </div>
+          <div class="param-row">
+            <span class="param-label">Points</span>
+            <div class="param-input-wrap"><input class="param-input" id="vna-pts" type="number" step="1" placeholder="201" /><span class="param-unit">#</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="dmm-actions">
+        <button class="btn btn-primary" onclick="_vnaApply()">Apply</button>
+        <button class="btn btn-ghost" style="font-size:11px;" onclick="instOp('vna','trigger')">Trigger</button>
+        <button class="output-toggle" id="vna-out" data-on="false" onclick="_vnaOut(this)"><span class="tog-dot"></span>RF: OFF</button>
+      </div>
+      ${_scpiRow("vna")}
+    </div>`;
+  return d;
+}
+function _vnaApply() {
+  const start = document.getElementById("vna-start")?.value;
+  const stop  = document.getElementById("vna-stop")?.value;
+  const pts   = document.getElementById("vna-pts")?.value;
+  if (start) instOp("vna","set_start_frequency",{freq:parseFloat(start)});
+  if (stop)  instOp("vna","set_stop_frequency", {freq:parseFloat(stop)});
+  if (pts)   instOp("vna","set_points",         {points:parseInt(pts)});
+}
+function _vnaOut(btn) {
+  const on = btn.dataset.on !== "true"; btn.dataset.on = on;
+  btn.className = "output-toggle" + (on?" on":"");
+  btn.innerHTML = `<span class="tog-dot"></span>RF: ${on?"ON":"OFF"}`;
+  instOp("vna", on ? "output_on" : "output_off");
+}
+
+// ── Laser ─────────────────────────────────────────────────────────────
+function buildLaserCard(instr) {
+  const d = document.createElement("div");
+  d.className = "card"; d.dataset.type = "laser"; d.dataset.model = instr.model||"";
+  d.innerHTML = _chdr(instr,"laser","λ","Laser") + `
+    <div class="card-body dmm-body">
+      <div>
+        <div class="section-label">Parameters</div>
+        <div class="param-rows">
+          <div class="param-row">
+            <span class="param-label">Wavelength</span>
+            <div class="param-input-wrap"><input class="param-input" id="laser-wl" type="number" step="0.001" placeholder="1550.0" /><span class="param-unit">nm</span></div>
+          </div>
+          <div class="param-row">
+            <span class="param-label">Power</span>
+            <div class="param-input-wrap"><input class="param-input" id="laser-pwr" type="number" step="0.01" placeholder="0.0" /><span class="param-unit">dBm</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="dmm-actions">
+        <button class="btn btn-primary" onclick="_laserApply()">Apply</button>
+        <button class="output-toggle" id="laser-out" data-on="false" onclick="_laserOut(this)"><span class="tog-dot"></span>Output: OFF</button>
+        <button class="btn btn-ghost" style="font-size:11px;" onclick="instOp('laser','get_wavelength')">↺ WL</button>
+      </div>
+      ${_scpiRow("laser")}
+    </div>`;
+  return d;
+}
+function _laserApply() {
+  const wl  = document.getElementById("laser-wl")?.value;
+  const pwr = document.getElementById("laser-pwr")?.value;
+  if (wl)  instOp("laser","set_wavelength",{wavelength:parseFloat(wl)});
+  if (pwr) instOp("laser","set_power",     {power:parseFloat(pwr)});
+}
+function _laserOut(btn) {
+  const on = btn.dataset.on !== "true"; btn.dataset.on = on;
+  btn.className = "output-toggle" + (on?" on":"");
+  btn.innerHTML = `<span class="tog-dot"></span>Output: ${on?"ON":"OFF"}`;
+  instOp("laser", on ? "output_on" : "output_off");
+}
+
+// ── Motion Controller ─────────────────────────────────────────────────
+function buildMotionCard(instr) {
+  const d = document.createElement("div");
+  d.className = "card"; d.dataset.type = "motion"; d.dataset.model = instr.model||"";
+  d.innerHTML = _chdr(instr,"mot","→","Motion") + `
+    <div class="card-body dmm-body">
+      <div class="dmm-display" style="flex-direction:column;gap:2px;padding:10px 16px">
+        <div style="font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--text-faint)">Position</div>
+        <div class="dmm-value dim" id="mot-pos" style="color:var(--green);font-size:24px">—</div>
+      </div>
+      <div>
+        <div class="section-label">Relative Move</div>
+        <div class="param-row">
+          <div class="param-input-wrap" style="flex:1"><input class="param-input" id="mot-step" type="number" step="any" placeholder="1.0" /><span class="param-unit">u</span></div>
+          <button class="btn btn-ghost" style="font-size:11px;flex-shrink:0;margin-left:4px;" onclick="instOp('motion','move_relative',{distance:parseFloat(document.getElementById('mot-step').value||1)})">+Step</button>
+          <button class="btn btn-ghost" style="font-size:11px;flex-shrink:0;margin-left:4px;" onclick="instOp('motion','move_relative',{distance:-parseFloat(document.getElementById('mot-step').value||1)})">−Step</button>
+        </div>
+      </div>
+      <div>
+        <div class="section-label">Absolute Move</div>
+        <div class="param-row">
+          <div class="param-input-wrap" style="flex:1"><input class="param-input" id="mot-abs" type="number" step="any" placeholder="0.0" /><span class="param-unit">u</span></div>
+          <button class="btn btn-ghost" style="font-size:11px;flex-shrink:0;margin-left:6px;" onclick="instOp('motion','move_absolute',{position:document.getElementById('mot-abs').value})">Go</button>
+        </div>
+      </div>
+      <div class="dmm-actions">
+        <button class="btn btn-ghost" style="font-size:11px;" onclick="instOp('motion','get_position')">↺ Pos</button>
+        <button class="btn btn-ghost" style="font-size:11px;" onclick="instOp('motion','home')">Home</button>
+        <button class="btn btn-ghost" style="font-size:11px;color:var(--red);" onclick="instOp('motion','stop')">Stop</button>
+        <button class="output-toggle" id="mot-motor" data-on="false" onclick="_motMotor(this)"><span class="tog-dot"></span>Motor: OFF</button>
+      </div>
+      ${_scpiRow("motion")}
+    </div>`;
+  return d;
+}
+function _motMotor(btn) {
+  const on = btn.dataset.on !== "true"; btn.dataset.on = on;
+  btn.className = "output-toggle" + (on?" on":"");
+  btn.innerHTML = `<span class="tog-dot"></span>Motor: ${on?"ON":"OFF"}`;
+  instOp("motion", on ? "motor_on" : "motor_off");
+}
+
 // ── Assign instrument modal ─────────────────────────────────────────
 let _assignResource = null;
 let _allFamilies    = [];
 
-const _TYPE_LABELS = { scope:"Scope", psu:"PSU", awg:"AWG / FGen", dmm:"DMM", load:"Load", smu:"SMU" };
+const _TYPE_LABELS = {
+  scope:"Scope", psu:"PSU", awg:"AWG / FGen", dmm:"DMM", load:"Load", smu:"SMU",
+  thermal:"Thermostream", lock_in:"Lock-in Amp", temp_ctrl:"Temp Controller",
+  lcr:"LCR Meter", rf_gen:"RF Generator", spectrum:"Spectrum Analyzer",
+  vna:"VNA", gaussmeter:"Gaussmeter", vacuum:"Vacuum Gauge",
+  power_meter:"Power Meter", freq_counter:"Freq Counter", laser:"Laser", motion:"Motion",
+};
 
 // ── Workbench manage modal ────────────────────────────────────────────
 async function openWbManageModal() {
@@ -3758,6 +4348,8 @@ async function openAssignModal(resource, currentFamilyId = '') {
   document.getElementById("assign-family-sel").innerHTML     = '<option value="">— select vendor first —</option>';
   document.getElementById("assign-role-inp").value           = "";
   document.getElementById("assign-confirm-btn").disabled     = true;
+  const _curInstr = ((state.workbench||{})._unique||[]).find(i=>i.resource===resource);
+  document.getElementById("assign-nickname-inp").value = _curInstr?.nickname || "";
 
   if (!_allFamilies.length) {
     try {
@@ -3836,12 +4428,13 @@ async function confirmAssign() {
   const resource  = _assignResource;
   const family_id = document.getElementById("assign-family-sel").value;
   const role      = document.getElementById("assign-role-inp").value.trim() || undefined;
+  const nickname  = document.getElementById("assign-nickname-inp").value.trim() || undefined;
   if (!resource || !family_id) return;
 
   const btn = document.getElementById("assign-confirm-btn");
   btn.disabled = true; btn.textContent = "Assigning…";
   try {
-    await POST("/api/workbench/assign", { resource, family_id, role });
+    await POST("/api/workbench/assign", { resource, family_id, role, nickname });
     closeAssignModal();
     toast("Instrument assigned.", "success");
     // Rebuild the instrument grid with updated workbench data
@@ -6264,11 +6857,49 @@ function sbDrop(e, id) {
   sbRender();
 }
 
+// Per-instrument-type measurement param options used by measure + wait_for steps
+const _INSTR_MEAS_PARAMS = {
+  psu:         [{v:"voltage",     l:"Voltage"},           {v:"current",    l:"Current"}],
+  load:        [{v:"voltage",     l:"Voltage"},           {v:"current",    l:"Current"}],
+  dmm:         [{v:"voltage",     l:"Voltage (DC)"},      {v:"current",    l:"Current"},
+                {v:"vac",         l:"Voltage (AC)"},       {v:"r",          l:"Resistance"},
+                {v:"r4w",         l:"Resistance (4W)"}],
+  gaussmeter:  [{v:"field",       l:"Field (Gauss)"}],
+  vacuum:      [{v:"pressure",    l:"Pressure"}],
+  power_meter: [{v:"power",       l:"Power (W)"}],
+  freq_counter:[{v:"frequency",   l:"Frequency (Hz)"}],
+  temp_ctrl:   [{v:"celsius",     l:"Temperature (°C)"}],
+  thermal:     [{v:"temperature", l:"Temperature (°C)"}],
+  lock_in:     [{v:"r",           l:"R (magnitude)"},     {v:"x",          l:"X"},
+                {v:"y",           l:"Y"}],
+};
+const _INSTR_MEAS_DEFAULT = [
+  {v:"voltage", l:"Voltage (DC)"}, {v:"current", l:"Current"},
+  {v:"vac",     l:"Voltage (AC)"}, {v:"r",       l:"Resistance"},
+];
+function _instrMeasOpts(iType, curParam) {
+  const list = _INSTR_MEAS_PARAMS[iType] || _INSTR_MEAS_DEFAULT;
+  return list.map(p=>`<option value="${p.v}"${curParam===p.v?" selected":""}>${p.l}</option>`).join("");
+}
 function _sbSetStep(id, key, val) {
   const s = _sb.steps.find(s => s.id === id);
   if (s) s[key] = val;
 }
 function _sbSetStepRe(id, key, val) { _sbSetStep(id, key, val); sbRender(); }
+function _sbMeasInstrChange(id, resource) {
+  _sbSetStep(id, "instrument", resource);
+  const iType = ((state.workbench||{})._unique||[]).find(i=>i.resource===resource)?.type||"";
+  const list  = _INSTR_MEAS_PARAMS[iType] || _INSTR_MEAS_DEFAULT;
+  _sbSetStep(id, "param", list[0].v);
+  sbRender();
+}
+function _sbWaitForInstrChange(id, resource) {
+  _sbSetStep(id, "instrument", resource);
+  const iType = ((state.workbench||{})._unique||[]).find(i=>i.resource===resource)?.type||"";
+  const list  = _INSTR_MEAS_PARAMS[iType] || _INSTR_MEAS_DEFAULT;
+  _sbSetStep(id, "param", list[0].v);
+  sbRender();
+}
 function _sbStepInstrChange(id, resource) {
   _sbSetStep(id, "instrument", resource);
   const instr = ((state.workbench||{})._unique||[]).find(i => i.resource === resource);
@@ -6376,17 +7007,10 @@ function _sbCfgHtml(step) {
   }
 
   if (step.type === "measure") {
-    html += row("Instrument", sel(iOpts(step.instrument), `_sbSetStepRe(${id},'instrument',this.value)`));
+    html += row("Instrument", sel(iOpts(step.instrument), `_sbMeasInstrChange(${id},this.value)`));
     html += row("Channel",    inp("number", step.ch||1,   `_sbSetStep(${id},'ch',+this.value)`, "min=1 max=4"));
     const iType = ((state.workbench||{})._unique||[]).find(i=>i.resource===step.instrument)?.type||"";
-    const mOpts = iType === "psu"
-      ? `<option value="voltage"${step.param==="voltage"?" selected":""}>Voltage</option><option value="current"${step.param==="current"?" selected":""}>Current</option>`
-      : `<option value="voltage"${step.param==="voltage"?" selected":""}>Voltage (DC)</option>
-         <option value="current"${step.param==="current"?" selected":""}>Current</option>
-         <option value="vac"${step.param==="vac"?" selected":""}>Voltage (AC)</option>
-         <option value="r"${step.param==="r"?" selected":""}>Resistance</option>
-         <option value="r4w"${step.param==="r4w"?" selected":""}>Resistance (4W)</option>`;
-    html += row("Parameter", sel(mOpts, `_sbSetStep(${id},'param',this.value)`));
+    html += row("Parameter", sel(_instrMeasOpts(iType, step.param), `_sbSetStep(${id},'param',this.value)`));
     html += row("Samples", inp("number", step.samples||1, `_sbSetStep(${id},'samples',+this.value)`, "min=1 max=100"));
     html += row("Settle",  inp("number", step.settle||0,  `_sbSetStep(${id},'settle',+this.value)`, "min=0 step=0.01") + `<span class="test-param-unit">s</span>`);
   }
@@ -6396,13 +7020,10 @@ function _sbCfgHtml(step) {
   }
 
   if (step.type === "wait_for") {
-    html += row("Instrument", sel(iOpts(step.instrument), `_sbSetStepRe(${id},'instrument',this.value)`));
+    html += row("Instrument", sel(iOpts(step.instrument), `_sbWaitForInstrChange(${id},this.value)`));
     html += row("Channel",    inp("number", step.ch||1,   `_sbSetStep(${id},'ch',+this.value)`, "min=1 max=4"));
-    const wOpts = `<option value="voltage"${step.param==="voltage"?" selected":""}>Voltage (DC)</option>
-      <option value="current"${step.param==="current"?" selected":""}>Current</option>
-      <option value="vac"${step.param==="vac"?" selected":""}>Voltage (AC)</option>
-      <option value="r"${step.param==="r"?" selected":""}>Resistance</option>`;
-    html += row("Parameter", sel(wOpts, `_sbSetStep(${id},'param',this.value)`));
+    const wfType = ((state.workbench||{})._unique||[]).find(i=>i.resource===step.instrument)?.type||"";
+    html += row("Parameter", sel(_instrMeasOpts(wfType, step.param), `_sbSetStep(${id},'param',this.value)`));
     const cOpts = `<option value=">="${step.condition===">="?" selected":""}>≥</option>
       <option value="<="${step.condition==="<="?" selected":""}>≤</option>
       <option value="within"${step.condition==="within"?" selected":""}>within ±</option>`;

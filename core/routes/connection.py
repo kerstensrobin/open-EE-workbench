@@ -170,7 +170,7 @@ def api_connect():
             "connected":   _sh._state["connected"],
             "instruments": instruments_out,
         })
-        if _sh._state["connected"]:
+        if _sh._state["connected"] and _sh._polling_enabled:
             _start_polling()
 
     _sh._executor.submit(_do)

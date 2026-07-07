@@ -41,7 +41,7 @@ python core/nachoVisa.py --fix-udev   # then re-plug USB instruments
 | **Python** | Full Python scripting console with syntax highlighting. Instruments, families, and helper functions are pre-injected into scope — no boilerplate needed. |
 | **CLI scripts** | Standalone Python scripts for screenshots, sweeps, and waveform analysis. |
 
-![Workbench tab](screenshots/workbench.png)
+![Workbench tab](screenshots/open-eew_overview.png)
 
 ---
 

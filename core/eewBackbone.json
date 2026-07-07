@@ -3582,6 +3582,53 @@
       }
     },
     {
+      "id": "owon_dge1000",
+      "vendor": "Owon",
+      "series": "DGE1000/2000/3000 Series Waveform Generator",
+      "type": "awg",
+      "patterns": [
+        "DGE1030",
+        "DGE1060",
+        "DGE2035",
+        "DGE2070",
+        "DGE3031",
+        "DGE3032",
+        "DGE3061",
+        "DGE3062"
+      ],
+      "func_map": {
+        "NOIS": "PRNOISE"
+      },
+      "commands": {
+        "reset": ["*RST"],
+        "apply": null,
+        "apply_query": null,
+        "set_function": {
+          "write": "SOURCE{ch}:FUNCTION:SHAPE {func}",
+          "query": "SOURCE{ch}:FUNCTION:SHAPE?"
+        },
+        "set_frequency": {
+          "write": "SOURCE{ch}:FREQUENCY:FIXED {freq}",
+          "query": "SOURCE{ch}:FREQUENCY:FIXED?"
+        },
+        "set_amplitude": {
+          "write": "SOURCE{ch}:VOLTAGE:LEVEL:IMMEDIATE:AMPLITUDE {amp}",
+          "query": "SOURCE{ch}:VOLTAGE:LEVEL:IMMEDIATE:AMPLITUDE?"
+        },
+        "set_amplitude_unit": null,
+        "set_offset": {
+          "write": "SOURCE{ch}:VOLTAGE:LEVEL:IMMEDIATE:OFFSET {offset}",
+          "query": "SOURCE{ch}:VOLTAGE:LEVEL:IMMEDIATE:OFFSET?"
+        },
+        "set_duty_cycle": {
+          "write": "SOURCE{ch}:PULSE:DCYCLE {value}",
+          "query": "SOURCE{ch}:PULSE:DCYCLE?"
+        },
+        "output_on": "OUTPUT{ch}:STATE ON",
+        "output_off": "OUTPUT{ch}:STATE OFF"
+      }
+    },
+    {
       "id": "siglent_sds1000xhd",
       "vendor": "Siglent",
       "series": "SDS1000xHD Series Oscilloscope",

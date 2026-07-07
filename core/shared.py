@@ -41,7 +41,7 @@ _poll_stop   = threading.Event()
 _poller_idle = threading.Event()
 _poller_idle.set()   # no poller running initially
 _psu_ch_cache: dict = {}  # resource → confirmed live channel count
-_polling_enabled = True   # False when user is not on the Workbench tab
+_polling_enabled = False  # True only when user enables it via Resume polling button
 
 # ── SocketIO handle (injected by app.py) ─────────────────────────────────────
 sio = None

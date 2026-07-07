@@ -408,8 +408,9 @@ def api_awg_apply():
     res, fam = _find_instrument("awg")
 
     def _do():
+        func_map = (fam or {}).get("func_map", {})
         ops = [
-            ("function",  "set_function",   lambda v: {"func":   str(v)}),
+            ("function",  "set_function",   lambda v: {"func": func_map.get(str(v).upper(), str(v))}),
             ("frequency", "set_frequency",  lambda v: {"freq":   f"{float(v):.6g}"}),
             ("amplitude", "set_amplitude",  lambda v: {"amp":    f"{float(v):.4f}"}),
             ("offset",    "set_offset",     lambda v: {"offset": f"{float(v):.4f}"}),
@@ -419,6 +420,11 @@ def api_awg_apply():
                 _op(res, fam, scpi_op, role="awg", ch=ch, **kw_fn(d[key]))
         if "amplitude" in d:
             _op(res, fam, "set_amplitude_unit", role="awg", ch=ch, unit="VPP")
+        if "duty_cycle" in d:
+            try:
+                _op(res, fam, "set_duty_cycle", role="awg", ch=ch, value=f"{float(d['duty_cycle']):.2f}")
+            except KeyError:
+                pass
 
     _sh._executor.submit(_do)
     return jsonify({"status": "ok"})
@@ -531,6 +537,17 @@ def api_awg_read_state():
                     out[key] = v
             except Exception:
                 pass
+        # duty cycle (pulse waveform only)
+        try:
+            dc_spec = cmds.get("set_duty_cycle")
+            if isinstance(dc_spec, dict) and "query" in dc_spec:
+                q_str = dc_spec["query"].format(ch=ch)
+                with _rlock(res):
+                    val = _run_steps(res, [("query", q_str)], role="awg")
+                if val is not None:
+                    out["duty_cycle"] = val.strip()
+        except Exception:
+            pass
         return out
 
     result = _sh._executor.submit(_do).result(timeout=5)
@@ -613,6 +630,44 @@ def api_eload_measure():
                 pass
         if readings:
             _sh.sio.emit("load_reading", readings)
+
+    _sh._executor.submit(_do)
+    return jsonify({"status": "ok"})
+
+
+# ── Generic named-operation endpoint (new instrument types) ───────────────────
+
+@bp.route("/api/instrument/op", methods=["POST"])
+def api_instrument_op():
+    """Call any named operation on any instrument type and emit instrument_result."""
+    d     = request.json or {}
+    itype = d.get("type", "")
+    op    = d.get("op", "")
+    poll  = bool(d.get("poll", False))
+    kw    = {k: v for k, v in d.items() if k not in ("type", "op", "poll")}
+
+    if not itype or not op:
+        return jsonify({"error": "type and op required"}), 400
+
+    def _do():
+        res, fam = _find_instrument(itype)
+        if res is None or fam is None:
+            _sh.sio.emit("instrument_result",
+                         {"type": itype, "op": op,
+                          "error": f"No {itype} connected"}); return
+        try:
+            raw = _run_steps(res, get_command(fam, op, **kw),
+                             role=itype, poll=poll)
+            _sh.sio.emit("instrument_result",
+                         {"type": itype, "op": op,
+                          "value": raw.strip() if isinstance(raw, str) else raw})
+        except KeyError:
+            _sh.sio.emit("instrument_result",
+                         {"type": itype, "op": op,
+                          "error": f"{op!r} not supported on this {itype}"})
+        except Exception as exc:
+            _sh.sio.emit("instrument_result",
+                         {"type": itype, "op": op, "error": str(exc)})
 
     _sh._executor.submit(_do)
     return jsonify({"status": "ok"})
