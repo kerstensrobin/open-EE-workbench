@@ -26,7 +26,7 @@ On Linux, USB instruments need a one-time udev rule:
 python core/nachoVisa.py --fix-udev   # then re-plug USB instruments
 ```
 
-**[Note for Windows users]** If no USB instruments are found and you don't already have a vendor VISA implementation installed, there might be some driver tweaks needed. See the **[Wiki](https://github.com/kerstensrobin/open-EE-workbench/wiki)** for the full walkthrough.
+**[Note for Windows users]** If no USB instruments are found and you don't already have a vendor VISA implementation installed, there might be some driver tweaks needed. See the **[Wiki](https://github.com/kerstensrobin/open-EE-workbench/wiki/Windows-USB-Setup)** for the full walkthrough.
 
 ---
 
