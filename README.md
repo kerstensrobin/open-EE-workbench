@@ -34,11 +34,11 @@ python core/nachoVisa.py --fix-udev   # then re-plug USB instruments
 
 | | |
 |---|---|
-| **Workbench** | Instrument cards with live controls for scope, PSU, AWG, DMM, and electronic load. Save / load / reset instrument state snapshots. Unrecognised instruments can be manually assigned a family. |
+| **Workbench** | Instrument cards with live controls for all 19 supported instrument types: scope, PSU, AWG, DMM, electronic load, gaussmeter, vacuum gauge, optical power meter, frequency counter, temperature controller, thermostream, lock-in amplifier, LCR meter, RF signal generator, spectrum analyzer, VNA, laser source, and motion controller. Instruments can be given a nickname and manually re-assigned to a family. Save / load / reset instrument state snapshots. |
 | **Automation** | Parametric tests: DC sweep (single / simultaneous / nested), PSU interrupt transient, AC frequency sweep, DMM logger, waveform & harmonic analysis, battery capacity discharge (with live voltage/capacity chart). |
 | **Plot Specific** | Purpose-built tests that produce specific, well-defined plots — the kind that appear in a component datasheet. Currently: IV Curve (Static Characteristic) and Transfer Characteristic for BJT / FET. |
 | **Sandbox** | Build arbitrary test sequences with a no-code column-based pipeline editor. |
-| **Python** | Full Python scripting console with syntax highlighting. Instruments, families, and helper functions are pre-injected into scope — no boilerplate needed. |
+| **Python** | Full Python scripting console with syntax highlighting. Instruments, families, PyMeasure, and helper functions are pre-injected into scope — no boilerplate needed. |
 | **CLI scripts** | Standalone Python scripts for screenshots, sweeps, and waveform analysis. |
 
 ![Workbench tab](screenshots/open-eew_overview.png)
@@ -76,7 +76,7 @@ open-EE-workbench/
 |---|---|
 | Oscilloscope | 33 |
 | Power supply | 28 |
-| AWG / Function generator | 21 |
+| AWG / Function generator | 22 |
 | Multimeter | 15 |
 | Lock-in amplifier | 7 |
 | Spectrum analyzer | 7 |
