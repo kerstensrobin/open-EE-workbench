@@ -8182,10 +8182,13 @@ function openTestMetaModal() {
   if (!state.instruments || state.instruments.length === 0) {
     eqEl.innerHTML = `<span style="color:var(--text-faint);font-style:italic;">No instruments connected</span>`;
   } else {
+    const wbUnique = (state.workbench||{})._unique || [];
     eqEl.innerHTML = state.instruments.map(i => {
-      const label = i.model || i.idn || i.resource || "Unknown";
+      const wb    = wbUnique.find(w => w.resource === i.resource) || i;
+      const model = i.model || i.idn || i.resource || "Unknown";
+      const label = wb.nickname ? `${escHtml(wb.nickname)} — ${escHtml(model)}` : escHtml(model);
       const type  = i.type ? `<span style="color:var(--text-faint);"> (${i.type})</span>` : "";
-      return `<div>${escHtml(label)}${type}</div>`;
+      return `<div>${label}${type}</div>`;
     }).join("");
   }
 }
@@ -8196,12 +8199,17 @@ function closeTestMetaModal() {
 
 function exportTestMeta() {
   const ts = document.getElementById("tmeta-timestamp").textContent;
-  const equipment = (state.instruments || []).map(i => ({
-    model:     i.model || i.idn || null,
-    type:      i.type  || null,
-    family_id: i.family_id || null,
-    resource:  i.resource  || null,
-  }));
+  const _wbUnique = (state.workbench||{})._unique || [];
+  const equipment = (state.instruments || []).map(i => {
+    const wb = _wbUnique.find(w => w.resource === i.resource) || i;
+    return {
+      nickname:  wb.nickname || null,
+      model:     i.model || i.idn || null,
+      type:      i.type  || null,
+      family_id: i.family_id || null,
+      resource:  i.resource  || null,
+    };
+  });
 
   const tv = id => document.getElementById(id).value.trim() || null;
   const meta = {
