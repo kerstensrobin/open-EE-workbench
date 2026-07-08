@@ -17,6 +17,20 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Iterable, List, Sequence, Tuple
 
+if sys.platform == "win32":
+    # Legacy conhost.exe (a plain cmd.exe window, not Windows Terminal) does not
+    # interpret ANSI/VT cursor-movement escapes by default — the spinner below
+    # would print them as literal garbage instead of animating in place.
+    try:
+        import ctypes
+        _kernel32 = ctypes.windll.kernel32
+        _handle = _kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+        _mode = ctypes.c_uint32()
+        if _kernel32.GetConsoleMode(_handle, ctypes.byref(_mode)):
+            _kernel32.SetConsoleMode(_handle, _mode.value | 0x0004)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+    except Exception:
+        pass
+
 REQUIRED_PACKAGES = [
     ("pyvisa",    "pyvisa",    "PyVISA — VISA resource manager"),
     ("pyvisa_py", "pyvisa-py", "PyVISA-py — pure-Python VISA backend"),

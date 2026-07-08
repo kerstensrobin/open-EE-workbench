@@ -12,6 +12,7 @@ What it does:
 
 import itertools
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -30,6 +31,19 @@ if sys.platform == "win32":
             _stream.reconfigure(encoding="utf-8", errors="replace")
         except Exception:
             pass
+
+    # Legacy conhost.exe (a plain cmd.exe window, not Windows Terminal) does not
+    # interpret ANSI/VT cursor-movement escapes by default — the spinner below
+    # would print them as literal garbage instead of animating in place.
+    try:
+        import ctypes
+        _kernel32 = ctypes.windll.kernel32
+        _handle = _kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+        _mode = ctypes.c_uint32()
+        if _kernel32.GetConsoleMode(_handle, ctypes.byref(_mode)):
+            _kernel32.SetConsoleMode(_handle, _mode.value | 0x0004)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+    except Exception:
+        pass
 
 ROOT   = Path(__file__).parent.resolve()
 PYTHON = sys.executable
@@ -178,16 +192,37 @@ def ensure_venv(spinner: Spinner):
         raise
 
 
+def _pip_install_with_progress(spinner: Spinner, args: list, label: str = "Installing"):
+    """Run `pip install <args>`, updating the spinner with each package pip reports.
+
+    pip's own progress bars aren't let through directly — they'd interleave with
+    the spinner's cursor-movement escapes and garble the terminal — but "Collecting
+    X" lines are parsed out so the spinner still shows what's currently happening
+    instead of sitting on one static message for the whole (often slow) install.
+    """
+    proc = subprocess.Popen(
+        [str(VENV_PYTHON), "-m", "pip", "install", *args],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
+    )
+    output = []
+    for line in proc.stdout:
+        output.append(line)
+        m = re.match(r"Collecting (\S+)", line)
+        if m:
+            spinner.update(f"{label}: {m.group(1)}")
+    proc.wait()
+    return proc.returncode, "".join(output)
+
+
 def install_deps():
     with Spinner("Preparing virtual environment") as spinner:
         ensure_venv(spinner)
         spinner.update("Installing required packages")
-        result = subprocess.run(
-            [str(VENV_PYTHON), "-m", "pip", "install", "--upgrade", *REQUIRED],
-            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+        returncode, output = _pip_install_with_progress(
+            spinner, ["--upgrade", *REQUIRED], "Installing required packages"
         )
-    if result.returncode != 0:
-        sys.exit("Failed to install required packages:\n" + result.stderr.decode(errors="replace"))
+    if returncode != 0:
+        sys.exit("Failed to install required packages:\n" + output)
     print(f"Virtual environment ready → {VENV}")
 
     print("\nOptional packages (skip with Ctrl-C to accept defaults):")
