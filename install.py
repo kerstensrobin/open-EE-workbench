@@ -10,10 +10,13 @@ What it does:
      your application menu and can be launched from the desktop
 """
 
+import itertools
 import os
 import shutil
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -34,6 +37,103 @@ VENV   = ROOT / ".venv"
 VENV_PYTHON = VENV / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
 
 
+# ── Boxed logo + spinner (same visual as core/nachoVisa.py) ──────────────────
+
+_SPINNER_FRAMES = ["|", "/", "-", "\\"]
+
+# Logo lines — padded to _LOGO_PAD chars so right-side text lines up cleanly.
+_LOGO_LINES = [
+    "                ####",
+    "              #######",
+    "             #########",
+    "           ############",
+    "          ##############",
+    "         ################",
+    "       ###################",
+    "      #######     ####",
+    "    ##########   ######  ##",
+    "   ###############   #######",
+    "  ###############     #######",
+    "##############################",
+    "    ##########################",
+    "                  #############",
+]
+_LOGO_PAD    = 36   # width each logo line is padded to before right-side text
+_BOX_INNER   = _LOGO_PAD + 42  # inner width of the surrounding box (logo + text + padding)
+_TITLE_ROW   = 4    # "nacho.works" goes here
+_SUB_ROW     = 5    # subtitle goes here
+_SPINNER_ROW = 7    # rotating arrow + status goes here
+# Lines to move up from after the full box to reach the spinner row.
+# +2 accounts for the top and bottom border lines.
+_ROWS_TO_SPINNER = len(_LOGO_LINES) - _SPINNER_ROW + 1  # +1 for bottom border
+
+
+def _logo_line(idx: int, frame: str = " ", msg: str = "") -> str:
+    logo = _LOGO_LINES[idx].ljust(_LOGO_PAD)
+    if idx == _TITLE_ROW:
+        right = "nacho.works"
+    elif idx == _SUB_ROW:
+        right = "open-EE-workbench installer"
+    elif idx == _SPINNER_ROW:
+        right = f"{frame}  {msg}" if msg else ""
+    else:
+        right = ""
+    inner = (logo + right).ljust(_BOX_INNER)
+    return f"│{inner}│"
+
+
+def _print_logo(frame: str = " ", msg: str = ""):
+    print("┌" + "─" * _BOX_INNER + "┐")
+    for i in range(len(_LOGO_LINES)):
+        print(_logo_line(i, frame, msg))
+    print("└" + "─" * _BOX_INNER + "┘")
+
+
+class Spinner:
+    """Animated status box shown while non-interactive setup steps run.
+
+    Interactive steps (input() prompts) must happen outside this context
+    manager — concurrent spinner redraws and prompt input would garble
+    the terminal.
+    """
+
+    def __init__(self, message: str = "Working"):
+        self._message = message
+        self._stop = threading.Event()
+        self._lock = threading.Lock()
+        self._thread = threading.Thread(target=self._spin, daemon=True)
+
+    def _write_spinner_row(self, frame: str, msg: str):
+        line = _logo_line(_SPINNER_ROW, frame, msg)
+        n = _ROWS_TO_SPINNER
+        sys.stdout.write(f"\033[{n}A\r{line}\033[{n}B\r")
+        sys.stdout.flush()
+
+    def _spin(self):
+        for frame in itertools.cycle(_SPINNER_FRAMES):
+            if self._stop.is_set():
+                break
+            with self._lock:
+                msg = self._message
+            self._write_spinner_row(frame, msg)
+            time.sleep(0.15)
+        self._write_spinner_row(" ", "")
+
+    def update(self, message: str):
+        with self._lock:
+            self._message = message
+
+    def __enter__(self):
+        _print_logo(frame=_SPINNER_FRAMES[0], msg=self._message)
+        self._thread.start()
+        return self
+
+    def __exit__(self, *args):
+        self._stop.set()
+        self._thread.join()
+        print()
+
+
 # ── 1. Dependencies ───────────────────────────────────────────────────────────
 
 REQUIRED = [
@@ -45,6 +145,8 @@ REQUIRED = [
     "flask-socketio",
     "pywebview",
     "pymeasure",
+    "numpy",
+    "h5py",
 ]
 
 OPTIONAL = {
@@ -55,32 +157,38 @@ def _venv_pkg():
     return f"python{sys.version_info.major}.{sys.version_info.minor}-venv"
 
 
-def ensure_venv():
+def ensure_venv(spinner: Spinner):
     if VENV_PYTHON.exists():
-        print(f"Virtual environment already exists at {VENV}")
         return
 
-    print("Creating virtual environment…")
+    spinner.update("Creating virtual environment")
     try:
-        subprocess.check_call([PYTHON, "-m", "venv", str(VENV)])
+        subprocess.run(
+            [PYTHON, "-m", "venv", str(VENV)],
+            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
     except subprocess.CalledProcessError:
         if sys.platform == "linux" and Path("/etc/debian_version").exists():
-            print(
+            sys.exit(
                 f"\n[error] Could not create virtual environment.\n"
                 f"        On Ubuntu/Debian, install the venv package first:\n\n"
                 f"            sudo apt install {_venv_pkg()}\n\n"
-                f"        Then re-run:  python3 install.py",
-                file=sys.stderr,
+                f"        Then re-run:  python3 install.py"
             )
-            sys.exit(1)
         raise
 
 
 def install_deps():
-    ensure_venv()
-
-    print("Installing required packages…")
-    subprocess.check_call([str(VENV_PYTHON), "-m", "pip", "install", "--upgrade", *REQUIRED])
+    with Spinner("Preparing virtual environment") as spinner:
+        ensure_venv(spinner)
+        spinner.update("Installing required packages")
+        result = subprocess.run(
+            [str(VENV_PYTHON), "-m", "pip", "install", "--upgrade", *REQUIRED],
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+        )
+    if result.returncode != 0:
+        sys.exit("Failed to install required packages:\n" + result.stderr.decode(errors="replace"))
+    print(f"Virtual environment ready → {VENV}")
 
     print("\nOptional packages (skip with Ctrl-C to accept defaults):")
     for pkg, desc in OPTIONAL.items():

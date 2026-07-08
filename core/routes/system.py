@@ -18,8 +18,6 @@ import core.shared as _sh
 
 bp = Blueprint("system", __name__)
 
-_ROOT = Path(__file__).parent.parent
-
 
 # ── Update check ──────────────────────────────────────────────────────────────
 
@@ -395,7 +393,7 @@ def api_save_text():
     content  = d.get("content", "")
     out_path = (d.get("output_path") or "").strip()
     try:
-        save_dir = Path(os.path.expanduser(out_path)).resolve() if out_path else _ROOT / "results"
+        save_dir = Path(os.path.expanduser(out_path)).resolve() if out_path else Path.cwd() / "results"
         save_dir.mkdir(parents=True, exist_ok=True)
         path = save_dir / filename
         path.write_text(content, encoding="utf-8")
@@ -418,7 +416,7 @@ def api_plot_save_image():
     try:
         header, b64 = data_url.split(",", 1) if "," in data_url else ("", data_url)
         img_bytes = base64.b64decode(b64)
-        save_dir  = Path(os.path.expanduser(out_path)).resolve() if out_path else _ROOT / "results"
+        save_dir  = Path(os.path.expanduser(out_path)).resolve() if out_path else Path.cwd() / "results"
         save_dir.mkdir(parents=True, exist_ok=True)
         ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
         path = save_dir / f"{filename}_{ts}.png"
@@ -437,7 +435,7 @@ def api_save_json():
     data     = d.get("data")
     out_path = (d.get("output_path") or "").strip()
     try:
-        save_dir = Path(os.path.expanduser(out_path)).resolve() if out_path else _ROOT / "results"
+        save_dir = Path(os.path.expanduser(out_path)).resolve() if out_path else Path.cwd() / "results"
         save_dir.mkdir(parents=True, exist_ok=True)
         path = save_dir / filename
         path.write_text(_json.dumps(data, indent=2), encoding="utf-8")
@@ -445,6 +443,56 @@ def api_save_json():
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
+
+# ── HDF5 export (measurement data + run metadata) ─────────────────────────────
+
+@bp.route("/api/export-hdf5", methods=["POST"])
+def api_export_hdf5():
+    """Write automation/sandbox results to an HDF5 file.
+
+    Layout: a `data` dataset (rows x columns, NaN for missing values, with
+    a `columns` attribute) and a `metadata` group holding the run's metadata
+    as both a JSON blob and flattened top-level attributes.
+    """
+    try:
+        import h5py
+        import numpy as np
+    except ImportError:
+        return jsonify({"error": "h5py is not installed — run install.py to add it"}), 500
+
+    d        = request.json or {}
+    filename = d.get("filename", "export")
+    columns  = d.get("columns") or []
+    rows     = d.get("rows") or []
+    metadata = d.get("metadata") or {}
+    out_path = (d.get("output_path") or "").strip()
+
+    if not columns or not rows:
+        return jsonify({"error": "No data to export"}), 400
+
+    try:
+        save_dir = Path(os.path.expanduser(out_path)).resolve() if out_path else Path.cwd() / "results"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        path = save_dir / (filename if filename.endswith((".h5", ".hdf5")) else f"{filename}.hdf5")
+
+        data = np.array(
+            [[np.nan if v is None else v for v in row] for row in rows],
+            dtype=float,
+        )
+
+        with h5py.File(path, "w") as hf:
+            dset = hf.create_dataset("data", data=data)
+            dset.attrs["columns"] = np.array(columns, dtype=h5py.string_dtype())
+
+            meta_grp = hf.create_group("metadata")
+            meta_grp.attrs["json"] = _json.dumps(metadata)
+            for k, v in metadata.items():
+                if v is None or isinstance(v, (str, int, float, bool)):
+                    meta_grp.attrs[k] = v if v is not None else ""
+
+        return jsonify({"path": str(path)})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 
 # ── SCPI command reference ────────────────────────────────────────────────────

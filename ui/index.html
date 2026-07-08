@@ -1285,6 +1285,9 @@
             <button class="btn btn-ghost" style="font-size:11px;" onclick="exportCSV()" id="export-btn">
               ⬇ Export CSV
             </button>
+            <button class="btn btn-ghost" style="font-size:11px;" onclick="exportHDF5()" id="export-hdf5-btn">
+              ⬇ Export HDF5
+            </button>
           </div>
         </div>
 
@@ -1415,6 +1418,7 @@
           <div class="results-footer">
             <span class="results-msg" id="sb-results-msg"></span>
             <button class="btn btn-ghost" style="font-size:11px;" onclick="sbExportCSV()">⬇ Export CSV</button>
+            <button class="btn btn-ghost" style="font-size:11px;" onclick="sbExportHDF5()">⬇ Export HDF5</button>
           </div>
         </div>
 
@@ -2207,6 +2211,7 @@ let state = {
   autoRows:       [],
   autoCols:       [],
   autoTestId:     null,
+  autoParams:     null,
   selectedTestId: null,
 };
 
@@ -5073,6 +5078,7 @@ async function runTest(testId) {
   const output_path = state.outputPath || "";
   state.autoRunning = true;
   state.autoTestId  = testId;
+  state.autoParams  = params;
   state.autoRows    = [];
   state.autoCols    = state.autoTests.find(t=>t.id===testId)?.columns || [];
 
@@ -5381,6 +5387,25 @@ function exportCSV() {
   a.click();
   URL.revokeObjectURL(url);
   toast("CSV exported","ok");
+}
+
+function exportHDF5() {
+  if (!state.autoRows.length) { toast("No data to export","error"); return; }
+  const ts       = new Date().toISOString();
+  const filename = `${state.autoTestId||"results"}_${ts.slice(0,19).replace(/:/g,"-")}.hdf5`;
+  const metadata = {
+    test_id:     state.autoTestId,
+    timestamp:   ts,
+    params:      state.autoParams || {},
+    workbench:   state.workbench  || null,
+    instruments: state.instruments || [],
+  };
+  POST("/api/export-hdf5", {
+    filename, columns: state.autoCols, rows: state.autoRows,
+    metadata, output_path: state.outputPath || "",
+  })
+    .then(r => toast(`HDF5 exported → ${r.path}`, "ok"))
+    .catch(e => toast("HDF5 export failed: " + e.message, "error"));
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -7251,6 +7276,28 @@ function sbExportCSV() {
   const a   = document.createElement("a"); a.href = url; a.download = fname; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
   toast(`Saved as ${fname}`, "ok");
+}
+
+function sbExportHDF5() {
+  if (!_sbRows.length) { toast("No data to export", "error"); return; }
+  const ts       = new Date().toISOString();
+  const name     = (document.getElementById("sb-name")?.value || "sandbox").replace(/[^\w-]/g,"_");
+  const filename = `${name}_${ts.slice(0,19).replace(/:/g,"-")}.hdf5`;
+  const metadata = {
+    test_id:     "sandbox",
+    name,
+    timestamp:   ts,
+    steps:       _sb.steps,
+    loops:       _sb.loops,
+    workbench:   state.workbench   || null,
+    instruments: state.instruments || [],
+  };
+  POST("/api/export-hdf5", {
+    filename, columns: _sbCols, rows: _sbRows,
+    metadata, output_path: state.outputPath || "",
+  })
+    .then(r => toast(`HDF5 exported → ${r.path}`, "ok"))
+    .catch(e => toast("HDF5 export failed: " + e.message, "error"));
 }
 
 // ── Plot Specific tab ───────────────────────────────────────────────

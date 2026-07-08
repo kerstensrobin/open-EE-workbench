@@ -231,8 +231,7 @@ def api_screenshot():
 
         ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
         name     = f"{filename}_{ts}{ext or '.bin'}"
-        _ROOT    = pathlib.Path(__file__).parent.parent
-        save_dir = pathlib.Path(out_dir) if out_dir else _ROOT / "results"
+        save_dir = pathlib.Path(out_dir) if out_dir else pathlib.Path.cwd() / "results"
         save_dir.mkdir(parents=True, exist_ok=True)
         path = save_dir / name
         try:
