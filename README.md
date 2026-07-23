@@ -35,10 +35,10 @@ python core/nachoVisa.py --fix-udev   # then re-plug USB instruments
 | | |
 |---|---|
 | **Workbench** | Instrument cards with live controls for all 19 supported instrument types: scope, PSU, AWG, DMM, electronic load, gaussmeter, vacuum gauge, optical power meter, frequency counter, temperature controller, thermostream, lock-in amplifier, LCR meter, RF signal generator, spectrum analyzer, VNA, laser source, and motion controller. Instruments can be given a nickname and manually re-assigned to a family. Save / load / reset instrument state snapshots. |
-| **Automation** | Parametric tests: DC sweep (single / simultaneous / nested), PSU interrupt transient, AC frequency sweep, DMM logger, waveform & harmonic analysis, battery capacity discharge (with live voltage/capacity chart). |
+| **Automation** | Parametric tests: DC sweep (single / simultaneous / nested), PSU interrupt transient, AC frequency sweep, DMM logger, waveform & harmonic analysis, battery capacity discharge (with live voltage/capacity chart). Tests are picked from a left-hand sidebar; custom tests saved from the Sandbox tab appear here too, rendered with the same parameter form as the built-ins. |
 | **Plot Specific** | Purpose-built tests that produce specific, well-defined plots — the kind that appear in a component datasheet. Currently: IV Curve (Static Characteristic) and Transfer Characteristic for BJT / FET. |
-| **Sandbox** | Build arbitrary test sequences with a no-code column-based pipeline editor. |
-| **Python** | Full Python scripting console with syntax highlighting. Instruments, families, PyMeasure, and helper functions are pre-injected into scope — no boilerplate needed. |
+| **Sandbox** | Build arbitrary test sequences with a no-code column-based pipeline editor. Any sequence can be saved as a reusable Automation-tab test: mark a value with `{name}` to turn it into an adjustable parameter, give it a label/unit/default, and it shows up in Automation with a simple form — no more re-wiring the sequence each time. |
+| **Python** | Full Python scripting console with syntax highlighting, a MATLAB-style file explorer (defaults to `scripts/`, path is changeable), and multi-script tabs — open several scripts at once and switch between them. Scripts opened from disk save back to their original file. Instruments, families, PyMeasure, and helper functions are pre-injected into scope — no boilerplate needed. |
 | **CLI scripts** | Standalone Python scripts for screenshots, sweeps, and waveform analysis. |
 
 ![Workbench tab](screenshots/open-eew_overview.png)
@@ -64,6 +64,7 @@ open-EE-workbench/
 ├── ui/                 single-file web front-end (index.html)
 ├── workbenches/        per-bench instrument config JSON files
 ├── scripts/            standalone Python scripts (sweeps, screenshots, …)
+├── custom_tests/       tests saved from the Sandbox tab (auto-created)
 ├── results/            test output — CSV data, scope captures, plots
 └── screenshots/        GUI screenshots
 ```

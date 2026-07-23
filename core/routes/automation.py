@@ -32,6 +32,50 @@ _auto_pause   = threading.Event()   # set = paused; runners call _pause_point()
 _auto_running = False
 
 
+# ── Custom tests (saved from the Sandbox tab) ─────────────────────────────────
+_CUSTOM_TESTS_DIR = _ROOT / "custom_tests"
+
+
+def _load_custom_tests() -> list:
+    """Parse every saved custom test definition. Malformed files are skipped."""
+    if not _CUSTOM_TESTS_DIR.is_dir():
+        return []
+    out = []
+    for p in sorted(_CUSTOM_TESTS_DIR.glob("*.json")):
+        try:
+            out.append(_json.loads(p.read_text(encoding="utf-8")))
+        except Exception:
+            continue
+    return out
+
+
+def _load_custom_test(test_id: str):
+    p = _CUSTOM_TESTS_DIR / f"{test_id}.json"
+    if not p.is_file():
+        return None
+    try:
+        return _json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _instrument_type_of(resource: str):
+    """Look up the instrument type (psu/scope/dmm/...) for a resource string
+    in the currently loaded workbench, so saved steps can be stored by role
+    instead of a literal resource that may not exist on a future connection."""
+    wb = _sh._state.get("workbench") or {}
+    for instr in wb.get("_unique", []):
+        if instr.get("resource") == resource:
+            return instr.get("type")
+    return None
+
+
+def _slugify(name: str) -> str:
+    import re
+    s = re.sub(r"[^\w]+", "_", name.strip().lower()).strip("_")
+    return s or "custom_test"
+
+
 # ── Suggest tests ─────────────────────────────────────────────────────────────
 
 def _suggest_tests() -> list:
@@ -68,7 +112,14 @@ def _suggest_tests() -> list:
     wb = _sh._state.get("workbench")
     if not wb:
         # No workbench — return all tests as unavailable stubs so users can browse
-        return [{**kt, "available": False, "params": [], "columns": []} for kt in _KNOWN]
+        stubs = [{**kt, "available": False, "params": [], "columns": []} for kt in _KNOWN]
+        stubs += [{
+            "id": cdef["id"], "name": cdef.get("name", cdef["id"]),
+            "description": cdef.get("description", ""),
+            "requires": cdef.get("instrument_roles", []), "is_custom": True,
+            "available": False, "params": [], "columns": [],
+        } for cdef in _load_custom_tests()]
+        return stubs
     connected = set(_sh._state.get("resources", {}).keys())
     types = {
         instr.get("type")
@@ -272,6 +323,38 @@ def _suggest_tests() -> list:
         if kt["id"] not in existing:
             tests.append({**kt, "available": False, "params": [], "columns": []})
 
+    # ── Custom tests saved from the Sandbox tab ───────────────────────────────
+    all_instr = wb.get("_unique", [])
+    connected_by_type = {}
+    for instr in all_instr:
+        if instr.get("resource", "") in connected:
+            connected_by_type.setdefault(instr.get("type"), []).append(instr)
+
+    for cdef in _load_custom_tests():
+        roles = cdef.get("instrument_roles", [])
+        avail = all(r in types for r in roles)
+        cparams = list(cdef.get("params", []))
+        if avail:
+            for role in roles:
+                candidates = connected_by_type.get(role, [])
+                if len(candidates) > 1:
+                    cparams.insert(0, {
+                        "id": f"_role_{role}", "label": role.upper(), "unit": "",
+                        "type": "select", "default": candidates[0]["resource"],
+                        "options": [{"value": c["resource"], "label": c.get("model", role)}
+                                    for c in candidates],
+                    })
+        tests.append({
+            "id":          cdef["id"],
+            "name":        cdef.get("name", cdef["id"]),
+            "description": cdef.get("description", ""),
+            "requires":    roles,
+            "is_custom":   True,
+            "available":   avail,
+            "params":      cparams,
+            "columns":     cdef.get("columns", []),
+        })
+
     return tests
 
 
@@ -280,6 +363,73 @@ def _suggest_tests() -> list:
 @bp.route("/api/automation/tests")
 def api_automation_tests():
     return jsonify({"tests": _suggest_tests()})
+
+
+@bp.route("/api/automation/custom-tests", methods=["POST"])
+def api_save_custom_test():
+    """Save a Sandbox-designed sequence as a reusable test in the Automation tab.
+
+    Steps are stored with instrument *roles* (psu/scope/dmm/...) instead of the
+    literal resource selected in Sandbox, so the test still resolves correctly
+    against a different workbench/connection later.
+    """
+    d     = request.json or {}
+    name  = (d.get("name") or "").strip()
+    steps = d.get("steps", [])
+    loops = d.get("loops", [])
+    params = d.get("params", [])
+
+    if not name:
+        return jsonify({"error": "name is required"}), 400
+    if not any(s.get("type") == "measure" for s in steps):
+        return jsonify({"error": "Add at least one Measure step"}), 400
+
+    roles = set()
+    baked_steps = []
+    for s in steps:
+        s2 = dict(s)
+        resource = s2.get("instrument")
+        if resource:
+            role = _instrument_type_of(resource)
+            if role:
+                roles.add(role)
+                s2["instrument"] = role
+        baked_steps.append(s2)
+
+    columns = [s.get("label") or f"meas_{i+1}"
+               for i, s in enumerate(steps) if s.get("type") == "measure"]
+
+    base_id = _slugify(name)
+    test_id = base_id
+    n = 2
+    while (_CUSTOM_TESTS_DIR / f"{test_id}.json").exists():
+        test_id = f"{base_id}_{n}"
+        n += 1
+
+    _CUSTOM_TESTS_DIR.mkdir(parents=True, exist_ok=True)
+    defn = {
+        "id":               test_id,
+        "name":             name,
+        "description":      (d.get("description") or "").strip(),
+        "created":          datetime.now().isoformat(timespec="seconds"),
+        "params":           params,
+        "instrument_roles": sorted(roles),
+        "columns":          columns,
+        "steps":            baked_steps,
+        "loops":            loops,
+    }
+    (_CUSTOM_TESTS_DIR / f"{test_id}.json").write_text(
+        _json.dumps(defn, indent=2), encoding="utf-8")
+    return jsonify({"id": test_id})
+
+
+@bp.route("/api/automation/custom-tests/<test_id>", methods=["DELETE"])
+def api_delete_custom_test(test_id):
+    p = _CUSTOM_TESTS_DIR / f"{test_id}.json"
+    if not p.is_file():
+        return jsonify({"error": "not found"}), 404
+    p.unlink()
+    return jsonify({"status": "deleted"})
 
 
 @bp.route("/api/automation/stop", methods=["POST"])
@@ -2030,7 +2180,7 @@ def api_automation_run():
             vals = [meas_row.get(c) for c in meas_cols]
             rows.append(vals)
             _sh.sio.emit("automation_row", {
-                "test_id": "sandbox", "row": vals, "columns": meas_cols,
+                "test_id": test_id, "row": vals, "columns": meas_cols,
                 "progress": -1,
             })
             meas_row.clear()
@@ -2252,6 +2402,52 @@ def api_automation_run():
                 f"{final_mah:.1f} mAh measured")
         _done(rows, cols)
 
+    # ── Custom test (saved from Sandbox) ──────────────────────────────────────
+    def _run_custom_test(defn):
+        """Resolve instrument roles + bake declared params into a saved sandbox
+        sequence, then run it through the same engine as the Sandbox tab."""
+        wb_l   = _sh._state.get("workbench") or {}
+        unique = wb_l.get("_unique", [])
+
+        def _resolve_role(role):
+            override = params.get(f"_role_{role}")
+            if override:
+                return override
+            for instr in unique:
+                if instr.get("type") == role and instr.get("resource") in _sh._state["resources"]:
+                    return instr["resource"]
+            return None
+
+        role_resource = {}
+        for role in defn.get("instrument_roles", []):
+            rstr = _resolve_role(role)
+            if rstr is None:
+                _done([], [], f"No connected instrument for role '{role}'"); return
+            role_resource[role] = rstr
+
+        declared = {p["id"]: params.get(p["id"], p.get("default"))
+                    for p in defn.get("params", []) if not p["id"].startswith("_role_")}
+
+        def _bake(raw):
+            s = str(raw)
+            for k, v in declared.items():
+                s = s.replace("{" + k + "}", str(v))
+            return s
+
+        import copy
+        steps = copy.deepcopy(defn.get("steps", []))
+        loops = copy.deepcopy(defn.get("loops", []))
+        _TEMPLATE_FIELDS = ("value", "duration", "target", "tolerance", "interval", "timeout")
+        for s in steps:
+            role = s.get("instrument", "")
+            if role in role_resource:
+                s["instrument"] = role_resource[role]
+            for f in _TEMPLATE_FIELDS:
+                if isinstance(s.get(f), str):
+                    s[f] = _bake(s[f])
+
+        _run_sandbox_sequential({"steps": steps, "loops": loops})
+
     runners = {
         "ac_frequency_sweep": _run_ac_sweep,
         "dc_sweep":           _run_dc_sweep,
@@ -2265,6 +2461,10 @@ def api_automation_run():
         "battery_capacity":   _run_battery_capacity,
     }
     runner = runners.get(test_id)
+    if runner is None:
+        custom_defn = _load_custom_test(test_id)
+        if custom_defn is not None:
+            runner = lambda defn=custom_defn: _run_custom_test(defn)
     if runner is None:
         _auto_running = False
         return jsonify({"error": f"Unknown test: {test_id!r}"}), 400
