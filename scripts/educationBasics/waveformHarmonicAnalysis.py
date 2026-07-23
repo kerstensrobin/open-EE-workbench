@@ -9,7 +9,7 @@ import os
 from datetime import datetime
 
 rm = visa.ResourceManager()
-# the VISA adress for your scope can be found in using Keysight Connection Expert
+# the VISA adress for your scope can be found in using Keysight Connection Expert, or nachoVisa.py
 scope = rm.open_resource('USB0::0x2A8D::0x038B::CN63370620::0::INSTR')
 scope.timeout = 10000 #Always good to involve a time-out to avoid putting the scope into an endless waiting state.
 

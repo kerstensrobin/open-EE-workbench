@@ -2,6 +2,7 @@
 # Reads frequencies from acAnalysis.csv, sets the waveform generator to each frequency,
 # and measures Vpp on CH1 and CH2 with the oscilloscope. Results are saved to acAnalysis_results.csv.
 # robin.kerstens@uantwerpen.be
+##
 
 import csv
 import os

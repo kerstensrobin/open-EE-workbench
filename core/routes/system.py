@@ -402,6 +402,62 @@ def api_save_text():
         return jsonify({"error": str(exc)}), 500
 
 
+# ── Script file explorer ──────────────────────────────────────────────────────
+
+_SCRIPTS_DIR   = Path(__file__).resolve().parents[2] / "scripts"
+_FS_SKIP_NAMES = {"__pycache__", ".git", ".venv", "node_modules"}
+
+
+@bp.route("/api/fs/list", methods=["GET"])
+def api_fs_list():
+    """List the immediate contents of a directory (defaults to the scripts/ folder)."""
+    raw = (request.args.get("path") or "").strip()
+    try:
+        target = Path(os.path.expanduser(raw)).resolve() if raw else _SCRIPTS_DIR.resolve()
+        if not target.is_dir():
+            return jsonify({"error": f"Not a directory: {target}"}), 400
+        entries = []
+        for p in sorted(target.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+            if p.name.startswith(".") or p.name in _FS_SKIP_NAMES:
+                continue
+            entries.append({"name": p.name, "path": str(p), "is_dir": p.is_dir()})
+        return jsonify({"path": str(target), "entries": entries})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@bp.route("/api/fs/read", methods=["GET"])
+def api_fs_read():
+    """Read a text file's contents for the script editor."""
+    raw = (request.args.get("path") or "").strip()
+    if not raw:
+        return jsonify({"error": "path is required"}), 400
+    try:
+        p = Path(os.path.expanduser(raw)).resolve()
+        if not p.is_file():
+            return jsonify({"error": f"Not a file: {p}"}), 400
+        content = p.read_text(encoding="utf-8", errors="replace")
+        return jsonify({"path": str(p), "name": p.name, "content": content})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@bp.route("/api/fs/write", methods=["POST"])
+def api_fs_write():
+    """Write the script editor's contents back to a known file path."""
+    d   = request.json or {}
+    raw = (d.get("path") or "").strip()
+    if not raw:
+        return jsonify({"error": "path is required"}), 400
+    try:
+        p = Path(os.path.expanduser(raw)).resolve()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(d.get("content", ""), encoding="utf-8")
+        return jsonify({"path": str(p)})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
 # ── Plot image save ───────────────────────────────────────────────────────────
 
 @bp.route("/api/plot/save-image", methods=["POST"])

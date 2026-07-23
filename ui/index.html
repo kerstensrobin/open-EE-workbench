@@ -991,8 +991,76 @@
     .scope-auto-tog .tog-dot { width:7px;height:7px;border-radius:50%;background:currentColor; }
 
     /* ── Python console tab ──────────────────────────────────────── */
-    #python-tab { display:none; flex-direction:column; gap:0; flex:1; min-height:0; }
+    #python-tab { display:none; flex-direction:row; gap:10px; flex:1; min-height:0; }
     #python-tab.visible { display:flex; }
+
+    /* ── Script explorer sidebar ──────────────────────────────────── */
+    #py-explorer {
+      display:flex; flex-direction:column; flex-shrink:0; width:230px;
+      background:var(--surface); border:1px solid var(--border);
+      border-radius:var(--radius-lg); overflow:hidden;
+    }
+    #py-explorer-header {
+      flex-shrink:0; display:flex; align-items:center; gap:4px;
+      padding:8px; border-bottom:1px solid var(--border);
+    }
+    #py-explorer-path {
+      flex:1; min-width:0; font:inherit; font-size:11px; background:var(--surface3);
+      border:1px solid var(--border); border-radius:var(--radius);
+      color:var(--text); padding:3px 6px; outline:none;
+    }
+    #py-explorer-path:focus { border-color:var(--accent); }
+    .py-explorer-btn {
+      flex-shrink:0; display:flex; align-items:center; justify-content:center;
+      width:22px; height:22px; border-radius:var(--radius);
+      background:var(--surface2); border:1px solid var(--border);
+      color:var(--text-dim); cursor:pointer; font-size:12px;
+    }
+    .py-explorer-btn:hover { background:var(--surface3); color:var(--text); }
+    #py-explorer-tree { flex:1; overflow-y:auto; padding:4px 0; }
+    #py-explorer-tree:empty::before {
+      content:"No scripts found"; display:block; padding:10px;
+      color:var(--text-faint); font-size:11px; font-style:italic;
+    }
+    .py-tree-row {
+      display:flex; align-items:center; gap:6px; padding:3px 8px;
+      font-size:12px; color:var(--text); cursor:pointer; white-space:nowrap;
+      overflow:hidden; text-overflow:ellipsis;
+    }
+    .py-tree-row:hover { background:var(--surface2); }
+    .py-tree-row.active { background:var(--surface3); color:var(--text); font-weight:600; }
+    .py-tree-row svg { flex-shrink:0; }
+    .py-tree-row span { overflow:hidden; text-overflow:ellipsis; }
+
+    /* ── Script tab bar (MATLAB-style) ─────────────────────────────── */
+    #py-tabbar {
+      flex-shrink:0; display:flex; align-items:flex-end; gap:2px;
+      padding:6px 8px 0; border-bottom:1px solid var(--border);
+      overflow-x:auto; background:var(--surface2);
+    }
+    .py-script-tab {
+      display:flex; align-items:center; gap:6px; padding:6px 8px 6px 12px;
+      font-size:11px; color:var(--text-dim); cursor:pointer; white-space:nowrap;
+      background:var(--surface); border:1px solid var(--border); border-bottom:none;
+      border-radius:var(--radius) var(--radius) 0 0; flex-shrink:0;
+    }
+    .py-script-tab.active { color:var(--text); background:var(--surface3); font-weight:600; }
+    .py-script-tab .py-tab-dot {
+      width:6px; height:6px; border-radius:50%; background:var(--accent); flex-shrink:0;
+      visibility:hidden;
+    }
+    .py-script-tab.dirty .py-tab-dot { visibility:visible; }
+    .py-script-tab .py-tab-close {
+      display:flex; align-items:center; justify-content:center;
+      width:14px; height:14px; border-radius:3px; color:var(--text-faint);
+      flex-shrink:0;
+    }
+    .py-script-tab .py-tab-close:hover { background:var(--surface2); color:var(--text); }
+    .py-script-tab.py-tab-new {
+      padding:6px 10px; color:var(--text-faint); font-weight:700; font-size:13px;
+    }
+    .py-script-tab.py-tab-new:hover { color:var(--text); }
+
     #py-card {
       display:flex; flex-direction:column; flex:1; min-height:0;
       background:var(--surface); border:1px solid var(--border);
@@ -1811,6 +1879,21 @@
 
     <!-- ── Python console tab ─────────────────────────────────────── -->
     <div id="python-tab">
+      <div id="py-explorer">
+        <div id="py-explorer-header">
+          <input id="py-explorer-path" type="text" spellcheck="false" autocomplete="off"
+                 placeholder="scripts folder path"
+                 title="Folder shown in the explorer below — press Enter to navigate"
+                 onkeydown="if(event.key==='Enter'){pyExplorerLoad(this.value.trim());this.blur();}">
+          <div class="py-explorer-btn" onclick="pyExplorerBrowse()" title="Browse…">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <div class="py-explorer-btn" onclick="pyExplorerLoad(document.getElementById('py-explorer-path').value.trim())" title="Refresh">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </div>
+        </div>
+        <div id="py-explorer-tree"></div>
+      </div>
       <div id="py-card">
         <div class="test-card-header">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
@@ -1819,11 +1902,11 @@
           <span class="test-card-title">Python Console</span>
           <div style="flex:1"></div>
           <input id="py-name-inp" type="text" value="script" placeholder="script name" spellcheck="false" autocomplete="off" title="Script name (used when saving)">
-          <button class="btn btn-ghost" style="font-size:11px;gap:4px;" onclick="pyLoad()" title="Load .py file">
+          <button class="btn btn-ghost" style="font-size:11px;gap:4px;" onclick="pyLoad()" title="Load .py file from anywhere on disk">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
             Load
           </button>
-          <button class="btn btn-ghost" style="font-size:11px;gap:4px;" onclick="pySave()" title="Save to output folder">
+          <button class="btn btn-ghost" style="font-size:11px;gap:4px;" onclick="pySave()" title="Save (writes back to file if opened from disk)">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
             Save
           </button>
@@ -1832,20 +1915,8 @@
             Guide
           </button>
         </div>
-        <textarea id="py-editor" spellcheck="false"># Available in scope (no imports needed):
-#   print, time, json, math, Path, pyvisa, pymeasure
-#   resources  — dict[resource_str → pyvisa resource]
-#   families   — dict[resource_str → resolved family dict]
-#   wb         — active workbench dict, or None
-#   _find_instrument(type)  → (resource, family_id)
-#   _op(resource, family, operation, **kwargs)
-#   get_command(family_id, operation)
-
-# Example — query scope IDN
-scope, fam = _find_instrument('scope')
-if scope:
-    print(scope.query('*IDN?'))
-</textarea>
+        <div id="py-tabbar"></div>
+        <textarea id="py-editor" spellcheck="false"></textarea>
         <div id="py-output"></div>
         <div class="py-toolbar">
           <button class="btn btn-primary" id="py-run-btn" onclick="pyRun()">▶ Run</button>
@@ -2331,6 +2402,21 @@ function closeScpiRefModal() {
 // ── Python console ─────────────────────────────────────────────────
 let _pyRunning = false;
 
+const _PY_DEFAULT_SCRIPT = `# Available in scope (no imports needed):
+#   print, time, json, math, Path, pyvisa, pymeasure
+#   resources  — dict[resource_str → pyvisa resource]
+#   families   — dict[resource_str → resolved family dict]
+#   wb         — active workbench dict, or None
+#   _find_instrument(type)  → (resource, family_id)
+#   _op(resource, family, operation, **kwargs)
+#   get_command(family_id, operation)
+
+# Example — query scope IDN
+scope, fam = _find_instrument('scope')
+if scope:
+    print(scope.query('*IDN?'))
+`;
+
 function _pySetRunning(running) {
   _pyRunning = running;
   document.getElementById("py-run-btn").classList.toggle("hidden", running);
@@ -2371,32 +2457,6 @@ function pyStop() {
   fetch("/api/python/stop", { method: "POST" }).catch(() => {});
 }
 
-function pyLoad() {
-  const inp = document.createElement("input");
-  inp.type = "file"; inp.accept = ".py,.txt";
-  inp.onchange = e => {
-    const file = e.target.files[0]; if (!file) return;
-    const r = new FileReader();
-    r.onload = ev => {
-      _pyEditor.setValue(ev.target.result);
-      const name = file.name.replace(/\.(py|txt)$/i, "");
-      document.getElementById("py-name-inp").value = name;
-      toast("Loaded " + file.name, "ok");
-    };
-    r.readAsText(file);
-  };
-  inp.click();
-}
-
-function pySave() {
-  const code = _pyEditor.getValue();
-  const name = (document.getElementById("py-name-inp").value.trim() || "script").replace(/[^\w-]/g, "_");
-  const filename = name + ".py";
-  POST("/api/save-text", { filename, content: code, output_path: state.outputPath || "" })
-    .then(r => toast("Saved → " + r.path, "ok"))
-    .catch(e => toast("Save failed: " + e.message, "error"));
-}
-
 const _pyEditor = CodeMirror.fromTextArea(document.getElementById("py-editor"), {
   mode: "python",
   lineNumbers: true,
@@ -2412,6 +2472,242 @@ const _pyEditor = CodeMirror.fromTextArea(document.getElementById("py-editor"), 
     "Shift-Tab":   cm  => cm.execCommand("indentLess"),
   },
 });
+
+// ── Script tabs (MATLAB-style) ───────────────────────────────────────
+let _pyTabs        = [];   // { id, name, path, doc, dirty }
+let _pyActiveTabId = null;
+let _pyTabSeq      = 1;
+
+function _pyActiveTab() {
+  return _pyTabs.find(t => t.id === _pyActiveTabId) || null;
+}
+
+function _pyNewTab({ name, content, path } = {}) {
+  const id  = "t" + (_pyTabSeq++);
+  const doc = CodeMirror.Doc(content ?? "", "python");
+  const tab = { id, name: name || ("untitled" + id), path: path || null, doc, dirty: false };
+  doc.on("change", () => {
+    if (!tab.dirty) { tab.dirty = true; _pyRenderTabs(); }
+  });
+  _pyTabs.push(tab);
+  _pyActiveTabId = null; // force the switch below to actually apply
+  _pySwitchTab(id);
+  return tab;
+}
+
+function _pySwitchTab(id) {
+  if (id === _pyActiveTabId) return;
+  const next = _pyTabs.find(t => t.id === id);
+  if (!next) return;
+  _pyActiveTabId = id;
+  _pyEditor.swapDoc(next.doc);
+  const nameInp = document.getElementById("py-name-inp");
+  nameInp.value    = next.name;
+  nameInp.readOnly = !!next.path;
+  nameInp.title    = next.path ? next.path : "Script name (used when saving)";
+  _pyRenderTabs();
+  _pyRenderTree();
+}
+
+document.getElementById("py-name-inp").addEventListener("input", e => {
+  const tab = _pyActiveTab();
+  if (!tab || tab.path) return; // name only editable before the first save
+  tab.name = e.target.value.trim() || tab.name;
+  _pyRenderTabs();
+});
+
+function pyNewScript() {
+  _pyNewTab({ name: "script" + (_pyTabSeq), content: "" });
+}
+
+function _pyCloseTab(id, evt) {
+  if (evt) evt.stopPropagation();
+  const idx = _pyTabs.findIndex(t => t.id === id);
+  if (idx === -1) return;
+  const tab = _pyTabs[idx];
+  if (tab.dirty && !confirm(`Discard unsaved changes in "${tab.name}"?`)) return;
+  _pyTabs.splice(idx, 1);
+  if (_pyTabs.length === 0) {
+    _pyNewTab({ name: "script", content: _PY_DEFAULT_SCRIPT });
+    return;
+  }
+  if (_pyActiveTabId === id) {
+    const fallback = _pyTabs[Math.max(0, idx - 1)];
+    _pyActiveTabId = null;
+    _pySwitchTab(fallback.id);
+  } else {
+    _pyRenderTabs();
+  }
+}
+
+function _pyRenderTabs() {
+  const bar = document.getElementById("py-tabbar");
+  bar.innerHTML = "";
+  for (const tab of _pyTabs) {
+    const el = document.createElement("div");
+    el.className = "py-script-tab" + (tab.id === _pyActiveTabId ? " active" : "") + (tab.dirty ? " dirty" : "");
+    el.title = tab.path || tab.name;
+    el.onclick = () => _pySwitchTab(tab.id);
+
+    const dot = document.createElement("span");
+    dot.className = "py-tab-dot";
+    el.appendChild(dot);
+
+    const label = document.createElement("span");
+    label.textContent = tab.name;
+    el.appendChild(label);
+
+    const close = document.createElement("span");
+    close.className = "py-tab-close";
+    close.textContent = "✕";
+    close.onclick = e => _pyCloseTab(tab.id, e);
+    el.appendChild(close);
+
+    bar.appendChild(el);
+  }
+  const newBtn = document.createElement("div");
+  newBtn.className = "py-script-tab py-tab-new";
+  newBtn.title = "New script";
+  newBtn.textContent = "+";
+  newBtn.onclick = () => pyNewScript();
+  bar.appendChild(newBtn);
+}
+
+function pyLoad() {
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = ".py,.txt";
+  inp.onchange = e => {
+    const file = e.target.files[0]; if (!file) return;
+    const r = new FileReader();
+    r.onload = ev => {
+      const name = file.name.replace(/\.(py|txt)$/i, "");
+      _pyNewTab({ name, content: ev.target.result });
+      toast("Loaded " + file.name, "ok");
+    };
+    r.readAsText(file);
+  };
+  inp.click();
+}
+
+function pySave() {
+  const tab = _pyActiveTab();
+  if (!tab) return;
+  const code = _pyEditor.getValue();
+  if (tab.path) {
+    POST("/api/fs/write", { path: tab.path, content: code })
+      .then(() => { tab.dirty = false; _pyRenderTabs(); toast("Saved → " + tab.path, "ok"); })
+      .catch(e => toast("Save failed: " + e.message, "error"));
+    return;
+  }
+  const name = (document.getElementById("py-name-inp").value.trim() || "script").replace(/[^\w-]/g, "_");
+  const filename = name + ".py";
+  POST("/api/save-text", { filename, content: code, output_path: state.outputPath || "" })
+    .then(r => {
+      tab.path    = r.path;
+      tab.name    = name;
+      tab.dirty   = false;
+      document.getElementById("py-name-inp").readOnly = true;
+      document.getElementById("py-name-inp").title = tab.path;
+      _pyRenderTabs();
+      toast("Saved → " + r.path, "ok");
+    })
+    .catch(e => toast("Save failed: " + e.message, "error"));
+}
+
+// ── Script explorer sidebar ──────────────────────────────────────────
+let _pyExplorerRoot = "";
+let _pyTreeCache    = {};   // dir path → entries[]
+let _pyExpanded     = new Set();
+
+async function pyExplorerLoad(path) {
+  try {
+    const r = await GET("/api/fs/list" + (path ? ("?path=" + encodeURIComponent(path)) : ""));
+    _pyExplorerRoot = r.path;
+    _pyTreeCache    = { [r.path]: r.entries };
+    _pyExpanded     = new Set();
+    document.getElementById("py-explorer-path").value = r.path;
+    _pyRenderTree();
+  } catch (e) {
+    toast("Failed to list folder: " + e.message, "error");
+  }
+}
+
+async function pyExplorerBrowse() {
+  try {
+    const r = await POST("/api/pick-folder", { initial: _pyExplorerRoot || "" });
+    if (r.path) pyExplorerLoad(r.path);
+  } catch (e) {
+    toast("Folder picker failed: " + e.message, "error");
+  }
+}
+
+async function _pyToggleDir(path) {
+  if (_pyExpanded.has(path)) {
+    _pyExpanded.delete(path);
+    _pyRenderTree();
+    return;
+  }
+  if (!_pyTreeCache[path]) {
+    try {
+      const r = await GET("/api/fs/list?path=" + encodeURIComponent(path));
+      _pyTreeCache[path] = r.entries;
+    } catch (e) {
+      toast("Failed to open folder: " + e.message, "error");
+      return;
+    }
+  }
+  _pyExpanded.add(path);
+  _pyRenderTree();
+}
+
+async function pyOpenFromExplorer(path) {
+  const existing = _pyTabs.find(t => t.path === path);
+  if (existing) { _pySwitchTab(existing.id); return; }
+  try {
+    const r = await GET("/api/fs/read?path=" + encodeURIComponent(path));
+    const name = r.name.replace(/\.py$/i, "");
+    _pyNewTab({ name, content: r.content, path: r.path });
+  } catch (e) {
+    toast("Failed to open file: " + e.message, "error");
+  }
+}
+
+const _PY_FOLDER_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+const _PY_FILE_ICON   = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+
+function _pyRenderTree() {
+  const root = document.getElementById("py-explorer-tree");
+  root.innerHTML = "";
+  if (!_pyExplorerRoot) return;
+  root.appendChild(_pyBuildTreeLevel(_pyExplorerRoot, 0));
+}
+
+function _pyBuildTreeLevel(dirPath, depth) {
+  const wrap    = document.createDocumentFragment();
+  const active  = _pyActiveTab();
+  const entries = _pyTreeCache[dirPath] || [];
+  for (const e of entries) {
+    const row = document.createElement("div");
+    row.className = "py-tree-row" + (active && active.path === e.path ? " active" : "");
+    row.style.paddingLeft = (10 + depth * 14) + "px";
+
+    const icon = document.createElement("span");
+    icon.innerHTML = e.is_dir ? _PY_FOLDER_ICON : _PY_FILE_ICON;
+    row.appendChild(icon.firstChild);
+
+    const label = document.createElement("span");
+    label.textContent = e.name;
+    row.appendChild(label);
+
+    row.onclick = () => e.is_dir ? _pyToggleDir(e.path) : pyOpenFromExplorer(e.path);
+    wrap.appendChild(row);
+
+    if (e.is_dir && _pyExpanded.has(e.path) && _pyTreeCache[e.path]) {
+      wrap.appendChild(_pyBuildTreeLevel(e.path, depth + 1));
+    }
+  }
+  return wrap;
+}
 
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -8295,6 +8591,8 @@ document.getElementById("test-meta-modal").addEventListener("click", e => {
 
 // ── Init ──────────────────────────────────────────────────────────
 (async () => { await loadWorkbenches(); refreshAutoTests(); })();
+_pyNewTab({ name: "script", content: _PY_DEFAULT_SCRIPT });
+pyExplorerLoad("");
 </script>
 </body>
 </html>

@@ -1,5 +1,6 @@
-#!/usr/bin/env python3
-"""Cycle a Korad KA-series power supply through a few voltages over USB/serial."""
+# This is an example script, setting up basic communication and using key functions of the device.
+# robin.kerstens@uantwerpen.be
+##
 
 import time
 import pyvisa

@@ -26,8 +26,6 @@
 #   python waveformAnalysis.py --no-autoscale     # skip the initial autoscale
 #   python waveformAnalysis.py --label "555 OUT"  # label shown on scope screen
 #   python waveformAnalysis.py --out results.csv  # custom CSV name
-#
-# robin.kerstens@uantwerpen.be
 
 import argparse
 import csv

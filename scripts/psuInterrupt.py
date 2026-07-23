@@ -26,8 +26,6 @@
 #
 # When --total-time is given T3 is derived as total-time − T1 − T2,
 # keeping each cycle the same wall-clock length across a T2 sweep.
-#
-# robin.kerstens@uantwerpen.be
 
 import argparse
 import csv
