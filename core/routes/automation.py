@@ -33,7 +33,7 @@ _auto_running = False
 
 
 # ── Custom tests (saved from the Sandbox tab) ─────────────────────────────────
-_CUSTOM_TESTS_DIR = _ROOT / "custom_tests"
+_CUSTOM_TESTS_DIR = Path(__file__).resolve().parents[2] / "custom_tests"
 
 
 def _load_custom_tests() -> list:
@@ -2122,8 +2122,13 @@ def api_automation_run():
 
     def _run_sandbox_sequential(sb):
         """Execute the new steps-based sandbox format."""
-        steps     = sb.get("steps", [])
-        loops_cfg = sb.get("loops", [])
+        steps = sb.get("steps", [])
+        # Nested loops are common (an inner loop wrapping the tail of an outer
+        # loop's range, so both share the same end_id). When that happens the
+        # innermost loop must finish a full cycle before the outer one advances,
+        # so sort loops with a later start_id (the more deeply nested one) first —
+        # that's the order they need to be checked in at a shared end step.
+        loops_cfg = sorted(sb.get("loops", []), key=lambda l: -l.get("start_id", 0))
 
         meas_cols = [s.get("label") or f"meas_{i+1}"
                      for i, s in enumerate(steps) if s.get("type") == "measure"]
@@ -2300,7 +2305,10 @@ def api_automation_run():
                         should_loop = True
                     else:
                         loop_counters[lc_id] = 0
-                        loop_sweep_val.pop(lc_id, None)
+                        # Reset to the first sweep value (not remove it) so a
+                        # nested loop's {var} still resolves correctly the next
+                        # time an outer loop re-enters its range.
+                        loop_sweep_val[lc_id] = vals[0]
                 elif ctype in ("until", "while") and res:
                     op_key = _MEAS_OPS.get(cond.get("param", "voltage"), "measure_voltage")
                     u_ch   = int(cond.get("ch", 1))
