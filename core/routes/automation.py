@@ -2153,6 +2153,13 @@ def api_automation_run():
             try: f = float(v); return None if abs(f) > 1e30 else round(f, 6)
             except Exception: return None
 
+        def _apply_vmap(raw, var_map):
+            """Substitute {sweep}-style loop variables into a step field's raw value."""
+            s = str(raw)
+            for var, val in var_map.items():
+                s = s.replace("{" + var + "}", str(val))
+            return s
+
         rows, meas_row = [], {}
         loop_counters  = {l["id"]: 0 for l in loops_cfg}
         loop_sweep_val = {}   # lc_id -> current swept float value
@@ -2197,13 +2204,11 @@ def api_automation_run():
             }
             t = s.get("type", "")
             if t == "wait":
-                time.sleep(float(s.get("duration", 0)))
+                time.sleep(float(_apply_vmap(s.get("duration", 0), var_map)))
             elif t == "set" and res:
                 ch, par = int(s.get("ch", 1)), s.get("param", "voltage")
                 settle  = float(s.get("settle", 0))
-                raw     = str(s.get("value", "0"))
-                for var, val in var_map.items():
-                    raw = raw.replace("{" + var + "}", str(val))
+                raw     = _apply_vmap(s.get("value", "0"), var_map)
                 try:
                     v = float(raw)
                     _run_steps(res, get_command(fam, par, ch=ch, value=f"{v:.6f}"))
@@ -2213,11 +2218,11 @@ def api_automation_run():
             elif t == "wait_for" and res:
                 op      = _MEAS_OPS_L.get(s.get("param", "voltage"), "measure_voltage")
                 ch      = int(s.get("ch", 1))
-                target  = float(s.get("target", 0))
-                tol     = abs(float(s.get("tolerance", 0.5)))
+                target  = float(_apply_vmap(s.get("target", 0), var_map))
+                tol     = abs(float(_apply_vmap(s.get("tolerance", 0.5), var_map)))
                 cond    = s.get("condition", ">=")
-                intv    = max(0.5, float(s.get("interval", 5)))
-                timeout = float(s.get("timeout", 0))
+                intv    = max(0.5, float(_apply_vmap(s.get("interval", 5), var_map)))
+                timeout = float(_apply_vmap(s.get("timeout", 0), var_map))
                 t_start = time.time()
                 while not _auto_stop.is_set():
                     try:
@@ -2243,15 +2248,17 @@ def api_automation_run():
             res, fam = handles.get(sid, (None, None))
             t   = s.get("type", "")
 
+            # build var_map from all active sweep loops (supports nesting) — lets
+            # "set", "wait" and "wait_for" steps reference {sweep}-style loop vars
+            vmap = {}
+            for lc in loops_cfg:
+                c = lc.get("condition", {})
+                if c.get("type") == "sweep" and lc["id"] in loop_sweep_val:
+                    vmap[c.get("var", "sweep")] = loop_sweep_val[lc["id"]]
+
             if t == "wait":
-                time.sleep(float(s.get("duration", 0)))
+                time.sleep(float(_apply_vmap(s.get("duration", 0), vmap)))
             elif t in ("set", "wait_for") and res:
-                # build var_map from all active sweep loops (supports nesting)
-                vmap = {}
-                for lc in loops_cfg:
-                    c = lc.get("condition", {})
-                    if c.get("type") == "sweep" and lc["id"] in loop_sweep_val:
-                        vmap[c.get("var", "sweep")] = loop_sweep_val[lc["id"]]
                 _exec_action_seq(s, res, fam, vmap)
             elif t == "measure" and res:
                 op     = _MEAS_OPS.get(s.get("param", "voltage"), "measure_voltage")
