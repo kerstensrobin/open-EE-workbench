@@ -230,8 +230,7 @@ def _start_polling():
                                     break
                                 readings: dict = {}
                                 for op, key in [("measure_voltage", "v"),
-                                                ("measure_current", "i"),
-                                                ("measure_power",   "p")]:
+                                                ("measure_current", "i")]:
                                     try:
                                         r = _run_steps(res,
                                                        get_command(fam, op, ch=ch),
@@ -240,6 +239,10 @@ def _start_polling():
                                             readings[key] = float(r)
                                     except Exception:
                                         pass
+                                # Power isn't queried — not every PSU family exposes a
+                                # MEAS:POW? command, and P = V × I is exact anyway.
+                                if "v" in readings and "i" in readings:
+                                    readings["p"] = readings["v"] * readings["i"]
                                 if readings:
                                     _sh.sio.emit("psu_reading", {"ch": ch, **readings})
                                 elif ch > 1:

@@ -365,6 +365,13 @@
     #dmml-chart  { width:100%; height:300px; }
     #dmml-canvas { width:100%; height:300px; }
 
+    /* ── PSU Logger custom card (reuses .dmml-* layout classes) ────── */
+    .psul-setpoints { display:flex; align-items:center; gap:5px; flex-shrink:0; }
+    .psul-setpoint-input { width:56px; background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:var(--radius); padding:3px 5px; font:inherit; font-size:10px; outline:none; }
+    .psul-setpoint-input:focus { border-color:var(--amber); }
+    .psul-setpoint-unit { font-size:9px; color:var(--text-faint); margin-right:4px; }
+    #psul-chart { width:100%; height:300px; }
+
     /* ── Log panel ───────────────────────────────────────────────── */
     #log-panel { width:var(--sidebar-w); min-width:150px; background:var(--surface); border-left:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
     #log-resize { width:4px; flex-shrink:0; cursor:col-resize; background:transparent; transition:background .15s; }
@@ -856,8 +863,8 @@
     .u-legend td, .u-legend tr, .u-legend th { background:transparent !important; border:none; }
     .u-legend .u-value { color:var(--text-dim); }
     .u-select { background:rgba(100,120,200,0.08); }
-    #iv-chart .u-wrap, #dmml-chart .u-wrap, #batt-chart .u-wrap { width:100%; height:100%; }
-    #iv-chart:empty::before, #dmml-chart:empty::before, #batt-chart:empty::before {
+    #iv-chart .u-wrap, #dmml-chart .u-wrap, #batt-chart .u-wrap, #psul-chart .u-wrap { width:100%; height:100%; }
+    #iv-chart:empty::before, #dmml-chart:empty::before, #batt-chart:empty::before, #psul-chart:empty::before {
       content: attr(data-placeholder); display:flex; align-items:center; justify-content:center;
       height:100%; color:rgba(120,132,154,0.55); font-size:12px; font-family:Inter,system-ui;
     }
@@ -4854,7 +4861,7 @@ function refreshAutoTab() {
 }
 
 function buildTestGrid(tests) {
-  const icons = { ac_frequency_sweep:"〼", dc_sweep:"⚡", dmm_logger:"Ω",
+  const icons = { ac_frequency_sweep:"〼", dc_sweep:"⚡", dmm_logger:"Ω", psu_logger:"⏻",
                   waveform_analysis:"∿",  harmonic_analysis:"≋" };
   const instrNames = { psu:"PSU", scope:"Oscilloscope", awg:"AWG / Function generator", dmm:"Multimeter" };
 
@@ -4886,6 +4893,8 @@ function buildTestGrid(tests) {
       card = buildTestCard(test);
     } else if (test.id === "dmm_logger") {
       card = buildDmmLoggerCard(test);
+    } else if (test.id === "psu_logger") {
+      card = buildPsuLoggerCard(test);
     } else {
       card = buildDcSweepCard(test);
       _dcSw.measItems = [
@@ -5431,6 +5440,7 @@ async function runTest(testId) {
 
   const params = testId === "dc_sweep"    ? getDcSweepParams()    :
                  testId === "dmm_logger"  ? getDmmLoggerParams()  :
+                 testId === "psu_logger"  ? getPsuLoggerParams()  :
                  getTestParams(testId);
   if (params == null) return;  // builder returned null (validation failure)
 
@@ -5440,6 +5450,13 @@ async function runTest(testId) {
     _dmmLog.cols    = [];
     _dmmLog.status  = "running";
     _dmmLogDraw();
+  }
+  if (testId === "psu_logger") {
+    _psuLog.data    = {};
+    _psuLog.elapsed = [];
+    _psuLog.cols    = [];
+    _psuLog.status  = "running";
+    _psuLogDraw();
   }
 
   const output_path = state.outputPath || "";
@@ -5590,6 +5607,40 @@ socket.on("automation_row", ({ test_id, row, columns, progress, cutoff_v }) => {
     _dmmLogDraw();
     return;
   }
+  if (test_id === "psu_logger") {
+    // Feed chart state
+    if (_psuLog.cols.length === 0 && columns?.length) {
+      _psuLog.cols = columns;
+      _psuLog.data = {};
+      for (const col of columns.slice(1)) _psuLog.data[col] = [];
+    }
+    if (row && columns?.length) {
+      _psuLog.elapsed.push(row[0]);
+      for (let i = 1; i < columns.length; i++) {
+        const lbl = columns[i];
+        if (!_psuLog.data[lbl]) _psuLog.data[lbl] = [];
+        _psuLog.data[lbl].push(row[i]);
+      }
+    }
+    // Progress bar inside the card
+    const fillP = document.getElementById("tprog-fill-psu_logger");
+    if (fillP) {
+      if (progress < 0) { fillP.style.width = "100%"; fillP.style.opacity = "0.35"; }
+      else               { fillP.style.width = (progress*100).toFixed(1)+"%"; fillP.style.opacity = ""; }
+    }
+    const lblP = document.getElementById("tprog-label-psu_logger");
+    if (lblP) lblP.textContent = `${_psuLog.elapsed.length} rows…`;
+    // Keep standard results panel (for CSV export)
+    if (state.autoRows.length === 0 && columns &&
+        columns.join("\0") !== state.autoCols.join("\0")) {
+      state.autoCols = columns;
+      initResultsPanel(test_id, columns);
+    }
+    state.autoRows.push(row);
+    appendResultRow(row, columns);
+    _psuLogDraw();
+    return;
+  }
   if (!document.getElementById(`test-card-${test_id}`)) return;
   // On the first row, update columns if the runner determined a different schema
   // (e.g. dc_sweep changes columns based on sweep_mode at runtime)
@@ -5659,6 +5710,19 @@ socket.on("automation_done", ({ test_id, columns, rows, error, csv_path }) => {
       logMsg(`✓ [dmm_logger] done (${_dmmLog.elapsed.length} rows)${csv_path ? " → " + csv_path : ""}`, "ok");
     }
     _dmmLogDraw();
+    testFinished(test_id, error, csv_path);
+    return;
+  }
+  if (test_id === "psu_logger") {
+    _psuLog.status = error ? "error" : "done";
+    if (error) {
+      toast("PSU Logger failed: " + error, "error");
+      logMsg(`✗ [psu_logger] ${error}`, "error");
+    } else {
+      toast(`PSU Logger — ${_psuLog.elapsed.length} rows`, "ok");
+      logMsg(`✓ [psu_logger] done (${_psuLog.elapsed.length} rows)${csv_path ? " → " + csv_path : ""}`, "ok");
+    }
+    _psuLogDraw();
     testFinished(test_id, error, csv_path);
     return;
   }
@@ -6958,6 +7022,236 @@ function _dmmLogDrawHistogram(c) {
       ctx.fillStyle = "#1a1d25"; ctx.textAlign = "left"; ctx.textBaseline = "top";
       ctx.fillText(d.label, bx+pad+swW+5, ry+1);
     });
+  }
+}
+
+// ── PSU Logger (set voltage/I-limit per channel, log I/P in real time) ─
+
+const _PSU_LOG_SUFFIX = { psu_v: "_V", psu_i: "_I", psu_p: "_P" };
+const _PSU_LOG_UNIT    = { psu_v: "V",  psu_i: "A",  psu_p: "W" };
+
+const _psuLog = {
+  test:     null,
+  channels: [],    // [{resource, label, ch, mode, enabled, color}]
+  data:     {},    // "{label}_V" | "{label}_I" | "{label}_P" -> [value, ...]
+  elapsed:  [],    // [elapsed_s, ...]
+  cols:     [],
+  status:   "idle",   // "idle" | "running" | "done" | "error"
+  uplot:    null,
+};
+
+function buildPsuLoggerCard(test) {
+  _psuLog.test     = test;
+  _psuLog.channels = (test.psu_channels || []).map((c, i) => ({
+    resource: c.resource,
+    label:    c.label,
+    ch:       c.ch || 1,
+    mode:     "psu_p",
+    enabled:  true,
+    color:    _CURVE_COLORS[i % _CURVE_COLORS.length],
+  }));
+  _psuLog.data    = {};
+  _psuLog.elapsed = [];
+  _psuLog.cols    = [];
+  _psuLog.status  = "idle";
+
+  const modeOptsFor = (selected) => Object.entries(_PSU_MODE_LABELS).map(([v, l]) =>
+    `<option value="${v}"${v === selected ? " selected" : ""}>${l}</option>`).join("");
+
+  const chRows = _psuLog.channels.length
+    ? _psuLog.channels.map((c, i) => `
+      <div class="dmml-dmm-row">
+        <input class="dmml-dmm-toggle" type="checkbox" checked id="psul-tog-${i}"
+               onchange="_psuLogToggleChannel(${i}, this.checked)">
+        <span class="dmml-dmm-swatch" style="background:${escHtml(c.color)};"></span>
+        <span class="dmml-dmm-label" title="${escHtml(c.label)}">${escHtml(c.label)}</span>
+        <div class="psul-setpoints">
+          <span class="psul-setpoint-unit">V</span>
+          <input class="psul-setpoint-input" type="number" step="any" id="psul-v-${i}" placeholder="unset">
+          <span class="psul-setpoint-unit">I lim</span>
+          <input class="psul-setpoint-input" type="number" step="any" id="psul-ilim-${i}" placeholder="unset">
+        </div>
+        <select class="dmml-dmm-mode" id="psul-mode-${i}" onchange="_psuLogDraw()">${modeOptsFor(c.mode)}</select>
+      </div>`).join("")
+    : `<span style="color:var(--text-faint);font-size:11px;padding:4px 0;display:block;">No PSU channels available</span>`;
+
+  const div = document.createElement("div");
+  div.className = "test-card";
+  div.id        = "test-card-psu_logger";
+  div.innerHTML = `
+    <div class="test-card-header">
+      <div class="test-card-icon">⏻</div>
+      <div>
+        <div class="test-card-title">${escHtml(test.name)}</div>
+        <div class="test-card-desc">${escHtml(test.description)}</div>
+      </div>
+    </div>
+    <div class="test-card-body">
+
+      <div class="dmml-timing-row">
+        <div>
+          <div class="section-label">Update rate</div>
+          <div class="test-param-input-wrap">
+            <input class="test-param-input" type="number" step="any" id="psul-interval"
+                   value="0.2" min="0.05" style="width:70px;">
+            <span class="test-param-unit">s</span>
+          </div>
+        </div>
+        <div>
+          <div class="section-label">Duration</div>
+          <div class="test-param-input-wrap">
+            <input class="test-param-input" type="number" step="any" id="psul-duration"
+                   value="60" min="1" style="width:70px;">
+            <span class="test-param-unit">s</span>
+          </div>
+        </div>
+        <div style="align-self:flex-end;padding-bottom:6px;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-dim);cursor:pointer;white-space:nowrap;">
+            <input type="checkbox" id="psul-infinite" style="accent-color:var(--amber);cursor:pointer;"
+                   onchange="const s=document.getElementById('psul-duration');s.disabled=this.checked;s.style.opacity=this.checked?'0.35':'1';">
+            ∞
+          </label>
+        </div>
+      </div>
+
+      <div class="dmml-dmm-section">
+        <div class="section-label">Channels — leave V / I lim blank to log without changing the setpoint</div>
+        <div class="dmml-dmm-list">${chRows}</div>
+      </div>
+
+      <div class="dmml-chart-bar">
+        <span style="font-size:10px;color:var(--text-faint);">Curve per channel picked via the dropdown above</span>
+        <button class="btn btn-ghost" style="margin-left:auto;font-size:10px;padding:4px 10px;"
+                onclick="_psuLogExportPng()">↓ PNG</button>
+      </div>
+      <div id="psul-chart" data-placeholder="Run the logger to see live data"></div>
+
+      <div class="test-progress" id="tprog-psu_logger">
+        <div class="progress-track"><div class="progress-fill" id="tprog-fill-psu_logger"></div></div>
+        <div class="progress-label" id="tprog-label-psu_logger">Ready</div>
+      </div>
+
+      <div class="test-actions">
+        <button class="btn btn-primary" id="trun-psu_logger"
+                onclick="runTest('psu_logger')">▶ Run</button>
+        <button class="btn btn-ghost hidden" id="tpause-psu_logger"
+                onclick="pauseTest('psu_logger')">⏸ Pause</button>
+        <button class="btn btn-danger hidden" id="tstop-psu_logger"
+                onclick="stopTest()">■ Stop</button>
+      </div>
+
+    </div>`;
+  return div;
+}
+
+function _psuLogToggleChannel(i, enabled) {
+  if (_psuLog.channels[i]) {
+    _psuLog.channels[i].enabled = enabled;
+    _psuLogDraw();
+  }
+}
+
+function _psuLogExportPng() {
+  if (!_psuLog.elapsed.length || !_psuLog.uplot) { toast("No chart data to export", "error"); return; }
+  const dataUrl = _psuLog.uplot.ctx.canvas.toDataURL("image/png");
+  POST("/api/plot/save-image", {
+    filename: "psu_logger_time_series",
+    data: dataUrl,
+    output_path: state.outputPath || "",
+  }).then(r => toast(`Saved → ${r.path}`, "ok"))
+    .catch(e => toast("Image save failed: " + e.message, "error"));
+}
+
+function getPsuLoggerParams() {
+  const enabled = _psuLog.channels.filter((c, i) => {
+    const tog = document.getElementById(`psul-tog-${i}`);
+    return tog ? tog.checked : c.enabled;
+  });
+  if (!enabled.length) { toast("Select at least one PSU channel", "error"); return null; }
+
+  return {
+    psu_resources: enabled.map(c => c.resource).join("|"),
+    psu_labels:    enabled.map(c => c.label).join("|"),
+    psu_channels:  enabled.map(c => String(c.ch || 1)).join("|"),
+    psu_voltages:  enabled.map(c => {
+      const el = document.getElementById(`psul-v-${_psuLog.channels.indexOf(c)}`);
+      return el && el.value !== "" ? el.value : "";
+    }).join("|"),
+    psu_ilimits:   enabled.map(c => {
+      const el = document.getElementById(`psul-ilim-${_psuLog.channels.indexOf(c)}`);
+      return el && el.value !== "" ? el.value : "";
+    }).join("|"),
+    interval: parseFloat(document.getElementById("psul-interval")?.value ?? "0.2"),
+    duration: document.getElementById("psul-infinite")?.checked ? 0 : parseFloat(document.getElementById("psul-duration")?.value ?? "60"),
+  };
+}
+
+// ── PSU logger drawing (uPlot time series; per-channel mode picks the curve) ──
+
+function _psuLogDraw() {
+  const container = document.getElementById("psul-chart");
+  if (!container) return;
+  const W = container.offsetWidth, H = container.offsetHeight;
+  if (W < 20 || H < 20) return;
+
+  const active = _psuLog.channels
+    .map((c, i) => ({ c, i }))
+    .filter(({ i }) => {
+      const tog = document.getElementById(`psul-tog-${i}`);
+      return tog ? tog.checked : _psuLog.channels[i].enabled;
+    })
+    .map(({ c, i }) => {
+      const mode = document.getElementById(`psul-mode-${i}`)?.value || c.mode;
+      return {
+        label: `${c.label} ${_PSU_LOG_UNIT[mode]}`,
+        color: c.color,
+        data:  _psuLog.data[c.label + _PSU_LOG_SUFFIX[mode]] || [],
+      };
+    })
+    .filter(s => s.data.length);
+
+  if (!_psuLog.elapsed.length || !active.length) {
+    if (_psuLog.uplot) { _psuLog.uplot.destroy(); _psuLog.uplot = null; }
+    return;
+  }
+
+  const xs = _psuLog.elapsed;
+  const ys = active.map(s => xs.map((_, i) => s.data[i] ?? null));
+  const data = [xs, ...ys];
+
+  const needRebuild = !_psuLog.uplot || _psuLog.uplot.series.length - 1 !== active.length;
+
+  if (needRebuild) {
+    if (_psuLog.uplot) _psuLog.uplot.destroy();
+    const series = [{}];
+    active.forEach(s => series.push({
+      label: s.label,
+      stroke: s.color,
+      width: 1.5,
+      alpha: 0.75,
+      points: { show: true, size: 3, fill: s.color },
+    }));
+    const axStyle = _uplotAxisStyle();
+    const opts = {
+      width: W, height: H, series,
+      axes: [
+        { ...axStyle, label: "Elapsed (s)" },
+        { ...axStyle, label: "Value" },
+      ],
+      scales: { x: { time: false } },
+      legend: { show: false },
+      cursor: { x: false, y: false },
+      select: { show: false },
+      hooks: {
+        draw: [u => {
+          _uplotDrawLegend(u, active.map(s => ({ color: s.color, label: s.label })));
+        }],
+      },
+    };
+    _psuLog.uplot = new uPlot(opts, data, container);
+  } else {
+    _psuLog.uplot.setSize({ width: W, height: H });
+    _psuLog.uplot.setData(data);
   }
 }
 
@@ -8611,6 +8905,7 @@ function _fmtTick(v, step) {
 window.addEventListener("resize", () => {
   if (state.activeTab === "testspec") ivChartDraw();
   if (state.selectedTestId === "dmm_logger") _dmmLogDraw();
+  if (state.selectedTestId === "psu_logger") _psuLogDraw();
   if (state.selectedTestId === "battery_capacity" && _batt.uplot) {
     const el = document.getElementById("batt-chart");
     if (el) _batt.uplot.setSize({ width: el.offsetWidth, height: el.offsetHeight });

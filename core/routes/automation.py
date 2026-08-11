@@ -99,6 +99,9 @@ def _suggest_tests() -> list:
         {"id": "dmm_logger",         "name": "DMM Logger",
          "description": "Log DMM measurements at a fixed interval",
          "requires": ["dmm"]},
+        {"id": "psu_logger",         "name": "PSU Logger",
+         "description": "Set PSU channel voltage(s) and log current draw / power in real time",
+         "requires": ["psu"]},
         {"id": "waveform_analysis",  "name": "Waveform Analysis",
          "description": "Live waveform analysis: autoscale, measure, screenshot",
          "requires": ["scope"]},
@@ -234,6 +237,28 @@ def _suggest_tests() -> list:
                         "v3_meas_V", "v3_meas_A",
                         "screenshot"],
             "has_scope": has_scope,
+        })
+
+        psu_channel_opts = []
+        for psu_instr in psu_list:
+            res_key = psu_instr.get("resource", "")
+            model   = psu_instr.get("model", "PSU")
+            num_ch  = _sh._state["psu_channels"].get(res_key, 1)
+            for ch in range(1, num_ch + 1):
+                ch_label = f"{model} Ch{ch}" if num_ch > 1 else model
+                psu_channel_opts.append({
+                    "resource": res_key, "label": ch_label,
+                    "model": model, "ch": ch,
+                })
+        tests.append({
+            "id":            "psu_logger",
+            "name":          "PSU Logger",
+            "description":   "Set PSU channel voltage(s) and log current draw / power in real time",
+            "requires":      ["psu"],
+            "custom_ui":     True,
+            "psu_channels":  psu_channel_opts,
+            "params":        [],
+            "columns":       ["elapsed_s"],
         })
 
     if "dmm" in types or "psu" in types:
@@ -1193,6 +1218,114 @@ def api_automation_run():
                 if _auto_stop.is_set():
                     break
                 time.sleep(min(0.05, deadline - time.time()))
+
+        _done(rows, cols)
+
+    def _run_psu_logger():
+        interval = float(params.get("interval", 0.2))
+        duration = float(params.get("duration", 0.0))
+        infinite = duration <= 0
+
+        res_str   = str(params.get("psu_resources", "")).strip()
+        label_str = str(params.get("psu_labels",    "")).strip()
+        ch_str    = str(params.get("psu_channels",  "")).strip()
+        v_str     = str(params.get("psu_voltages",  "")).strip()
+        ilim_str  = str(params.get("psu_ilimits",   "")).strip()
+
+        resources = [r.strip() for r in res_str.split("|") if r.strip()]
+        labels    = [l.strip() for l in label_str.split("|")]
+        ch_nums   = [int(c) if c.strip() else 1 for c in ch_str.split("|")]
+        voltages  = [v.strip() for v in v_str.split("|")]
+        ilimits   = [i.strip() for i in ilim_str.split("|")]
+
+        if not resources:
+            _done([], [], "No PSU channels configured"); return
+
+        handles = []
+        for i, res_name in enumerate(resources):
+            res = _sh._state["resources"].get(res_name)
+            fam = _sh._state["families"].get(res_name)
+            if res is None or fam is None:
+                continue
+            handles.append({
+                "res": res, "fam": fam,
+                "ch":    ch_nums[i]  if i < len(ch_nums)  else 1,
+                "label": labels[i]   if i < len(labels)   else f"CH{i+1}",
+                "v":     voltages[i] if i < len(voltages) else "",
+                "ilim":  ilimits[i]  if i < len(ilimits)  else "",
+            })
+
+        if not handles:
+            _done([], [], "No valid channels configured"); return
+
+        # ── Apply voltage / current-limit setpoints and enable outputs ──────────
+        for h in handles:
+            try:
+                if h["ilim"]:
+                    _run_steps(h["res"], get_command(
+                        h["fam"], "set_current_limit", ch=h["ch"], value=h["ilim"]))
+                if h["v"]:
+                    _run_steps(h["res"], get_command(
+                        h["fam"], "set_voltage", ch=h["ch"], value=h["v"]))
+                    _run_steps(h["res"], get_command(
+                        h["fam"], "output_on", ch=h["ch"]))
+            except Exception as exc:
+                _emit_progress(f"  ⚠ {h['label']} setpoint: {exc}")
+
+        cols = ["elapsed_s"]
+        for h in handles:
+            cols += [f"{h['label']}_V", f"{h['label']}_I", f"{h['label']}_P"]
+        rows   = []
+        n_ch   = len(handles)
+        n_desc = "∞" if infinite else f"{duration:.3g}s"
+        _emit_progress(
+            f"PSU logger: {n_desc} @ {interval:.2g}s interval, "
+            f"{n_ch} channel{'s' if n_ch > 1 else ''}"
+        )
+
+        t0 = time.time()
+        try:
+            while True:
+                iter_t = time.time()
+                if _auto_stop.is_set():
+                    _emit_progress("Stopped by user"); break
+                vals = []
+                for h in handles:
+                    v = i_ = None
+                    try:
+                        raw_v = _run_steps(h["res"], get_command(
+                            h["fam"], "measure_voltage", ch=h["ch"]))
+                        v = round(float(raw_v), 8) if raw_v is not None else None
+                    except Exception as exc:
+                        _log(f"[auto] PSU logger V {h['label']}: {exc}")
+                    try:
+                        raw_i = _run_steps(h["res"], get_command(
+                            h["fam"], "measure_current", ch=h["ch"]))
+                        i_ = round(float(raw_i), 8) if raw_i is not None else None
+                    except Exception as exc:
+                        _log(f"[auto] PSU logger I {h['label']}: {exc}")
+                    # Power = V × I — not queried, since not every PSU family
+                    # exposes a MEAS:POW? command and the product is exact anyway.
+                    p = round(v * i_, 8) if v is not None and i_ is not None else None
+                    vals += [v, i_, p]
+                elapsed = round(time.time() - t0, 3)
+                row     = [elapsed] + vals
+                rows.append(row)
+                progress = -1 if infinite else min(elapsed / duration, 1.0)
+                _sh.sio.emit("automation_row", {
+                    "test_id": test_id, "row": row, "columns": cols,
+                    "progress": progress,
+                })
+                if not infinite and (time.time() - t0) >= duration:
+                    break
+                remaining = interval - (time.time() - iter_t)
+                deadline  = time.time() + remaining
+                while time.time() < deadline:
+                    if _auto_stop.is_set():
+                        break
+                    time.sleep(min(0.05, deadline - time.time()))
+        finally:
+            _psu_local_mode(handles)
 
         _done(rows, cols)
 
@@ -2469,6 +2602,7 @@ def api_automation_run():
         "iv_curve":           _run_dc_sweep,   # Plot Specific: Static Characteristic
         "transfer":           _run_dc_sweep,   # Plot Specific: Transfer Characteristic
         "dmm_logger":         _run_dmm_logger,
+        "psu_logger":         _run_psu_logger,
         "waveform_analysis":  _run_waveform_analysis,
         "harmonic_analysis":  _run_harmonic_analysis,
         "psu_interrupt":      _run_psu_interrupt,
