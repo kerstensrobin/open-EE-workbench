@@ -4861,8 +4861,7 @@ function refreshAutoTab() {
 }
 
 function buildTestGrid(tests) {
-  const icons = { ac_frequency_sweep:"〼", dc_sweep:"⚡", dmm_logger:"Ω", psu_logger:"⏻",
-                  waveform_analysis:"∿",  harmonic_analysis:"≋" };
+  const icons = { ac_frequency_sweep:"〼", dc_sweep:"⚡", dmm_logger:"Ω", psu_logger:"⏻" };
   const instrNames = { psu:"PSU", scope:"Oscilloscope", awg:"AWG / Function generator", dmm:"Multimeter" };
 
   // ── Build tab strip ──────────────────────────────────────────────────
@@ -5006,7 +5005,6 @@ function buildTestCard(test) {
   }).join("");
 
   const _testIcons = { ac_frequency_sweep:"〜", dc_sweep:"⚡", dmm_logger:"Ω",
-                       waveform_analysis:"∿",  harmonic_analysis:"≋",
                        battery_capacity:"⚡" };
   const icon = _testIcons[test.id] || (test.is_custom ? "★" : "▶");
 
