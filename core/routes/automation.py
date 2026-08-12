@@ -233,13 +233,26 @@ def _suggest_tests() -> list:
             "has_scope": has_scope,
         })
 
+        # Prefer a user-set nickname over the bare model name so identical
+        # PSU models can be told apart; fall back to a "#N" suffix if two
+        # supplies still share the same name (no nickname set on either).
+        psu_names = [i.get("nickname") or i.get("model", "PSU") for i in psu_list]
+        name_counts = {}
+        for n in psu_names:
+            name_counts[n] = name_counts.get(n, 0) + 1
+        name_seen = {}
         psu_channel_opts = []
-        for psu_instr in psu_list:
+        for psu_instr, base_name in zip(psu_list, psu_names):
             res_key = psu_instr.get("resource", "")
             model   = psu_instr.get("model", "PSU")
             num_ch  = _sh._state["psu_channels"].get(res_key, 1)
+            if name_counts[base_name] > 1:
+                name_seen[base_name] = name_seen.get(base_name, 0) + 1
+                supply_label = f"{base_name} #{name_seen[base_name]}"
+            else:
+                supply_label = base_name
             for ch in range(1, num_ch + 1):
-                ch_label = f"{model} Ch{ch}" if num_ch > 1 else model
+                ch_label = f"{supply_label} Ch{ch}" if num_ch > 1 else supply_label
                 psu_channel_opts.append({
                     "resource": res_key, "label": ch_label,
                     "model": model, "ch": ch,
@@ -465,6 +478,16 @@ def api_automation_run():
     def _emit_progress(msg: str):
         _sh.sio.emit("automation_progress", {"test_id": test_id, "msg": msg})
         _log(f"[auto] {msg}")
+
+    def _psu_outputs_off(handles):
+        """Turn off the output of every PSU channel handle."""
+        for h in handles:
+            try:
+                for _act, scpi in get_command(h["fam"], "output_off", ch=h["ch"]):
+                    if _act == "write":
+                        h["res"].write(scpi)
+            except Exception:
+                pass
 
     def _psu_local_mode(handles):
         """Restore front-panel control on all PSU handles."""
@@ -1183,6 +1206,10 @@ def api_automation_run():
         interval = float(params.get("interval", 0.2))
         duration = float(params.get("duration", 0.0))
         infinite = duration <= 0
+        action   = str(params.get("action", "set_and_run"))
+        do_set   = action in ("set", "set_and_run")
+        do_run   = action in ("run", "set_and_run")
+        keep_power_on = bool(params.get("keep_power_on", False))
 
         res_str   = str(params.get("psu_resources", "")).strip()
         label_str = str(params.get("psu_labels",    "")).strip()
@@ -1217,18 +1244,24 @@ def api_automation_run():
             _done([], [], "No valid channels configured"); return
 
         # ── Apply voltage / current-limit setpoints and enable outputs ──────────
-        for h in handles:
-            try:
-                if h["ilim"]:
-                    _run_steps(h["res"], get_command(
-                        h["fam"], "set_current_limit", ch=h["ch"], value=h["ilim"]))
-                if h["v"]:
-                    _run_steps(h["res"], get_command(
-                        h["fam"], "set_voltage", ch=h["ch"], value=h["v"]))
-                    _run_steps(h["res"], get_command(
-                        h["fam"], "output_on", ch=h["ch"]))
-            except Exception as exc:
-                _emit_progress(f"  ⚠ {h['label']} setpoint: {exc}")
+        if do_set:
+            for h in handles:
+                try:
+                    if h["ilim"]:
+                        _run_steps(h["res"], get_command(
+                            h["fam"], "set_current_limit", ch=h["ch"], value=h["ilim"]))
+                    if h["v"]:
+                        _run_steps(h["res"], get_command(
+                            h["fam"], "set_voltage", ch=h["ch"], value=h["v"]))
+                        _run_steps(h["res"], get_command(
+                            h["fam"], "output_on", ch=h["ch"]))
+                except Exception as exc:
+                    _emit_progress(f"  ⚠ {h['label']} setpoint: {exc}")
+
+        if not do_run:
+            _emit_progress(f"Setpoints applied to {len(handles)} channel(s)")
+            _done([], [])
+            return
 
         cols = ["elapsed_s"]
         for h in handles:
@@ -1283,6 +1316,8 @@ def api_automation_run():
                         break
                     time.sleep(min(0.05, deadline - time.time()))
         finally:
+            if not keep_power_on:
+                _psu_outputs_off(handles)
             _psu_local_mode(handles)
 
         _done(rows, cols)

@@ -5432,7 +5432,7 @@ async function browseOutputFolder() {
 }
 
 
-async function runTest(testId) {
+async function runTest(testId, action) {
   if (state.autoRunning) { toast("A test is already running","error"); return; }
   if (!state.connected)  { toast("Not connected to instruments","error"); return; }
 
@@ -5442,6 +5442,10 @@ async function runTest(testId) {
                  getTestParams(testId);
   if (params == null) return;  // builder returned null (validation failure)
 
+  if (testId === "psu_logger") {
+    params.action = action || "set_and_run";
+  }
+
   if (testId === "dmm_logger") {
     _dmmLog.data    = {};
     _dmmLog.elapsed = [];
@@ -5449,7 +5453,7 @@ async function runTest(testId) {
     _dmmLog.status  = "running";
     _dmmLogDraw();
   }
-  if (testId === "psu_logger") {
+  if (testId === "psu_logger" && params.action !== "set") {
     _psuLog.data    = {};
     _psuLog.elapsed = [];
     _psuLog.cols    = [];
@@ -5468,6 +5472,8 @@ async function runTest(testId) {
   const card = document.getElementById(`test-card-${testId}`);
   if (card) card.classList.add("running");
   document.getElementById(`trun-${testId}`).classList.add("hidden");
+  document.getElementById(`tset-${testId}`)?.classList.add("hidden");
+  document.getElementById(`tsetrun-${testId}`)?.classList.add("hidden");
   document.getElementById(`tpause-${testId}`)?.classList.remove("hidden");
   document.getElementById(`tstop-${testId}`).classList.remove("hidden");
   const prog = document.getElementById(`tprog-${testId}`);
@@ -5741,10 +5747,14 @@ function testFinished(testId, error, csv_path) {
     card.classList.remove("running");
     if (!error) card.classList.add("done");
   }
-  const run   = document.getElementById(`trun-${testId}`);
-  const pause = document.getElementById(`tpause-${testId}`);
-  const stop  = document.getElementById(`tstop-${testId}`);
-  if (run)   run.classList.remove("hidden");
+  const run    = document.getElementById(`trun-${testId}`);
+  const set    = document.getElementById(`tset-${testId}`);
+  const setrun = document.getElementById(`tsetrun-${testId}`);
+  const pause  = document.getElementById(`tpause-${testId}`);
+  const stop   = document.getElementById(`tstop-${testId}`);
+  if (run)    run.classList.remove("hidden");
+  if (set)    set.classList.remove("hidden");
+  if (setrun) setrun.classList.remove("hidden");
   if (pause) { pause.classList.add("hidden"); pause.textContent = "⏸ Pause"; }
   if (stop)  stop.classList.add("hidden");
   const prog = document.getElementById(`tprog-${testId}`);
@@ -7110,6 +7120,12 @@ function buildPsuLoggerCard(test) {
             ∞
           </label>
         </div>
+        <div style="align-self:flex-end;padding-bottom:6px;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-dim);cursor:pointer;white-space:nowrap;">
+            <input type="checkbox" id="psul-keep-power" style="accent-color:var(--amber);cursor:pointer;">
+            Keep power on after run
+          </label>
+        </div>
       </div>
 
       <div class="dmml-dmm-section">
@@ -7130,8 +7146,12 @@ function buildPsuLoggerCard(test) {
       </div>
 
       <div class="test-actions">
-        <button class="btn btn-primary" id="trun-psu_logger"
-                onclick="runTest('psu_logger')">▶ Run</button>
+        <button class="btn btn-ghost" id="tset-psu_logger"
+                onclick="runTest('psu_logger', 'set')">Set</button>
+        <button class="btn btn-ghost" id="trun-psu_logger"
+                onclick="runTest('psu_logger', 'run')">▶ Run</button>
+        <button class="btn btn-primary" id="tsetrun-psu_logger"
+                onclick="runTest('psu_logger', 'set_and_run')">⚡ Set &amp; Run</button>
         <button class="btn btn-ghost hidden" id="tpause-psu_logger"
                 onclick="pauseTest('psu_logger')">⏸ Pause</button>
         <button class="btn btn-danger hidden" id="tstop-psu_logger"
@@ -7181,6 +7201,7 @@ function getPsuLoggerParams() {
     }).join("|"),
     interval: parseFloat(document.getElementById("psul-interval")?.value ?? "0.2"),
     duration: document.getElementById("psul-infinite")?.checked ? 0 : parseFloat(document.getElementById("psul-duration")?.value ?? "60"),
+    keep_power_on: document.getElementById("psul-keep-power")?.checked ?? false,
   };
 }
 
@@ -7207,6 +7228,10 @@ function _psuLogDraw() {
       };
     })
     .filter(s => s.data.length);
+
+  // Read fresh by the draw hook below on every redraw (not just on rebuild),
+  // so the legend reflects the currently-selected V/I/W unit per channel.
+  _psuLog._legendItems = active.map(s => ({ color: s.color, label: s.label }));
 
   if (!_psuLog.elapsed.length || !active.length) {
     if (_psuLog.uplot) { _psuLog.uplot.destroy(); _psuLog.uplot = null; }
@@ -7242,7 +7267,7 @@ function _psuLogDraw() {
       select: { show: false },
       hooks: {
         draw: [u => {
-          _uplotDrawLegend(u, active.map(s => ({ color: s.color, label: s.label })));
+          _uplotDrawLegend(u, _psuLog._legendItems);
         }],
       },
     };
