@@ -1203,7 +1203,7 @@ def api_automation_run():
         _done(rows, cols)
 
     def _run_psu_logger():
-        interval = float(params.get("interval", 0.2))
+        interval = float(params.get("interval", 0.5))
         duration = float(params.get("duration", 0.0))
         infinite = duration <= 0
         action   = str(params.get("action", "set_and_run"))

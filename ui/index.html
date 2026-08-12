@@ -7079,6 +7079,7 @@ function buildPsuLoggerCard(test) {
           <span class="psul-setpoint-unit">I lim</span>
           <input class="psul-setpoint-input" type="number" step="any" id="psul-ilim-${i}" placeholder="unset">
         </div>
+        <span class="psul-setpoint-unit">Chart data</span>
         <select class="dmml-dmm-mode" id="psul-mode-${i}" onchange="_psuLogDraw()">${modeOptsFor(c.mode)}</select>
       </div>`).join("")
     : `<span style="color:var(--text-faint);font-size:11px;padding:4px 0;display:block;">No PSU channels available</span>`;
@@ -7101,7 +7102,7 @@ function buildPsuLoggerCard(test) {
           <div class="section-label">Update rate</div>
           <div class="test-param-input-wrap">
             <input class="test-param-input" type="number" step="any" id="psul-interval"
-                   value="0.2" min="0.05" style="width:70px;">
+                   value="0.5" min="0.05" style="width:70px;">
             <span class="test-param-unit">s</span>
           </div>
         </div>
@@ -7123,7 +7124,7 @@ function buildPsuLoggerCard(test) {
         <div style="align-self:flex-end;padding-bottom:6px;">
           <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-dim);cursor:pointer;white-space:nowrap;">
             <input type="checkbox" id="psul-keep-power" style="accent-color:var(--amber);cursor:pointer;">
-            Keep power on after run
+            Keep output ON after run
           </label>
         </div>
       </div>
@@ -7199,7 +7200,7 @@ function getPsuLoggerParams() {
       const el = document.getElementById(`psul-ilim-${_psuLog.channels.indexOf(c)}`);
       return el && el.value !== "" ? el.value : "";
     }).join("|"),
-    interval: parseFloat(document.getElementById("psul-interval")?.value ?? "0.2"),
+    interval: parseFloat(document.getElementById("psul-interval")?.value ?? "0.5"),
     duration: document.getElementById("psul-infinite")?.checked ? 0 : parseFloat(document.getElementById("psul-duration")?.value ?? "60"),
     keep_power_on: document.getElementById("psul-keep-power")?.checked ?? false,
   };
