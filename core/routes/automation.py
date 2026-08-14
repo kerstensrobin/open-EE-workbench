@@ -497,6 +497,17 @@ def api_automation_run():
             if id(res) in seen:
                 continue
             seen.add(id(res))
+            # Serial (ASRL) instruments — e.g. the Keithley 2231A via its
+            # Prolific USB adapter — need an explicit SYSTem:REMote before
+            # they'll accept commands again (sent once at connect time; see
+            # connection.py). Unlike GPIB/USBTMC, SYSTem:LOCal over ASRL
+            # fully drops the instrument out of remote and nothing re-arms
+            # it, so the app loses control until the user reconnects. Skip
+            # relinquishing remote control for these so later tests keep
+            # working; the trade-off is the front panel stays locked out
+            # until the next connect/disconnect.
+            if str(getattr(res, "resource_name", "")).upper().startswith("ASRL"):
+                continue
             try:
                 for _act, scpi in get_command(h["fam"], "local_mode"):
                     if _act == "write":
