@@ -20,6 +20,7 @@ from core.helpers import (
     _scope_enable_measures, _scope_query_only, _start_polling,
     _extract_value_key,
 )
+from core.paths import today_output_dir
 from core.routes.instruments import DMM_OPS, PSU_LOGGER_OPS, _res_for_interval
 
 bp = Blueprint("automation", __name__)
@@ -462,9 +463,9 @@ def api_automation_run():
     d       = request.json or {}
     test_id = d.get("test_id")
     params  = d.get("params", {})
-    # Resolve output directory: expand ~ and make absolute
+    # Resolve output directory: today's dated folder, under a custom base if given
     raw_out = (d.get("output_path") or "").strip()
-    out_dir = Path(os.path.expanduser(raw_out)).resolve() if raw_out else Path.cwd() / "results"
+    out_dir = today_output_dir(raw_out or None)
 
     if not test_id:
         return jsonify({"error": "test_id required"}), 400
@@ -528,7 +529,6 @@ def api_automation_run():
         if rows and columns and not error:
             try:
                 ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
-                out_dir.mkdir(parents=True, exist_ok=True)
                 csv_path = out_dir / f"{test_id}_{ts}.csv"
                 with open(csv_path, "w", newline="") as f:
                     import csv as _csv
@@ -893,8 +893,7 @@ def api_automation_run():
                         step   = step_ctx.get("step", 0)
                         prefix = (item.get("filename_prefix") or "sweep").strip() or "sweep"
                         fname  = f"{prefix}_{step:04d}_{ts}{ext}"
-                        fpath  = out_dir / "screenshots" / fname
-                        fpath.parent.mkdir(parents=True, exist_ok=True)
+                        fpath  = out_dir / fname
                         fpath.write_bytes(data)
                         _log(f"[auto] capture → {fpath}  ({len(data)} bytes)")
                         return str(fpath)
@@ -1569,7 +1568,6 @@ def api_automation_run():
             fname  = (f"psu_interrupt_run{run_num:03d}_t2_{t2_ms:.0f}ms"
                       f"{v2tag}_{ts_str}{ext or '.bin'}")
             try:
-                out_dir.mkdir(parents=True, exist_ok=True)
                 fpath = out_dir / fname
                 fpath.write_bytes(data)
                 return str(fpath)

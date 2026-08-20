@@ -15,7 +15,8 @@
       "type": "scope",
       "role": "scope",
       "family_id": "rigol_ds1000z",
-      "write_ops": []
+      "write_ops": [],
+      "nickname": "Scopy"
     },
     {
       "resource": "DEMO::PSU::INSTR",

@@ -15,6 +15,7 @@ from pathlib import Path
 from flask import Blueprint, jsonify, request
 
 import core.shared as _sh
+from core.paths import today_output_dir
 
 bp = Blueprint("system", __name__)
 
@@ -288,7 +289,9 @@ def api_python_run():
     if _py_running:
         return jsonify({"error": "Already running"}), 409
 
-    code = (request.json or {}).get("code", "").strip()
+    body = request.json or {}
+    code = body.get("code", "").strip()
+    path = (body.get("path") or "").strip() or None
     if not code:
         return jsonify({"error": "No code"}), 400
 
@@ -330,6 +333,8 @@ def api_python_run():
             "wb":         _sh._state.get("workbench"),
             "sio":        _sh.sio,
         }
+        if path:
+            ns["__file__"] = path
         if _sh.PYVISA_OK:
             ns["pyvisa"] = _sh.pyvisa
         try:
@@ -393,8 +398,7 @@ def api_save_text():
     content  = d.get("content", "")
     out_path = (d.get("output_path") or "").strip()
     try:
-        save_dir = Path(os.path.expanduser(out_path)).resolve() if out_path else Path.cwd() / "results"
-        save_dir.mkdir(parents=True, exist_ok=True)
+        save_dir = today_output_dir(out_path)
         path = save_dir / filename
         path.write_text(content, encoding="utf-8")
         return jsonify({"path": str(path)})
@@ -472,8 +476,7 @@ def api_plot_save_image():
     try:
         header, b64 = data_url.split(",", 1) if "," in data_url else ("", data_url)
         img_bytes = base64.b64decode(b64)
-        save_dir  = Path(os.path.expanduser(out_path)).resolve() if out_path else Path.cwd() / "results"
-        save_dir.mkdir(parents=True, exist_ok=True)
+        save_dir  = today_output_dir(out_path)
         ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
         path = save_dir / f"{filename}_{ts}.png"
         path.write_bytes(img_bytes)
@@ -491,8 +494,7 @@ def api_save_json():
     data     = d.get("data")
     out_path = (d.get("output_path") or "").strip()
     try:
-        save_dir = Path(os.path.expanduser(out_path)).resolve() if out_path else Path.cwd() / "results"
-        save_dir.mkdir(parents=True, exist_ok=True)
+        save_dir = today_output_dir(out_path)
         path = save_dir / filename
         path.write_text(_json.dumps(data, indent=2), encoding="utf-8")
         return jsonify({"path": str(path)})
@@ -527,8 +529,7 @@ def api_export_hdf5():
         return jsonify({"error": "No data to export"}), 400
 
     try:
-        save_dir = Path(os.path.expanduser(out_path)).resolve() if out_path else Path.cwd() / "results"
-        save_dir.mkdir(parents=True, exist_ok=True)
+        save_dir = today_output_dir(out_path)
         path = save_dir / (filename if filename.endswith((".h5", ".hdf5")) else f"{filename}.hdf5")
 
         data = np.array(

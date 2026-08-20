@@ -13,6 +13,7 @@ from core.helpers import (
     _find_instrument, _run_steps, _op, _log, _rlock,
     _scope_enable_measures, _scope_query_only,
 )
+from core.paths import today_output_dir
 
 bp = Blueprint("instruments", __name__)
 
@@ -231,8 +232,7 @@ def api_screenshot():
 
         ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
         name     = f"{filename}_{ts}{ext or '.bin'}"
-        save_dir = pathlib.Path(out_dir) if out_dir else pathlib.Path.cwd() / "results"
-        save_dir.mkdir(parents=True, exist_ok=True)
+        save_dir = today_output_dir(out_dir)
         path = save_dir / name
         try:
             path.write_bytes(data)

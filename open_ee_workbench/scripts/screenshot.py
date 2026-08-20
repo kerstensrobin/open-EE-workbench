@@ -12,6 +12,7 @@ import pyvisa
 # Allow running from any directory: add core/ (where workbench.py / eewBackbone.py live)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'core'))
 
+from paths import today_output_dir
 from workbench import load_workbench, open_by_role
 from nachoVisa import open_resource_manager
 
@@ -252,6 +253,9 @@ def main():
                         help="PyVISA backend (default: auto-detect system VISA, "
                              "falling back to pyvisa-py)")
     args = parser.parse_args()
+
+    if not os.path.dirname(args.filename):   # bare filename → today's dated results/ folder
+        args.filename = str(today_output_dir() / args.filename)
 
     try:
         wb = load_workbench(args.workbench)

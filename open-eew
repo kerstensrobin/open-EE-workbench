@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")"
 if [ -f .venv/bin/python ]; then
-    exec .venv/bin/python app.py "$@"
+    exec .venv/bin/python open_ee_workbench/app.py "$@"
 else
-    exec python3 app.py "$@"
+    exec python3 open_ee_workbench/app.py "$@"
 fi

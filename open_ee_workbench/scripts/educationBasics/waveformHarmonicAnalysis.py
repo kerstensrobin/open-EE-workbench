@@ -6,15 +6,22 @@ import pyvisa as visa
 import time
 import csv
 import os
+import sys
 from datetime import datetime
+
+# paths.py lives in core/ — see CLAUDE.md
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'core'))
+from paths import today_output_dir
 
 rm = visa.ResourceManager()
 # the VISA adress for your scope can be found in using Keysight Connection Expert, or nachoVisa.py
-scope = rm.open_resource('USB0::0x2A8D::0x038B::CN63370620::0::INSTR')
+scope = rm.open_resource('TCPIP::143.129.36.135::hislip0,4880::INSTR')
 scope.timeout = 10000 #Always good to involve a time-out to avoid putting the scope into an endless waiting state.
 
 measurements = {}  # This variable will be used to save your measurements.
 
+# All output (screenshots + CSV) goes in today's dated results/ folder, regardless of cwd.
+OUTPUT_DIR = today_output_dir()
 
 def get_screenshot(filename):
     time.sleep(0.1) # Interacting with real equipment takes time. If some commands are not going through, consider adding a small pause to make sure your equipment has finished the previous task.
@@ -27,20 +34,22 @@ def get_screenshot(filename):
     if start != -1:
         data = data[start:]
     # Save the binary data to a file with the specified filename
-    with open(filename, "wb") as f:
+    filepath = os.path.join(OUTPUT_DIR, filename)
+    with open(filepath, "wb") as f:
         f.write(data)
     time.sleep(0.1)
-    print(f"Screenshot saved as {filename}")
+    print(f"Screenshot saved as {filepath}")
 
 def save_measurements_to_csv(filename, measurements, header=False):
-    file_exists = os.path.isfile(filename)
-    with open(filename, "a", newline='') as csvfile:
+    filepath = os.path.join(OUTPUT_DIR, filename)
+    file_exists = os.path.isfile(filepath)
+    with open(filepath, "a", newline='') as csvfile:
         writer = csv.writer(csvfile)
         if header or not file_exists:
             writer.writerow(["Timestamp", "Measurement", "Value"])
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S:%f")
         writer.writerows([[timestamp, m, v] for m, v in measurements.items()])
-    print(f"Measurements saved as {filename}")
+    print(f"Measurements saved as {filepath}")
 
 
 print('Scope based analysis of signal Harmonics')

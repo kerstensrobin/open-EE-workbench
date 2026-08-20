@@ -1,0 +1,15 @@
+# Virtual environment (created by install.py)
+/.venv/
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Generated at install time (double-click launcher, Linux only)
+/open-EE-workbench.desktop
+
+# Runtime output — generated per run, not source
+/open_ee_workbench/results/*
+!/open_ee_workbench/results/.gitkeep
+/open_ee_workbench/custom_tests/
+/open_ee_workbench/workbenches/bench_*.json

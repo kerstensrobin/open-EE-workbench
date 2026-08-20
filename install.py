@@ -20,7 +20,7 @@ import threading
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent / "open_ee_workbench"))
 from core.browser import find_chrome
 
 # cmd.exe defaults to a legacy codepage (e.g. cp1252) that can't encode "→"/"…" —
@@ -45,9 +45,10 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-ROOT   = Path(__file__).parent.resolve()
-PYTHON = sys.executable
-VENV   = ROOT / ".venv"
+ROOT    = Path(__file__).parent.resolve()
+APP_DIR = ROOT / "open_ee_workbench"
+PYTHON  = sys.executable
+VENV    = ROOT / ".venv"
 VENV_PYTHON = VENV / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
 
 
@@ -282,9 +283,9 @@ def patch_launchers():
         "#!/usr/bin/env bash\n"
         'cd "$(dirname "$0")"\n'
         'if [ -f .venv/bin/python ]; then\n'
-        "    exec .venv/bin/python app.py \"$@\"\n"
+        "    exec .venv/bin/python open_ee_workbench/app.py \"$@\"\n"
         "else\n"
-        '    exec python3 app.py "$@"\n'
+        '    exec python3 open_ee_workbench/app.py "$@"\n'
         "fi\n"
     )
     launcher.chmod(launcher.stat().st_mode | 0o755)
@@ -295,9 +296,9 @@ def patch_launchers():
         'cd /d "%~dp0"\n'
         'if exist .venv\\Scripts\\python.exe (\n'
         '    set "PATH=%~dp0.venv\\Scripts;%PATH%"\n'
-        '    .venv\\Scripts\\python.exe app.py %*\n'
+        '    .venv\\Scripts\\python.exe open_ee_workbench\\app.py %*\n'
         ") else (\n"
-        "    python app.py %*\n"
+        "    python open_ee_workbench\\app.py %*\n"
         ")\n"
     )
 
@@ -307,9 +308,9 @@ def make_desktop():
         print("\n[install] Desktop launcher is Linux-only — skipping.")
         return
 
-    icon_path = ROOT / "ui" / "gui_assets" / "icon.svg"
+    icon_path = APP_DIR / "ui" / "gui_assets" / "icon.svg"
     if not icon_path.exists():
-        icon_path = ROOT / "ui" / "gui_assets" / "icon.png"
+        icon_path = APP_DIR / "ui" / "gui_assets" / "icon.png"
 
     desktop_file = ROOT / "open-EE-workbench.desktop"
     content = f"""\

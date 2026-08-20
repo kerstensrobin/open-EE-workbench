@@ -42,6 +42,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'core'))
 # screenshot.py lives alongside this script
 sys.path.insert(0, os.path.dirname(__file__))
 
+from paths import today_output_dir
 from workbench import load_workbench, open_by_role
 from eewBackbone import classify, get_command
 
@@ -350,10 +351,10 @@ def main():
     def t3_for(t2_ms):
         return args.total_time - args.t1 - t2_ms if args.total_time is not None else args.t3
 
-    # ── Screenshots directory ──────────────────────────────────────────────────
-    root     = os.path.join(os.path.dirname(__file__), '..')
-    shot_dir = os.path.join(root, 'screenshots')
-    os.makedirs(shot_dir, exist_ok=True)
+    # ── Output directory: today's dated results/ folder ─────────────────────────
+    shot_dir = today_output_dir()
+    if not os.path.dirname(args.output):   # bare filename (default or user-given) → dated folder
+        args.output = str(shot_dir / args.output)
 
     # ── Connect ────────────────────────────────────────────────────────────────
     rm  = pyvisa.ResourceManager()

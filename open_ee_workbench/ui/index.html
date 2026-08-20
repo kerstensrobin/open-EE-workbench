@@ -14,7 +14,7 @@
     /* ── Reset & Base ────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg:          #bfc3ca;
+      --bg:          #c8cdd5;
       --surface:     #cdd1d7;
       --surface2:    #d8dbe1;
       --surface3:    #c5c9d0;
@@ -183,7 +183,7 @@
       display:grid; grid-template-columns:repeat(auto-fill, minmax(340px,1fr)); gap:16px; align-items:start;
     }
     #report-issue-bar {
-      padding:16px 20px; border-top:1px solid var(--border); display:flex;
+      margin-top:16px; padding:16px 20px; border-top:1px solid var(--border); display:flex;
       align-items:center; justify-content:center; flex-shrink:0;
     }
     #report-issue-btn {
@@ -2024,7 +2024,10 @@
       <button class="btn btn-ghost" style="padding:2px 7px;font-size:13px;" onclick="closeAssignModal()">✕</button>
     </div>
     <div class="modal-body">
-      <div style="font-size:11px;color:var(--text-dim);font-family:var(--mono);word-break:break-all;" id="assign-resource-lbl"></div>
+      <div class="assign-section">
+        <div class="assign-lbl">Address</div>
+        <div style="font-size:11px;color:var(--text-dim);font-family:var(--mono);word-break:break-all;" id="assign-resource-lbl"></div>
+      </div>
 
       <div class="assign-section">
         <div class="assign-lbl">Nickname <span style="font-weight:400;color:var(--text-dim);font-size:10px;">(optional — shown as card title)</span></div>
@@ -2497,12 +2500,13 @@ function pyRun() {
   if (_pyRunning) return;
   const code = _pyEditor.getValue().trim();
   if (!code) return;
+  const path = _pyActiveTab()?.path || null;
   pyClearOutput();
   _pySetRunning(true);
   fetch("/api/python/run", {
     method: "POST",
     headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({code}),
+    body: JSON.stringify({code, path}),
   }).catch(err => {
     _pyAppend("✗ " + err, "py-err");
     _pySetRunning(false);
@@ -2524,6 +2528,8 @@ const _pyEditor = CodeMirror.fromTextArea(document.getElementById("py-editor"), 
   extraKeys: {
     "Ctrl-Enter":  () => pyRun(),
     "Shift-Enter": () => pyRun(),
+    "Ctrl-S":      () => pySave(),
+    "Cmd-S":       () => pySave(),
     "Tab":         cm  => cm.execCommand("indentMore"),
     "Shift-Tab":   cm  => cm.execCommand("indentLess"),
   },
