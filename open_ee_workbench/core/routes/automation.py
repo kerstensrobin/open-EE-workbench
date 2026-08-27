@@ -649,6 +649,7 @@ def api_automation_run():
                 "v_start":      float(params.get(f"ch{n}_v_start", 0)),
                 "v_step":       abs(float(params.get(f"ch{n}_v_step",  0.1))) or 0.1,
                 "v_stop":       float(params.get(f"ch{n}_v_stop",  5)),
+                "v_list":       str(params.get(f"ch{n}_v_list", "")).strip(),
                 "i_limit":      float(params.get(f"ch{n}_i_limit", 0.5)),
                 "settle":       float(params.get(f"ch{n}_settle",  0.1)),
                 "sweep_type":   str(params.get(f"ch{n}_sweep_type", "voltage")),
@@ -675,6 +676,8 @@ def api_automation_run():
                 return None
 
         def _make_vols(cfg):
+            if cfg.get("v_list"):
+                return [float(x) for x in cfg["v_list"].split(",") if x.strip() != ""]
             n = round(abs(cfg["v_stop"] - cfg["v_start"]) / cfg["v_step"])
             s = 1 if cfg["v_stop"] >= cfg["v_start"] else -1
             return [round(cfg["v_start"] + k * s * cfg["v_step"], 10)
@@ -2273,6 +2276,10 @@ def api_automation_run():
         "dc_sweep":           _run_dc_sweep,
         "iv_curve":           _run_dc_sweep,   # Plot Specific: Static Characteristic
         "transfer":           _run_dc_sweep,   # Plot Specific: Transfer Characteristic
+        "hfe_gain":           _run_dc_sweep,   # Plot Specific: Current Gain (hFE)
+        "vce_sat":            _run_dc_sweep,   # Plot Specific: Collector Saturation Voltage
+        "rds_on":             _run_dc_sweep,   # Plot Specific: On-Resistance (R_DS(on))
+        "vgs_th":             _run_dc_sweep,   # Plot Specific: Gate Threshold Voltage spot check
         "dmm_logger":         _run_dmm_logger,
         "psu_logger":         _run_psu_logger,
         "psu_interrupt":      _run_psu_interrupt,

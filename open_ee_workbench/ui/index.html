@@ -827,6 +827,15 @@
       height:2px; background:var(--accent); border-radius:1px 1px 0 0;
     }
     /* tabbed card: subtab bar sits flush on top of whichever config card is active */
+    .ts-devtype-bar {
+      display:flex; align-items:center; gap:10px;
+      padding:10px 14px; background:var(--surface); border:1px solid var(--border);
+      border-radius:var(--radius-lg);
+    }
+    .ts-devtype-label {
+      font-size:11px; font-weight:600; color:var(--text-dim);
+      text-transform:uppercase; letter-spacing:.06em; margin-right:2px;
+    }
     .ts-tabbed-card { display:flex; flex-direction:column; }
     .ts-tabbed-card .test-card { border-radius:0 var(--radius-lg) var(--radius-lg) var(--radius-lg); }
     .ts-config-grid {
@@ -857,6 +866,20 @@
       font-size:11px; color:var(--text-dim); line-height:1.55;
     }
     .iv-note svg { flex-shrink:0; margin-top:1px; color:var(--amber); }
+    .ts-wip-badge {
+      align-self:flex-start;
+      padding:3px 10px; border-radius:999px;
+      background:rgba(180,83,9,0.12); border:1px solid rgba(180,83,9,0.28);
+      color:var(--amber); font-size:10px; font-weight:700;
+      text-transform:uppercase; letter-spacing:.04em;
+    }
+    .ts-hfe-estimate {
+      display:flex; align-items:baseline; justify-content:center; gap:8px;
+      padding:10px 16px; border-radius:var(--radius-lg);
+      background:var(--accent-glow); border:1px solid var(--border);
+    }
+    .ts-hfe-estimate-label { font-size:12px; color:var(--text-dim); }
+    .ts-hfe-estimate-val { font-size:20px; font-weight:700; color:var(--accent); font-family:var(--mono); }
     /* uPlot theme */
     .u-wrap { font-family: inherit; }
     .u-legend { background:transparent; border:none; font-size:10px; font-family:'JetBrains Mono',monospace; color:var(--text-dim); padding:2px 8px 4px; }
@@ -1545,17 +1568,29 @@
 
       <div id="ts-layout" class="hidden">
 
+        <!-- Global device type — governs which plots below are relevant/available -->
+        <div class="ts-devtype-bar">
+          <span class="ts-devtype-label">Device Type</span>
+          <div class="dcsw-seg" id="iv-devtype-seg">
+            <button class="dcsw-seg-btn"        onclick="ivSetDevType('fet')">FET</button>
+            <button class="dcsw-seg-btn active" onclick="ivSetDevType('bjt')">BJT</button>
+          </div>
+          <div class="dcsw-seg" id="iv-polarity-seg" title="P-type devices need the supply leads physically reversed. The app still commands positive magnitudes and mirrors the plot into quadrant III.">
+            <button class="dcsw-seg-btn active" id="iv-polarity-btn-n" onclick="ivSetPolarity('n')">NPN</button>
+            <button class="dcsw-seg-btn"        id="iv-polarity-btn-p" onclick="ivSetPolarity('p')">PNP</button>
+          </div>
+        </div>
+
         <!-- Tabbed card: sub-tab strip + switchable config cards -->
         <div class="ts-tabbed-card">
-        <!-- Sub-tab strip + FET/BJT toggle -->
+        <!-- Sub-tab strip -->
         <div class="ts-subtab-bar">
           <div class="ts-subtabs">
             <button class="ts-subtab active" data-plot="iv_curve" onclick="tsSelectPlot('iv_curve')">Static Characteristic</button>
             <button class="ts-subtab"        data-plot="transfer"  onclick="tsSelectPlot('transfer')">Transfer Characteristic</button>
-          </div>
-          <div class="dcsw-seg" id="iv-devtype-seg" style="flex-shrink:0;margin:4px 4px;">
-            <button class="dcsw-seg-btn"        onclick="ivSetDevType('fet')">FET</button>
-            <button class="dcsw-seg-btn active" onclick="ivSetDevType('bjt')">BJT</button>
+            <button class="ts-subtab" data-plot="hfe_gain" id="ts-subtab-hfe" onclick="tsSelectPlot('hfe_gain')">DC Current Gain (h<sub>FE</sub>)</button>
+            <button class="ts-subtab" data-plot="vce_sat" id="ts-subtab-vcesat" onclick="tsSelectPlot('vce_sat')">Sat. Voltage (V<sub>CE</sub>)</button>
+            <button class="ts-subtab" data-plot="rds_on" id="ts-subtab-rds" onclick="tsSelectPlot('rds_on')">On-Resistance (R<sub>DS</sub>)</button>
           </div>
         </div>
 
@@ -1873,7 +1908,502 @@
             </div>
           </div>
         </div><!-- /ts-tc-card -->
+
+        <!-- DC Current Gain (hFE) config card — BJT only -->
+        <div class="test-card hidden" id="ts-hfe-card">
+          <div class="test-card-header">
+            <div class="test-card-icon" style="background:rgba(26,86,196,.12);color:var(--accent);">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 20 8 14 13 17 20 6"/>
+              </svg>
+            </div>
+            <div style="flex:1;">
+              <div class="test-card-title">DC Current Gain (h<sub>FE</sub>)</div>
+              <div class="test-card-desc">DC current gain — h<sub>FE</sub> = I<sub>C</sub>/I<sub>B</sub> vs I<sub>C</sub>, base driven in constant current at a fixed V<sub>CE</sub></div>
+            </div>
+          </div>
+          <div class="test-card-body">
+
+            <div class="ts-wip-badge">This test is still a work in progress</div>
+
+            <div class="iv-note">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <span>h<sub>FE</sub> is computed per point as measured I<sub>C</sub> / measured I<sub>B</sub> — both are read back rather than trusting the commanded base-current set-point, since bench-PSU constant-current regulation is imprecise at these low currents. A calibrated SMU on both channels is recommended for a clean curve.</span>
+            </div>
+
+            <!-- Collector (fixed bias) -->
+            <div class="psi-card">
+              <div class="psi-card-hdr psi-card-hdr-psu">Collector — bias</div>
+              <div class="ts-config-grid">
+                <div class="test-param-row ts-config-span2">
+                  <span class="test-param-label">Source</span>
+                  <div class="test-param-input-wrap">
+                    <select class="test-param-input sel" id="hfe-drain-src"></select>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Channel</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="hfe-drain-ch" value="1" min="1" max="4" step="1" oninput="tsSyncHfeMeterCh()">
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">I Limit</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="hfe-drain-ilim" value="0.5" step="0.1" min="0">
+                    <span class="test-param-unit">A</span>
+                  </div>
+                </div>
+                <div class="test-param-row ts-config-span2">
+                  <span class="test-param-label">V_CE</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="text" id="hfe-drain-vce" value="5" placeholder="e.g. 2, 5, 10" title="One or more V_CE values, comma-separated — one curve is plotted per value">
+                    <span class="test-param-unit">V</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Settle</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="hfe-drain-settle" value="0.1" step="0.05" min="0.005">
+                    <span class="test-param-unit">s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Base (inner, swept in constant current) -->
+            <div class="psi-card">
+              <div class="psi-card-hdr" style="color:var(--green);">Base — current sweep</div>
+              <div class="ts-config-grid">
+                <div class="test-param-row ts-config-span2">
+                  <span class="test-param-label">Source</span>
+                  <div class="test-param-input-wrap">
+                    <select class="test-param-input sel" id="hfe-gate-src"></select>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Channel</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="hfe-gate-ch" value="2" min="1" max="4" step="1">
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">V Comp.</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="hfe-gate-vlim" value="5" step="0.5" min="0">
+                    <span class="test-param-unit">V</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">I Start</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="hfe-gate-istart" value="0.05" step="0.01" min="0.001">
+                    <span class="test-param-unit">mA</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">I Stop</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="hfe-gate-istop" value="1" step="0.01">
+                    <span class="test-param-unit">mA</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">I Step</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="hfe-gate-istep" value="0.01" step="0.01" min="0.001">
+                    <span class="test-param-unit">mA</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Settle</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="hfe-gate-settle" value="0.1" step="0.01" min="0.005">
+                    <span class="test-param-unit">s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Current Measurement -->
+            <div class="psi-card">
+              <div class="psi-card-hdr psi-card-hdr-scope">Current Measurement</div>
+              <div class="ts-config-grid">
+                <div class="test-param-row">
+                  <span class="test-param-label">I Meter</span>
+                  <div class="test-param-input-wrap">
+                    <select class="test-param-input sel" id="hfe-meter" onchange="tsSyncHfeMeterCh()"></select>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label" id="hfe-meter-ch-label">Collector CH</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="hfe-meter-ch" value="1" min="1" max="4" step="1" disabled>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="test-progress" id="hfe-prog">
+              <div class="progress-track"><div class="progress-fill" id="hfe-prog-fill"></div></div>
+              <div class="progress-label" id="hfe-prog-label">Running…</div>
+            </div>
+            <div class="test-actions">
+              <button class="btn btn-primary" id="hfe-run-btn" onclick="tsRunHfe()">▶ Run</button>
+              <button class="btn btn-danger hidden" id="hfe-stop-btn" onclick="stopTest()">■ Stop</button>
+            </div>
+          </div>
+        </div><!-- /ts-hfe-card -->
+
+        <!-- Collector Saturation Voltage config card — BJT only -->
+        <div class="test-card hidden" id="ts-vcesat-card">
+          <div class="test-card-header">
+            <div class="test-card-icon" style="background:rgba(26,86,196,.12);color:var(--accent);">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 20 8 14 13 17 20 6"/>
+              </svg>
+            </div>
+            <div style="flex:1;">
+              <div class="test-card-title">Collector Saturation Voltage</div>
+              <div class="test-card-desc">V<sub>CE(sat)</sub> vs I<sub>C</sub> — both collector and base forced in constant current at a fixed I<sub>C</sub>/I<sub>B</sub> ratio</div>
+            </div>
+          </div>
+          <div class="test-card-body">
+
+            <div class="ts-wip-badge">This test is still a work in progress</div>
+
+            <div class="iv-note">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <span>Base current is derived from I<sub>C</sub> / ratio and driven in lockstep with the collector sweep — enough overdrive to keep the device in saturation at every point, per the datasheet's forced-h<sub>FE</sub> test condition.</span>
+            </div>
+
+            <!-- Collector (swept, current mode) -->
+            <div class="psi-card">
+              <div class="psi-card-hdr psi-card-hdr-psu">Collector — current sweep</div>
+              <div class="ts-config-grid">
+                <div class="test-param-row ts-config-span2">
+                  <span class="test-param-label">Source</span>
+                  <div class="test-param-input-wrap">
+                    <select class="test-param-input sel" id="vcesat-drain-src"></select>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Channel</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="vcesat-drain-ch" value="1" min="1" max="4" step="1" oninput="tsSyncVceSatMeterCh()">
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">V Comp.</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="vcesat-drain-vlim" value="2" step="0.5" min="0">
+                    <span class="test-param-unit">V</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">I<sub>C</sub> Start</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="vcesat-ic-start" value="1" step="1" min="0.01">
+                    <span class="test-param-unit">mA</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">I<sub>C</sub> Stop</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="vcesat-ic-stop" value="100" step="1">
+                    <span class="test-param-unit">mA</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">I<sub>C</sub> Step</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="vcesat-ic-step" value="1" step="1" min="0.01">
+                    <span class="test-param-unit">mA</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Settle</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="vcesat-drain-settle" value="0.1" step="0.05" min="0.005">
+                    <span class="test-param-unit">s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Base (derived, forced ratio) -->
+            <div class="psi-card">
+              <div class="psi-card-hdr" style="color:var(--green);">Base — forced ratio</div>
+              <div class="ts-config-grid">
+                <div class="test-param-row ts-config-span2">
+                  <span class="test-param-label">Source</span>
+                  <div class="test-param-input-wrap">
+                    <select class="test-param-input sel" id="vcesat-gate-src"></select>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Channel</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="vcesat-gate-ch" value="2" min="1" max="4" step="1">
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">V Comp.</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="vcesat-gate-vlim" value="5" step="0.5" min="0">
+                    <span class="test-param-unit">V</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">I<sub>C</sub>/I<sub>B</sub> Ratio</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="vcesat-ratio" value="10" step="1" min="1">
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Settle</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="vcesat-gate-settle" value="0.1" step="0.05" min="0.005">
+                    <span class="test-param-unit">s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Voltage Measurement -->
+            <div class="psi-card">
+              <div class="psi-card-hdr psi-card-hdr-scope">Voltage Measurement</div>
+              <div class="ts-config-grid">
+                <div class="test-param-row">
+                  <span class="test-param-label">V Meter</span>
+                  <div class="test-param-input-wrap">
+                    <select class="test-param-input sel" id="vcesat-meter" onchange="tsSyncVceSatMeterCh()"></select>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label" id="vcesat-meter-ch-label">Collector CH</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="vcesat-meter-ch" value="1" min="1" max="4" step="1" disabled>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="test-progress" id="vcesat-prog">
+              <div class="progress-track"><div class="progress-fill" id="vcesat-prog-fill"></div></div>
+              <div class="progress-label" id="vcesat-prog-label">Running…</div>
+            </div>
+            <div class="test-actions">
+              <button class="btn btn-primary" id="vcesat-run-btn" onclick="tsRunVceSat()">▶ Run</button>
+              <button class="btn btn-danger hidden" id="vcesat-stop-btn" onclick="stopTest()">■ Stop</button>
+            </div>
+          </div>
+        </div><!-- /ts-vcesat-card -->
+
+        <!-- On-Resistance config card — FET only -->
+        <div class="test-card hidden" id="ts-rds-card">
+          <div class="test-card-header">
+            <div class="test-card-icon" style="background:rgba(26,86,196,.12);color:var(--accent);">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 20 8 14 13 17 20 6"/>
+              </svg>
+            </div>
+            <div style="flex:1;">
+              <div class="test-card-title">On-Resistance (R<sub>DS(on)</sub>)</div>
+              <div class="test-card-desc">R<sub>DS(on)</sub> = V<sub>DS</sub>/I<sub>D</sub> vs I<sub>D</sub> — drain forced in constant current at a fixed V<sub>GS</sub></div>
+            </div>
+          </div>
+          <div class="test-card-body">
+
+            <div class="ts-wip-badge">This test is still a work in progress</div>
+
+            <div class="iv-note">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <span>The gate draws no static current, so unlike the BJT tests it's held at a fixed voltage rather than forced — only the drain is current-sourced and swept.</span>
+            </div>
+
+            <!-- Drain (swept, current mode) -->
+            <div class="psi-card">
+              <div class="psi-card-hdr psi-card-hdr-psu">Drain — current sweep</div>
+              <div class="ts-config-grid">
+                <div class="test-param-row ts-config-span2">
+                  <span class="test-param-label">Source</span>
+                  <div class="test-param-input-wrap">
+                    <select class="test-param-input sel" id="rds-drain-src"></select>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Channel</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="rds-drain-ch" value="1" min="1" max="4" step="1" oninput="tsSyncRdsMeterCh()">
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">V Comp.</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="rds-drain-vlim" value="5" step="0.5" min="0">
+                    <span class="test-param-unit">V</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">I<sub>D</sub> Start</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="rds-id-start" value="10" step="1" min="0.01">
+                    <span class="test-param-unit">mA</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">I<sub>D</sub> Stop</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="rds-id-stop" value="200" step="1">
+                    <span class="test-param-unit">mA</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">I<sub>D</sub> Step</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="rds-id-step" value="5" step="1" min="0.01">
+                    <span class="test-param-unit">mA</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Settle</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="rds-drain-settle" value="0.1" step="0.05" min="0.005">
+                    <span class="test-param-unit">s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Gate (fixed bias) -->
+            <div class="psi-card">
+              <div class="psi-card-hdr" style="color:var(--green);">Gate — bias</div>
+              <div class="ts-config-grid">
+                <div class="test-param-row ts-config-span2">
+                  <span class="test-param-label">Source</span>
+                  <div class="test-param-input-wrap">
+                    <select class="test-param-input sel" id="rds-gate-src"></select>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Channel</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="rds-gate-ch" value="2" min="1" max="4" step="1">
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">I Limit</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="rds-gate-ilim" value="0.1" step="0.05" min="0">
+                    <span class="test-param-unit">A</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">V<sub>GS</sub></span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="rds-gate-vgs" value="10" step="0.5" min="0">
+                    <span class="test-param-unit">V</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Settle</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="rds-gate-settle" value="0.1" step="0.05" min="0.005">
+                    <span class="test-param-unit">s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Voltage Measurement -->
+            <div class="psi-card">
+              <div class="psi-card-hdr psi-card-hdr-scope">Voltage Measurement</div>
+              <div class="ts-config-grid">
+                <div class="test-param-row">
+                  <span class="test-param-label">V Meter</span>
+                  <div class="test-param-input-wrap">
+                    <select class="test-param-input sel" id="rds-meter" onchange="tsSyncRdsMeterCh()"></select>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label" id="rds-meter-ch-label">Drain CH</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="rds-meter-ch" value="1" min="1" max="4" step="1" disabled>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="test-progress" id="rds-prog">
+              <div class="progress-track"><div class="progress-fill" id="rds-prog-fill"></div></div>
+              <div class="progress-label" id="rds-prog-label">Running…</div>
+            </div>
+            <div class="test-actions">
+              <button class="btn btn-primary" id="rds-run-btn" onclick="tsRunRds()">▶ Run</button>
+              <button class="btn btn-danger hidden" id="rds-stop-btn" onclick="stopTest()">■ Stop</button>
+            </div>
+
+            <!-- Threshold Voltage — one-shot spot check, separate DUT wiring -->
+            <div class="psi-card">
+              <div class="psi-card-hdr" style="color:var(--green);">Threshold Voltage — spot check</div>
+              <div class="iv-note">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <span>Tie the gate directly to the drain (diode-connected) on the DUT before measuring — this forces I<sub>D</sub> through the shorted G+D node and reads the resulting V<sub>GS(th)</sub>. Separate wiring from the sweep above.</span>
+              </div>
+              <div class="ts-config-grid">
+                <div class="test-param-row ts-config-span2">
+                  <span class="test-param-label">Source</span>
+                  <div class="test-param-input-wrap">
+                    <select class="test-param-input sel" id="vgsth-src"></select>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">Channel</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="vgsth-ch" value="1" min="1" max="4" step="1">
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">V Comp.</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="vgsth-vlim" value="5" step="0.5" min="0">
+                    <span class="test-param-unit">V</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">I<sub>D</sub> Target</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="vgsth-id" value="1.0" step="0.1" min="0.01">
+                    <span class="test-param-unit">mA</span>
+                  </div>
+                </div>
+              </div>
+              <div class="test-actions" style="margin-top:8px;">
+                <button class="btn btn-primary" id="vgsth-measure-btn" onclick="tsMeasureVgsTh()">Measure V<sub>GS(th)</sub></button>
+              </div>
+              <div class="ts-hfe-estimate" style="margin-top:8px;">
+                <span class="ts-hfe-estimate-label">V<sub>GS(th)</sub></span>
+                <span class="ts-hfe-estimate-val" id="vgsth-val">—</span>
+              </div>
+            </div>
+          </div>
+        </div><!-- /ts-rds-card -->
         </div><!-- /ts-tabbed-card -->
+
+        <!-- Estimated overall hFE — mean across the current sweep, hfe_gain tab only -->
+        <div id="ts-hfe-estimate" class="ts-hfe-estimate hidden">
+          <span class="ts-hfe-estimate-label">Estimated h<sub>FE</sub></span>
+          <span class="ts-hfe-estimate-val" id="ts-hfe-estimate-val">—</span>
+        </div>
 
         <!-- Live chart panel -->
         <div id="ts-chart-panel">
@@ -1885,6 +2415,10 @@
             <div class="ts-axis-row" id="ts-axis-row" style="display:none;">
               X <select class="ts-axis-sel" id="ts-x-sel" onchange="tsUpdateAxes()"></select>
               Y <select class="ts-axis-sel" id="ts-y-sel" onchange="tsUpdateAxes()"></select>
+            </div>
+            <div class="dcsw-seg" id="hfe-yscale-seg" style="display:none;">
+              <button class="dcsw-seg-btn active" onclick="hfeSetYScale('linear')">Linear</button>
+              <button class="dcsw-seg-btn"        onclick="hfeSetYScale('log')">Log</button>
             </div>
             <button class="btn btn-ghost" id="ts-autoscale-btn"  style="font-size:11px;display:none;" onclick="tsAutoScaleChart()">⊡ Auto</button>
             <button class="btn btn-ghost" id="ts-zoom-reset-btn" style="font-size:11px;display:none;" onclick="tsResetZoom()">↺ Reset</button>
@@ -5561,13 +6095,19 @@ socket.on("automation_row", ({ test_id, row, columns, progress, cutoff_v }) => {
     if (lbl)  lbl.textContent = `${_sbRows.length} rows…`;
     return;
   }
-  if (test_id === "iv_curve" || test_id === "transfer") {
+  if (test_id === "iv_curve" || test_id === "transfer" || test_id === "hfe_gain" || test_id === "vce_sat" || test_id === "rds_on") {
     ivChartAddPoint(columns, row);
-    const isIv   = test_id === "iv_curve";
-    const fillEl = document.getElementById(isIv ? "ts-prog-fill" : "tc-prog-fill");
+    const pfx    = _TS_TEST_META[test_id]?.pfx || "ts";
+    const fillEl = document.getElementById(`${pfx}-prog-fill`);
     if (fillEl) fillEl.style.width = (progress * 100).toFixed(1) + "%";
-    const lblEl  = document.getElementById(isIv ? "ts-prog-label" : "tc-prog-label");
+    const lblEl  = document.getElementById(`${pfx}-prog-label`);
     if (lblEl) { const n = _ivChart.curves.reduce((s,c) => s+c.points.length, 0); lblEl.textContent = `${n} pts…`; }
+    return;
+  }
+  if (test_id === "vgs_th") {
+    const v  = row[row.length - 1];
+    const el = document.getElementById("vgsth-val");
+    if (el && v != null) el.textContent = `${(+v).toFixed(3)} V`;
     return;
   }
   if (test_id === "battery_capacity") {
@@ -5682,8 +6222,8 @@ socket.on("automation_done", ({ test_id, columns, rows, error, csv_path }) => {
     sbTestFinished(error, csv_path);
     return;
   }
-  if (test_id === "iv_curve" || test_id === "transfer") {
-    const label = test_id === "iv_curve" ? "Static Characteristic" : "Transfer Characteristic";
+  if (test_id === "iv_curve" || test_id === "transfer" || test_id === "hfe_gain" || test_id === "vce_sat" || test_id === "rds_on") {
+    const label = _TS_TEST_META[test_id]?.title || test_id;
     if (error) {
       toast(`${label} failed: ` + error, "error");
       logMsg(`✗ [${test_id}] ${error}`, "error");
@@ -5693,6 +6233,20 @@ socket.on("automation_done", ({ test_id, columns, rows, error, csv_path }) => {
       logMsg(`✓ [${test_id}] done (${_ivChart.curves.length} curves, ${_ivTotal} pts)${csv_path ? " → " + csv_path : ""}`, "ok");
     }
     tsTestFinished(error, csv_path);
+    return;
+  }
+  if (test_id === "vgs_th") {
+    const btn = document.getElementById("vgsth-measure-btn");
+    if (btn) btn.disabled = false;
+    if (error) {
+      toast("V_GS(th) measurement failed: " + error, "error");
+      logMsg(`✗ [vgs_th] ${error}`, "error");
+      const el = document.getElementById("vgsth-val");
+      if (el) el.textContent = "—";
+    } else {
+      toast("V_GS(th) measured", "ok");
+      logMsg("✓ [vgs_th] done", "ok");
+    }
     return;
   }
   if (test_id === "battery_capacity") {
@@ -8087,11 +8641,30 @@ const _PLOT_LABELS = {
     fet: { x: "V_GS", y: "I_D", g: "V_DS", drain: "Drain",     gate: "Gate"  },
     bjt: { x: "V_BE", y: "I_C", g: "V_CE", drain: "Collector", gate: "Base"  },
   },
+  hfe_gain: {
+    bjt: { x: "I_C", y: "h_FE", g: "V_CE", drain: "Collector", gate: "Base" },
+  },
+  vce_sat: {
+    bjt: { x: "I_C", y: "V_CE(sat)", g: "", drain: "Collector", gate: "Base" },
+  },
+  rds_on: {
+    fet: { x: "I_D", y: "R_DS(on)", g: "V_GS", drain: "Drain", gate: "Gate" },
+  },
 };
 function _plotLabels() {
   return (_PLOT_LABELS[_tsActivePlot] || _PLOT_LABELS.iv_curve)[_ivChart.devType]
       || _PLOT_LABELS.iv_curve.bjt;
 }
+
+// Per-test-id metadata shared by the socket handlers / tsTestFinished / CSV export —
+// keyed by the same string used as both `test_id` (backend) and `_tsActivePlot` (frontend).
+const _TS_TEST_META = {
+  iv_curve: { pfx: "ts",  title: "Static Characteristic",   csvPrefix: "static_char" },
+  transfer: { pfx: "tc",  title: "Transfer Characteristic", csvPrefix: "transfer_char" },
+  hfe_gain: { pfx: "hfe", title: "DC Current Gain (h_FE)",  csvPrefix: "hfe_gain" },
+  vce_sat:  { pfx: "vcesat", title: "Collector Saturation Voltage", csvPrefix: "vce_sat" },
+  rds_on:   { pfx: "rds", title: "On-Resistance (R_DS)", csvPrefix: "rds_on" },
+};
 
 const _ivChart = {
   curves:       [],    // [{gateV, ib, points:[{x,y}]}]  ib=null for FET
@@ -8108,9 +8681,13 @@ const _ivChart = {
   xLim:         null,  // drain/gate sweep stop  — X axis ceiling
   devType:      "bjt", // "fet" | "bjt" — controls axis/legend labels
   gateMode:     "cc",  // "cc" | "cv" — only meaningful when devType === "bjt"
+  polarity:     "n",   // "n" | "p" — NPN/NMOS vs PNP/PMOS; only Static/Transfer mirror on "p"
+  yScale:       "linear", // "linear" | "log" — only meaningful on the hfe_gain/vce_sat/rds_on plots
+  vceSatRatio:  10,    // forced I_C/I_B ratio, shown in the vce_sat legend
   uplot:        null,
   _buildXIdx:   -1,
   _buildYIdx:   -1,
+  _buildYScale: null,
 };
 
 let _ivDrag = null;   // {startX, startY, bounds}
@@ -8146,7 +8723,7 @@ function refreshTestSpecTab() {
     ivSetDevType(_ivChart.devType);
   }
   // Grey out Run buttons when PSU not available
-  for (const id of ["ts-run-btn", "tc-run-btn"]) {
+  for (const id of ["ts-run-btn", "tc-run-btn", "hfe-run-btn", "vcesat-run-btn", "rds-run-btn", "vgsth-measure-btn"]) {
     const btn = document.getElementById(id);
     if (btn) { btn.disabled = !psuAvail; btn.title = psuAvail ? "" : "No PSU connected"; }
   }
@@ -8158,14 +8735,14 @@ function _tsPopulateDropdowns(dcTest) {
   const mtrOpts = (dcTest.meters || []).map(m =>
     `<option value="${escHtml(m.value)}">${escHtml(m.label)}</option>`).join("");
 
-  for (const id of ["iv-drain-src", "iv-gate-src", "tc-gate-src", "tc-drain-src"]) {
+  for (const id of ["iv-drain-src", "iv-gate-src", "tc-gate-src", "tc-drain-src", "hfe-drain-src", "hfe-gate-src", "vcesat-drain-src", "vcesat-gate-src", "rds-drain-src", "rds-gate-src", "vgsth-src"]) {
     const el = document.getElementById(id);
     if (!el) continue;
     const cur = el.value;
     el.innerHTML = srcOpts;
     if (cur) el.value = cur;
   }
-  for (const id of ["iv-meter", "tc-meter"]) {
+  for (const id of ["iv-meter", "tc-meter", "hfe-meter", "vcesat-meter", "rds-meter"]) {
     const el = document.getElementById(id);
     if (!el) continue;
     const cur = el.value;
@@ -8174,6 +8751,9 @@ function _tsPopulateDropdowns(dcTest) {
   }
   tsSyncMeterCh();
   tsSyncTcMeterCh();
+  tsSyncHfeMeterCh();
+  tsSyncVceSatMeterCh();
+  tsSyncRdsMeterCh();
 }
 
 function tsSelectPlot(plot) {
@@ -8182,8 +8762,14 @@ function tsSelectPlot(plot) {
     b.classList.toggle("active", b.dataset.plot === plot));
   document.getElementById("ts-iv-card")?.classList.toggle("hidden", plot !== "iv_curve");
   document.getElementById("ts-tc-card")?.classList.toggle("hidden", plot !== "transfer");
+  document.getElementById("ts-hfe-card")?.classList.toggle("hidden", plot !== "hfe_gain");
+  document.getElementById("ts-vcesat-card")?.classList.toggle("hidden", plot !== "vce_sat");
+  document.getElementById("ts-rds-card")?.classList.toggle("hidden", plot !== "rds_on");
   const title = document.getElementById("ts-chart-title");
-  if (title) title.textContent = plot === "iv_curve" ? "Static Characteristic" : "Transfer Characteristic";
+  if (title) title.textContent = _TS_TEST_META[plot]?.title || "Static Characteristic";
+  const yscaleSeg = document.getElementById("hfe-yscale-seg");
+  if (yscaleSeg) yscaleSeg.style.display = (plot === "hfe_gain" || plot === "vce_sat" || plot === "rds_on") ? "" : "none";
+  document.getElementById("ts-hfe-estimate")?.classList.toggle("hidden", plot !== "hfe_gain");
   tsClearChart();
 }
 
@@ -8198,6 +8784,57 @@ function tsSyncTcMeterCh() {
     mtrChInp.value    = drainCh;
     mtrChInp.disabled = true;
     if (mtrChLbl) mtrChLbl.textContent = `${_plotLabels().drain} CH`;
+  } else {
+    mtrChInp.disabled = false;
+    if (mtrChLbl) mtrChLbl.textContent = "Meter CH";
+  }
+}
+
+function tsSyncHfeMeterCh() {
+  const mtrSel   = document.getElementById("hfe-meter");
+  const mtrChInp = document.getElementById("hfe-meter-ch");
+  const mtrChLbl = document.getElementById("hfe-meter-ch-label");
+  if (!mtrChInp) return;
+  const isPsu = !mtrSel?.value || mtrSel.value === "psu";
+  if (isPsu) {
+    const drainCh = parseInt(document.getElementById("hfe-drain-ch")?.value || "1");
+    mtrChInp.value    = drainCh;
+    mtrChInp.disabled = true;
+    if (mtrChLbl) mtrChLbl.textContent = "Collector CH";
+  } else {
+    mtrChInp.disabled = false;
+    if (mtrChLbl) mtrChLbl.textContent = "Meter CH";
+  }
+}
+
+function tsSyncVceSatMeterCh() {
+  const mtrSel   = document.getElementById("vcesat-meter");
+  const mtrChInp = document.getElementById("vcesat-meter-ch");
+  const mtrChLbl = document.getElementById("vcesat-meter-ch-label");
+  if (!mtrChInp) return;
+  const isPsu = !mtrSel?.value || mtrSel.value === "psu";
+  if (isPsu) {
+    const drainCh = parseInt(document.getElementById("vcesat-drain-ch")?.value || "1");
+    mtrChInp.value    = drainCh;
+    mtrChInp.disabled = true;
+    if (mtrChLbl) mtrChLbl.textContent = "Collector CH";
+  } else {
+    mtrChInp.disabled = false;
+    if (mtrChLbl) mtrChLbl.textContent = "Meter CH";
+  }
+}
+
+function tsSyncRdsMeterCh() {
+  const mtrSel   = document.getElementById("rds-meter");
+  const mtrChInp = document.getElementById("rds-meter-ch");
+  const mtrChLbl = document.getElementById("rds-meter-ch-label");
+  if (!mtrChInp) return;
+  const isPsu = !mtrSel?.value || mtrSel.value === "psu";
+  if (isPsu) {
+    const drainCh = parseInt(document.getElementById("rds-drain-ch")?.value || "1");
+    mtrChInp.value    = drainCh;
+    mtrChInp.disabled = true;
+    if (mtrChLbl) mtrChLbl.textContent = "Drain CH";
   } else {
     mtrChInp.disabled = false;
     if (mtrChLbl) mtrChLbl.textContent = "Meter CH";
@@ -8237,6 +8874,7 @@ function tsRunIVCurve() {
   const drainVStep  = parseFloat(document.getElementById("iv-drain-vstep")?.value  || "0.2");
   const drainILim   = parseFloat(document.getElementById("iv-drain-ilim")?.value   || "0.5");
   const drainSettle = parseFloat(document.getElementById("iv-drain-settle")?.value || "0.05");
+  const pol = _ivChart.polarity === "p" ? -1 : 1;
 
   // Reset chart
   _ivChart.curves       = [];
@@ -8248,9 +8886,9 @@ function tsRunIVCurve() {
   _ivChart.ibIdx        = -1;
   _ivChart.status       = "running";
   _ivChart.view         = null;
-  _ivChart.iLim         = drainILim;
-  _ivChart.xStart       = drainVStart;
-  _ivChart.xLim         = drainVStop;
+  _ivChart.iLim         = drainILim * pol;
+  _ivChart.xStart       = drainVStart * pol;
+  _ivChart.xLim         = drainVStop * pol;
   document.getElementById("ts-zoom-reset-btn").style.display = "none";
   document.getElementById("ts-autoscale-btn").style.display  = "";
   document.getElementById("ts-axis-row").style.display = "none";
@@ -8339,12 +8977,12 @@ function tsRunIVCurve() {
 
 function tsTestFinished(error, csv_path) {
   state.autoRunning = false;
-  const isIv = state.autoTestId === "iv_curve";
-  document.getElementById(isIv ? "ts-run-btn" : "tc-run-btn")?.classList.remove("hidden");
-  document.getElementById(isIv ? "ts-stop-btn" : "tc-stop-btn")?.classList.add("hidden");
-  const prog = document.getElementById(isIv ? "ts-prog" : "tc-prog");
+  const pfx = _TS_TEST_META[state.autoTestId]?.pfx || "ts";
+  document.getElementById(`${pfx}-run-btn`)?.classList.remove("hidden");
+  document.getElementById(`${pfx}-stop-btn`)?.classList.add("hidden");
+  const prog = document.getElementById(`${pfx}-prog`);
   if (prog) prog.classList.remove("visible");
-  const fill = document.getElementById(isIv ? "ts-prog-fill" : "tc-prog-fill");
+  const fill = document.getElementById(`${pfx}-prog-fill`);
   if (fill && !error) fill.style.width = "100%";
   const footer = document.getElementById("ts-chart-footer");
   if (footer) {
@@ -8383,13 +9021,14 @@ function tsRunTransfer() {
   const drainVce    = parseFloat(document.getElementById("tc-drain-vce")?.value    || "5");
   const drainILim   = parseFloat(document.getElementById("tc-drain-ilim")?.value   || "0.5");
   const drainSettle = parseFloat(document.getElementById("tc-drain-settle")?.value || "0.1");
+  const pol = _ivChart.polarity === "p" ? -1 : 1;
 
   _ivChart.curves = []; _ivChart.currentGateV = null; _ivChart.cols = [];
   _ivChart.gIdx = 0; _ivChart.xIdx = 1; _ivChart.yIdx = 2; _ivChart.ibIdx = -1;
   _ivChart.status = "running"; _ivChart.view = null;
-  _ivChart.iLim   = drainILim;
-  _ivChart.xStart = gateVStart;
-  _ivChart.xLim   = gateVStop;
+  _ivChart.iLim   = drainILim * pol;
+  _ivChart.xStart = gateVStart * pol;
+  _ivChart.xLim   = gateVStop * pol;
   document.getElementById("ts-zoom-reset-btn").style.display = "none";
   document.getElementById("ts-autoscale-btn").style.display  = "";
   document.getElementById("ts-axis-row").style.display = "none";
@@ -8433,6 +9072,302 @@ function tsRunTransfer() {
     });
 }
 
+function tsRunHfe() {
+  if (state.autoRunning) { toast("A test is already running", "error"); return; }
+  if (!state.connected)  { toast("Not connected to instruments", "error"); return; }
+
+  // Collector — CH1, outer (one curve per V_CE value, comma-separated)
+  const drainVceRaw  = document.getElementById("hfe-drain-vce")?.value || "5";
+  const drainVceList = drainVceRaw.split(",").map(s => parseFloat(s.trim())).filter(v => !isNaN(v));
+  if (!drainVceList.length) { toast("Enter at least one V_CE value", "error"); return; }
+
+  state.autoRunning = true;
+  state.autoTestId  = "hfe_gain";
+
+  // Base — CH0, inner (swept in constant current)
+  const gateSrc    = document.getElementById("hfe-gate-src")?.value   || "";
+  const gateCh     = parseInt(document.getElementById("hfe-gate-ch")?.value    || "2");
+  const gateIStart = parseFloat(document.getElementById("hfe-gate-istart")?.value || "0.01") * 0.001;
+  const gateIStop  = parseFloat(document.getElementById("hfe-gate-istop")?.value  || "1")    * 0.001;
+  const gateIStep  = parseFloat(document.getElementById("hfe-gate-istep")?.value  || "0.05") * 0.001;
+  const gateVLim   = parseFloat(document.getElementById("hfe-gate-vlim")?.value   || "5");
+  const gateSettle = parseFloat(document.getElementById("hfe-gate-settle")?.value || "0.05");
+
+  // Collector — CH1, outer (source/channel/limits shared across every V_CE value)
+  const drainSrc    = document.getElementById("hfe-drain-src")?.value   || "";
+  const drainCh     = parseInt(document.getElementById("hfe-drain-ch")?.value    || "1");
+  const drainILim   = parseFloat(document.getElementById("hfe-drain-ilim")?.value   || "0.5");
+  const drainSettle = parseFloat(document.getElementById("hfe-drain-settle")?.value || "0.1");
+
+  _ivChart.curves = []; _ivChart.currentGateV = null; _ivChart.cols = [];
+  _ivChart.gIdx = 0; _ivChart.xIdx = 1; _ivChart.yIdx = 2; _ivChart.ibIdx = -1;
+  _ivChart.status = "running"; _ivChart.view = null;
+  // X (measured I_C) and Y (computed h_FE) ranges aren't known ahead of the sweep —
+  // leave unset so the chart auto-fits to incoming data instead of a fixed placeholder range.
+  _ivChart.iLim   = null;
+  _ivChart.xStart = null;
+  _ivChart.xLim   = null;
+  document.getElementById("ts-zoom-reset-btn").style.display = "none";
+  document.getElementById("ts-autoscale-btn").style.display  = "";
+  document.getElementById("ts-axis-row").style.display = "none";
+  document.getElementById("ts-chart-footer").textContent = "Running…";
+  ivChartDraw();
+
+  document.getElementById("hfe-run-btn").classList.add("hidden");
+  document.getElementById("hfe-stop-btn").classList.remove("hidden");
+  const prog = document.getElementById("hfe-prog");
+  if (prog) prog.classList.add("visible");
+  document.getElementById("hfe-prog-fill").style.width = "0%";
+  document.getElementById("hfe-prog-label").textContent = "Starting…";
+
+  const mtrVal = document.getElementById("hfe-meter")?.value  || "psu";
+  const mtrCh  = parseInt(document.getElementById("hfe-meter-ch")?.value || "1");
+  const isPsu  = !mtrVal || mtrVal === "psu";
+
+  const measItems = [{
+    // Collector current — "psu_outer" is CH1 (collector); using the plain "psu" alias
+    // here would resolve to CH0's (base) resource/family, which is only harmless
+    // because the two channels usually share one physical PSU in practice.
+    kind: "measurement", instrument: isPsu ? "psu_outer" : mtrVal,
+    measure: "current", instr_ch: isPsu ? drainCh : mtrCh,
+    samples: 1, settle: 0, label: "I_C",
+  }, {
+    // Base current readback — the ratio uses this instead of the commanded I_B
+    // set-point, since bench-PSU constant-current regulation is imprecise at the
+    // low (sub-mA) currents this sweep typically runs at; trusting the nominal
+    // set-point blindly was the main source of the reported plot instability.
+    kind: "measurement", instrument: "psu",
+    measure: "current", instr_ch: gateCh,
+    samples: 1, settle: 0, label: "I_B",
+  }];
+
+  const params = {
+    num_channels: 2, sweep_mode: "nested",
+    measurements: JSON.stringify(measItems),
+    ch0_resource: gateSrc,  ch0_ch: gateCh,
+    ch0_v_start: gateIStart, ch0_v_step: gateIStep, ch0_v_stop: gateIStop,
+    ch0_sweep_type: "current",
+    ch0_i_limit: 0.001,          // irrelevant for a current-sweep channel
+    ch0_v_compliance: gateVLim,
+    ch0_settle: gateSettle,
+    ch1_resource: drainSrc, ch1_ch: drainCh,
+    ch1_v_start: drainVceList[0], ch1_v_step: 1, ch1_v_stop: drainVceList[drainVceList.length - 1],
+    ch1_v_list: drainVceList.join(","),  // explicit values override the start/step/stop range above
+    ch1_i_limit: drainILim, ch1_settle: drainSettle, ch1_sweep_type: "voltage",
+    ch1_v_compliance: 5.0,
+  };
+
+  POST("/api/automation/run", { test_id: "hfe_gain", params, output_path: state.outputPath || "" })
+    .catch(e => {
+      toast("Failed to start DC Current Gain sweep: " + e.message, "error");
+      tsTestFinished(e.message, null);
+    });
+}
+
+function tsRunVceSat() {
+  if (state.autoRunning) { toast("A test is already running", "error"); return; }
+  if (!state.connected)  { toast("Not connected to instruments", "error"); return; }
+
+  state.autoRunning = true;
+  state.autoTestId  = "vce_sat";
+
+  // Collector — CH0, swept in constant current
+  const drainSrc    = document.getElementById("vcesat-drain-src")?.value   || "";
+  const drainCh     = parseInt(document.getElementById("vcesat-drain-ch")?.value    || "1");
+  const drainVLim   = parseFloat(document.getElementById("vcesat-drain-vlim")?.value || "2");
+  const icStart     = parseFloat(document.getElementById("vcesat-ic-start")?.value || "1")   * 0.001;
+  const icStop      = parseFloat(document.getElementById("vcesat-ic-stop")?.value  || "100") * 0.001;
+  const icStep      = parseFloat(document.getElementById("vcesat-ic-step")?.value  || "1")   * 0.001;
+  const drainSettle = parseFloat(document.getElementById("vcesat-drain-settle")?.value || "0.1");
+
+  // Base — CH1, derived from I_C / ratio, driven in lockstep (simultaneous sweep_mode)
+  const gateSrc     = document.getElementById("vcesat-gate-src")?.value   || "";
+  const gateCh      = parseInt(document.getElementById("vcesat-gate-ch")?.value    || "2");
+  const gateVLim    = parseFloat(document.getElementById("vcesat-gate-vlim")?.value || "5");
+  const ratio       = parseFloat(document.getElementById("vcesat-ratio")?.value || "10") || 10;
+  const gateSettle  = parseFloat(document.getElementById("vcesat-gate-settle")?.value || "0.1");
+
+  // Derive the base sweep with the SAME step count as the collector sweep — scaling
+  // v_step by the ratio can round to an off-by-one step count independently on each
+  // channel, which would desync the two simultaneous channels on the tail rows.
+  const n       = Math.max(1, Math.round(Math.abs(icStop - icStart) / icStep));
+  const ibStart = icStart / ratio;
+  const ibStop  = icStop  / ratio;
+  const ibStep  = Math.abs(ibStop - ibStart) / n || (icStep / ratio);
+
+  _ivChart.vceSatRatio  = ratio;
+  _ivChart.curves       = [];
+  _ivChart.currentGateV = null;
+  _ivChart.cols         = [];
+  _ivChart.gIdx = 0; _ivChart.xIdx = 1; _ivChart.yIdx = 2; _ivChart.ibIdx = -1;
+  _ivChart.status = "running"; _ivChart.view = null;
+  _ivChart.iLim   = null;      // V_CE(sat) magnitude isn't known ahead of the sweep
+  _ivChart.xStart = icStart;   // I_C range is the configured sweep, known upfront
+  _ivChart.xLim   = icStop;
+  document.getElementById("ts-zoom-reset-btn").style.display = "none";
+  document.getElementById("ts-autoscale-btn").style.display  = "";
+  document.getElementById("ts-axis-row").style.display = "none";
+  document.getElementById("ts-chart-footer").textContent = "Running…";
+  ivChartDraw();
+
+  document.getElementById("vcesat-run-btn").classList.add("hidden");
+  document.getElementById("vcesat-stop-btn").classList.remove("hidden");
+  const prog = document.getElementById("vcesat-prog");
+  if (prog) prog.classList.add("visible");
+  document.getElementById("vcesat-prog-fill").style.width = "0%";
+  document.getElementById("vcesat-prog-label").textContent = "Starting…";
+
+  const mtrVal = document.getElementById("vcesat-meter")?.value  || "psu";
+  const mtrCh  = parseInt(document.getElementById("vcesat-meter-ch")?.value || "1");
+  const isPsu  = !mtrVal || mtrVal === "psu";
+
+  const measItems = [{
+    kind: "measurement", instrument: isPsu ? "psu" : mtrVal,
+    measure: "voltage", instr_ch: isPsu ? drainCh : mtrCh,
+    samples: 1, settle: 0, label: "V_CE",
+  }];
+
+  const params = {
+    num_channels: 2, sweep_mode: "simultaneous",
+    measurements: JSON.stringify(measItems),
+    ch0_resource: drainSrc, ch0_ch: drainCh,
+    ch0_v_start: icStart, ch0_v_step: icStep, ch0_v_stop: icStop,
+    ch0_sweep_type: "current",
+    ch0_i_limit: 0.001,          // irrelevant for a current-sweep channel
+    ch0_v_compliance: drainVLim,
+    ch0_settle: drainSettle,
+    ch1_resource: gateSrc, ch1_ch: gateCh,
+    ch1_v_start: ibStart, ch1_v_step: ibStep, ch1_v_stop: ibStop,
+    ch1_sweep_type: "current",
+    ch1_i_limit: 0.001,
+    ch1_v_compliance: gateVLim,
+    ch1_settle: gateSettle,
+  };
+
+  POST("/api/automation/run", { test_id: "vce_sat", params, output_path: state.outputPath || "" })
+    .catch(e => {
+      toast("Failed to start Saturation Voltage sweep: " + e.message, "error");
+      tsTestFinished(e.message, null);
+    });
+}
+
+function tsRunRds() {
+  if (state.autoRunning) { toast("A test is already running", "error"); return; }
+  if (!state.connected)  { toast("Not connected to instruments", "error"); return; }
+
+  state.autoRunning = true;
+  state.autoTestId  = "rds_on";
+
+  // Drain — CH0, inner (swept in constant current)
+  const drainSrc    = document.getElementById("rds-drain-src")?.value   || "";
+  const drainCh     = parseInt(document.getElementById("rds-drain-ch")?.value    || "1");
+  const drainVLim   = parseFloat(document.getElementById("rds-drain-vlim")?.value || "5");
+  const idStart     = parseFloat(document.getElementById("rds-id-start")?.value || "10")  * 0.001;
+  const idStop      = parseFloat(document.getElementById("rds-id-stop")?.value  || "200") * 0.001;
+  const idStep      = parseFloat(document.getElementById("rds-id-step")?.value  || "5")   * 0.001;
+  const drainSettle = parseFloat(document.getElementById("rds-drain-settle")?.value || "0.1");
+
+  // Gate — CH1, outer (single fixed bias — no static gate current, unlike the BJT tests)
+  const gateSrc     = document.getElementById("rds-gate-src")?.value   || "";
+  const gateCh      = parseInt(document.getElementById("rds-gate-ch")?.value    || "2");
+  const gateILim    = parseFloat(document.getElementById("rds-gate-ilim")?.value || "0.1");
+  const gateVgs     = parseFloat(document.getElementById("rds-gate-vgs")?.value  || "10");
+  const gateSettle  = parseFloat(document.getElementById("rds-gate-settle")?.value || "0.1");
+
+  _ivChart.curves = []; _ivChart.currentGateV = null; _ivChart.cols = [];
+  _ivChart.gIdx = 0; _ivChart.xIdx = 1; _ivChart.yIdx = 2; _ivChart.ibIdx = -1;
+  _ivChart.status = "running"; _ivChart.view = null;
+  _ivChart.iLim   = null;      // R_DS(on) magnitude isn't known ahead of the sweep
+  _ivChart.xStart = idStart;   // I_D range is the configured sweep, known upfront
+  _ivChart.xLim   = idStop;
+  document.getElementById("ts-zoom-reset-btn").style.display = "none";
+  document.getElementById("ts-autoscale-btn").style.display  = "";
+  document.getElementById("ts-axis-row").style.display = "none";
+  document.getElementById("ts-chart-footer").textContent = "Running…";
+  ivChartDraw();
+
+  document.getElementById("rds-run-btn").classList.add("hidden");
+  document.getElementById("rds-stop-btn").classList.remove("hidden");
+  const prog = document.getElementById("rds-prog");
+  if (prog) prog.classList.add("visible");
+  document.getElementById("rds-prog-fill").style.width = "0%";
+  document.getElementById("rds-prog-label").textContent = "Starting…";
+
+  const mtrVal = document.getElementById("rds-meter")?.value  || "psu";
+  const mtrCh  = parseInt(document.getElementById("rds-meter-ch")?.value || "1");
+  const isPsu  = !mtrVal || mtrVal === "psu";
+
+  const measItems = [{
+    kind: "measurement", instrument: isPsu ? "psu" : mtrVal,
+    measure: "voltage", instr_ch: isPsu ? drainCh : mtrCh,
+    samples: 1, settle: 0, label: "V_DS",
+  }];
+
+  const params = {
+    num_channels: 2, sweep_mode: "nested",
+    measurements: JSON.stringify(measItems),
+    ch0_resource: drainSrc, ch0_ch: drainCh,
+    ch0_v_start: idStart, ch0_v_step: idStep, ch0_v_stop: idStop,
+    ch0_sweep_type: "current",
+    ch0_i_limit: 0.001,          // irrelevant for a current-sweep channel
+    ch0_v_compliance: drainVLim,
+    ch0_settle: drainSettle,
+    ch1_resource: gateSrc, ch1_ch: gateCh,
+    ch1_v_start: gateVgs, ch1_v_step: 1, ch1_v_stop: gateVgs,  // single value → one outer step
+    ch1_i_limit: gateILim, ch1_settle: gateSettle, ch1_sweep_type: "voltage",
+    ch1_v_compliance: 5.0,
+  };
+
+  POST("/api/automation/run", { test_id: "rds_on", params, output_path: state.outputPath || "" })
+    .catch(e => {
+      toast("Failed to start On-Resistance sweep: " + e.message, "error");
+      tsTestFinished(e.message, null);
+    });
+}
+
+function tsMeasureVgsTh() {
+  if (state.autoRunning) { toast("A test is already running", "error"); return; }
+  if (!state.connected)  { toast("Not connected to instruments", "error"); return; }
+
+  state.autoRunning = true;
+  state.autoTestId  = "vgs_th";
+
+  const src      = document.getElementById("vgsth-src")?.value   || "";
+  const ch       = parseInt(document.getElementById("vgsth-ch")?.value || "1");
+  const vlim     = parseFloat(document.getElementById("vgsth-vlim")?.value || "5");
+  const idTarget = parseFloat(document.getElementById("vgsth-id")?.value   || "1") * 0.001;
+
+  const btn = document.getElementById("vgsth-measure-btn");
+  if (btn) btn.disabled = true;
+  const valEl = document.getElementById("vgsth-val");
+  if (valEl) valEl.textContent = "measuring…";
+
+  const measItems = [{
+    kind: "measurement", instrument: "psu",
+    measure: "voltage", instr_ch: ch,
+    samples: 1, settle: 0, label: "V_GSth",
+  }];
+
+  const params = {
+    num_channels: 1, sweep_mode: "simultaneous",
+    measurements: JSON.stringify(measItems),
+    ch0_resource: src, ch0_ch: ch,
+    ch0_v_start: idTarget, ch0_v_step: idTarget || 0.001, ch0_v_stop: idTarget,
+    ch0_sweep_type: "current",
+    ch0_i_limit: 0.001,
+    ch0_v_compliance: vlim,
+    ch0_settle: 0.15,
+  };
+
+  POST("/api/automation/run", { test_id: "vgs_th", params, output_path: state.outputPath || "" })
+    .catch(e => {
+      toast("Failed to measure V_GS(th): " + e.message, "error");
+      state.autoRunning = false;
+      if (btn) btn.disabled = false;
+      if (valEl) valEl.textContent = "—";
+    });
+}
+
 // ── IV Canvas chart ─────────────────────────────────────────────────
 function ivChartAddPoint(cols, row) {
   if (!_ivChart.cols.length && cols && cols.length) {
@@ -8445,24 +9380,66 @@ function ivChartAddPoint(cols, row) {
     _ivChartPopulateAxisSelectors();
   }
 
-  const g = row[_ivChart.gIdx];
-  const x = row[_ivChart.xIdx];
-  const y = row[_ivChart.yIdx];
-  if (x == null || y == null) return;
+  const isHfe    = _tsActivePlot === "hfe_gain";
+  const isVceSat = _tsActivePlot === "vce_sat";
+  const isRdsOn  = _tsActivePlot === "rds_on";
+  // PNP/PMOS mirror into quadrant III on Static/Transfer; h_FE, V_CE(sat), and R_DS(on)
+  // are all polarity-invariant here (ratios/magnitudes of co-signed quantities), so
+  // they always stay first-quadrant.
+  const pol = (!isHfe && !isVceSat && !isRdsOn && _ivChart.polarity === "p") ? -1 : 1;
+
+  const gRaw = row[_ivChart.gIdx];
+  const xRaw = row[_ivChart.xIdx];
+  const yRaw = row[_ivChart.yIdx];
+  if (xRaw == null || yRaw == null) return;
+
+  let x, y, g;
+  if (isHfe) {
+    // Prefer the measured I_B readback over the commanded set-point (xRaw) — bench-PSU
+    // constant-current regulation is imprecise at the low currents this sweep runs at,
+    // and dividing by an assumed-exact set-point that the instrument didn't actually
+    // hit is the main source of an unstable-looking curve. Falls back to the set-point
+    // if no readback column is present (e.g. an older saved sweep).
+    const ibMeasured = _ivChart.ibIdx >= 0 ? row[_ivChart.ibIdx] : null;
+    const ib = ibMeasured != null ? +ibMeasured : +xRaw;
+    const ic = +yRaw;                 // yIdx = measured I_C
+    if (!ib) return;                  // guard divide-by-zero on the I_B=0 start point
+    x = ic;
+    y = ic / ib;
+    g = gRaw != null ? +gRaw * pol : gRaw;
+  } else if (isVceSat) {
+    // Simultaneous sweep: cols = [I_C set-point, I_B set-point, measured V_CE].
+    // Both channels move every row (no fixed "outer" column), so grouping by column
+    // value would split every point into its own curve — force a single curve instead.
+    x = row[0] != null ? +row[0] : null;
+    y = +yRaw;
+    g = 0;
+    if (x == null) return;
+  } else if (isRdsOn) {
+    const id = +xRaw, vds = +yRaw;  // xIdx = swept drain current, yIdx = measured V_DS
+    if (!id) return;                // guard divide-by-zero on the I_D=0 start point
+    x = id;
+    y = vds / id;
+    g = gRaw != null ? +gRaw : gRaw;   // V_GS, fixed for the whole sweep — one curve
+  } else {
+    x = +xRaw * pol;
+    y = +yRaw * pol;
+    g = gRaw != null ? +gRaw * pol : gRaw;
+  }
 
   if (g !== _ivChart.currentGateV) {
     _ivChart.currentGateV = g;
     const ib = (_ivChart.ibIdx >= 0 && row[_ivChart.ibIdx] != null)
-      ? +row[_ivChart.ibIdx] : null;
+      ? +row[_ivChart.ibIdx] * pol : null;
     _ivChart.curves.push({ gateV: g, ib, points: [] });
   }
   if (_ivChart.curves.length) {
     const cur = _ivChart.curves[_ivChart.curves.length - 1];
     // Capture the first valid I_B measurement for this curve (may arrive on any row)
     if (cur.ib == null && _ivChart.ibIdx >= 0 && row[_ivChart.ibIdx] != null) {
-      cur.ib = +row[_ivChart.ibIdx];
+      cur.ib = +row[_ivChart.ibIdx] * pol;
     }
-    cur.points.push({ x: +x, y: +y });
+    cur.points.push({ x, y });
   }
   ivChartDraw();
 }
@@ -8551,8 +9528,45 @@ function ivSetDevType(type) {
   const gateSeg = document.getElementById("iv-gate-mode-seg");
   if (gateSeg) gateSeg.style.display = type === "bjt" ? "" : "none";
   ivSetGateMode(type === "bjt" ? _ivChart.gateMode : "cv");
+  // Polarity button labels: NPN/PNP for BJT, NMOS/PMOS for FET
+  const polNBtn = document.getElementById("iv-polarity-btn-n");
+  if (polNBtn) polNBtn.textContent = type === "fet" ? "NMOS" : "NPN";
+  const polPBtn = document.getElementById("iv-polarity-btn-p");
+  if (polPBtn) polPBtn.textContent = type === "fet" ? "PMOS" : "PNP";
+  // Current Gain (hFE) and Saturation Voltage sub-tabs are BJT-only concepts
+  const hfeTab = document.getElementById("ts-subtab-hfe");
+  if (hfeTab) hfeTab.classList.toggle("hidden", type === "fet");
+  const vcesatTab = document.getElementById("ts-subtab-vcesat");
+  if (vcesatTab) vcesatTab.classList.toggle("hidden", type === "fet");
+  if (type === "fet" && (_tsActivePlot === "hfe_gain" || _tsActivePlot === "vce_sat")) tsSelectPlot("iv_curve");
+  // On-Resistance sub-tab is a FET-only concept (no static current draw into the gate)
+  const rdsTab = document.getElementById("ts-subtab-rds");
+  if (rdsTab) rdsTab.classList.toggle("hidden", type === "bjt");
+  if (type === "bjt" && _tsActivePlot === "rds_on") tsSelectPlot("iv_curve");
   tsSyncMeterCh();
   tsSyncTcMeterCh();
+  tsSyncHfeMeterCh();
+  tsSyncVceSatMeterCh();
+  tsSyncRdsMeterCh();
+  ivChartDraw();
+}
+
+function ivSetPolarity(pol) {
+  _ivChart.polarity = pol;
+  const seg = document.getElementById("iv-polarity-seg");
+  if (seg) seg.querySelectorAll(".dcsw-seg-btn").forEach((b, i) => {
+    b.classList.toggle("active", (i === 0 && pol === "n") || (i === 1 && pol === "p"));
+  });
+  ivChartDraw();
+}
+
+function hfeSetYScale(mode) {
+  _ivChart.yScale = mode;
+  const seg = document.getElementById("hfe-yscale-seg");
+  if (seg) seg.querySelectorAll(".dcsw-seg-btn").forEach((b, i) => {
+    b.classList.toggle("active", (i === 0 && mode === "linear") || (i === 1 && mode === "log"));
+  });
+  _ivChart.view = null; // manual zoom/pan bounds don't carry across a scale-type change
   ivChartDraw();
 }
 
@@ -8588,6 +9602,11 @@ function ivSetGateMode(mode) {
   }
 }
 
+function _ivIsLogY() {
+  return (_tsActivePlot === "hfe_gain" || _tsActivePlot === "vce_sat" || _tsActivePlot === "rds_on")
+      && _ivChart.yScale === "log";
+}
+
 function tsResetZoom() {
   _ivChart.view = null;
   document.getElementById("ts-zoom-reset-btn").style.display = "none";
@@ -8602,10 +9621,20 @@ function tsAutoScaleChart() {
     xMin = Math.min(xMin, p.x); xMax = Math.max(xMax, p.x);
     yMin = Math.min(yMin, p.y); yMax = Math.max(yMax, p.y);
   }
+  const isLogY = _ivIsLogY();
   if (xMin === xMax) { xMin -= 0.5; xMax += 0.5; }
+  const xT = _niceTicks(Math.min(xMin, xMax), Math.max(xMin, xMax), 6);
+  if (isLogY) {
+    const ys = allPts.map(p => p.y).filter(v => v > 0);
+    _ivSetView({
+      xMin: xT[0], xMax: xT[xT.length - 1],
+      yMin: ys.length ? Math.min(...ys) / 1.5 : 1e-6,
+      yMax: ys.length ? Math.max(...ys) * 1.5 : 1,
+    });
+    return;
+  }
   if (yMin === yMax) { const d = Math.abs(yMin) * 0.5 || 0.5; yMin -= d; yMax += d; }
-  const xT = _niceTicks(xMin, xMax, 6);
-  const yT = _niceTicks(yMin, yMax, 5);
+  const yT = _niceTicks(Math.min(yMin, yMax), Math.max(yMin, yMax), 5);
   _ivSetView({ xMin: xT[0], xMax: xT[xT.length - 1], yMin: yT[0], yMax: yT[yT.length - 1] });
 }
 
@@ -8617,13 +9646,21 @@ function _ivSetView(v) {
 
 function _ivGetCurrentBounds() {
   if (_ivChart.view) return { ..._ivChart.view };
-  // Fixed range: use configured sweep limits (same logic as ivChartDraw)
   const allPts = _ivChart.curves.flatMap(c => c.points);
+  // X range: use configured sweep limits (same logic as ivChartDraw), ordered for
+  // _niceTicks (which requires min < max — PNP/PMOS mirroring can flip either bound negative).
   const xA = _ivChart.xStart ?? 0;
   const xB = _ivChart.xLim   ?? (allPts.length ? Math.max(...allPts.map(p => p.x)) : 1);
-  const yB = _ivChart.iLim   ?? (allPts.length ? Math.max(...allPts.map(p => p.y)) : 1);
-  const xT = _niceTicks(xA, xB, 6);
-  const yT = _niceTicks(0,  yB, 5);
+  const xT = _niceTicks(Math.min(xA, xB), Math.max(xA, xB), 6);
+  if (_ivIsLogY()) {
+    // Log-y needs strictly positive bounds and decade-friendly padding, not linear "nice" ticks.
+    const ys = allPts.map(p => p.y).filter(v => v > 0);
+    const yMin = ys.length ? Math.min(...ys) / 1.5 : 1e-6;
+    const yMax = ys.length ? Math.max(...ys) * 1.5 : 1;
+    return { xMin: xT[0], xMax: xT[xT.length - 1], yMin, yMax };
+  }
+  const yB = _ivChart.iLim ?? (allPts.length ? Math.max(...allPts.map(p => p.y)) : 1);
+  const yT = _niceTicks(Math.min(0, yB), Math.max(0, yB), 5);
   return { xMin: xT[0], xMax: xT[xT.length - 1], yMin: yT[0], yMax: yT[yT.length - 1] };
 }
 
@@ -8644,15 +9681,27 @@ function _ivAttachUplotEvents(u) {
     const xRatio = mx / W;
     const yRatio = 1 - my / H;
     const xCenter  = b.xMin + xRatio * (b.xMax - b.xMin);
-    const yCenter  = b.yMin + yRatio * (b.yMax - b.yMin);
     const newXSpan = (b.xMax - b.xMin) * factor;
-    const newYSpan = (b.yMax - b.yMin) * factor;
-    _ivSetView({
+    const view = {
       xMin: xCenter - xRatio       * newXSpan,
       xMax: xCenter + (1 - xRatio) * newXSpan,
-      yMin: yCenter - yRatio       * newYSpan,
-      yMax: yCenter + (1 - yRatio) * newYSpan,
-    });
+    };
+    if (_ivIsLogY()) {
+      // A log scale's min/max must stay strictly positive — zoom in log10 space
+      // (multiplicative) instead of linear space, which can drive yMin to <= 0
+      // and crash uPlot's log-distr scale.
+      const lo = Math.log10(Math.max(b.yMin, 1e-300)), hi = Math.log10(Math.max(b.yMax, 1e-300));
+      const yCenter  = lo + yRatio * (hi - lo);
+      const newYSpan = (hi - lo) * factor;
+      view.yMin = Math.pow(10, yCenter - yRatio       * newYSpan);
+      view.yMax = Math.pow(10, yCenter + (1 - yRatio) * newYSpan);
+    } else {
+      const yCenter  = b.yMin + yRatio * (b.yMax - b.yMin);
+      const newYSpan = (b.yMax - b.yMin) * factor;
+      view.yMin = yCenter - yRatio       * newYSpan;
+      view.yMax = yCenter + (1 - yRatio) * newYSpan;
+    }
+    _ivSetView(view);
   }, { passive: false });
 
   over.addEventListener("mousedown", e => {
@@ -8667,8 +9716,20 @@ function _ivAttachUplotEvents(u) {
     const W = over.offsetWidth, H = over.offsetHeight;
     const b = _ivDrag.bounds;
     const dx = -(e.clientX - _ivDrag.startX) / W * (b.xMax - b.xMin);
-    const dy =  (e.clientY - _ivDrag.startY) / H * (b.yMax - b.yMin);
-    _ivSetView({ xMin: b.xMin+dx, xMax: b.xMax+dx, yMin: b.yMin+dy, yMax: b.yMax+dy });
+    const view = { xMin: b.xMin + dx, xMax: b.xMax + dx };
+    if (_ivIsLogY()) {
+      // Pan in log10 space (multiplicative) so dragging can never push the log
+      // scale's min to <= 0 — see the matching note in the wheel handler above.
+      const lo = Math.log10(Math.max(b.yMin, 1e-300)), hi = Math.log10(Math.max(b.yMax, 1e-300));
+      const dLog = (e.clientY - _ivDrag.startY) / H * (hi - lo);
+      view.yMin = Math.pow(10, lo + dLog);
+      view.yMax = Math.pow(10, hi + dLog);
+    } else {
+      const dy = (e.clientY - _ivDrag.startY) / H * (b.yMax - b.yMin);
+      view.yMin = b.yMin + dy;
+      view.yMax = b.yMax + dy;
+    }
+    _ivSetView(view);
   });
   const endDrag = () => { _ivDrag = null; over.style.cursor = "grab"; };
   document.addEventListener("mouseup", endDrag);
@@ -8676,26 +9737,16 @@ function _ivAttachUplotEvents(u) {
 }
 
 function _ivApplyViewToUplot(u, v) {
-  if (v) {
-    u.setScale("x", { min: v.xMin, max: v.xMax });
-    u.setScale("y", { min: v.yMin, max: v.yMax });
-  } else {
-    const allPts = _ivChart.curves.flatMap(c => c.points);
-    const xA = _ivChart.xStart ?? 0;
-    const xB = _ivChart.xLim ?? (allPts.length ? Math.max(...allPts.map(p => p.x)) : 1);
-    const yB = _ivChart.iLim ?? (allPts.length ? Math.max(...allPts.map(p => p.y)) : 1);
-    const xT = _niceTicks(xA, xB, 6);
-    const yT = _niceTicks(0, yB, 5);
-    u.setScale("x", { min: xT[0], max: xT[xT.length - 1] });
-    u.setScale("y", { min: yT[0], max: yT[yT.length - 1] });
-  }
+  const b = v || _ivGetCurrentBounds();
+  u.setScale("x", { min: b.xMin, max: b.xMax });
+  u.setScale("y", { min: b.yMin, max: b.yMax });
 }
 
 function tsExportImage() {
   if (!_ivChart.uplot || !_ivChart.curves.some(cv => cv.points.length)) {
     toast("No chart data to export", "error"); return;
   }
-  const prefix = _tsActivePlot === "transfer" ? "transfer_char" : "static_char";
+  const prefix = _TS_TEST_META[_tsActivePlot]?.csvPrefix || "static_char";
   const dataUrl = _ivChart.uplot.ctx.canvas.toDataURL("image/png");
   POST("/api/plot/save-image", { filename: prefix, data: dataUrl, output_path: state.outputPath || "" })
     .then(r => toast(`Saved → ${r.path}`, "ok"))
@@ -8709,12 +9760,16 @@ function tsExportCSV() {
   const lb         = _plotLabels();
   const gColName   = (_ivChart.cols[_ivChart.gIdx] || "");
   const gIsCurrent = gColName.startsWith("i_") || gColName.endsWith("_A");
-  const gCol = (gIsCurrent || curves.some(c => c.ib != null)) ? "I_B_A" : lb.g;
+  // hfe_gain: cv.ib holds an incidental I_B readback sample used for the ratio
+  // calculation (see ivChartAddPoint), not the curve-grouping value — always export
+  // the grouping value (V_CE) there, same reasoning as makeLbl in ivChartDraw.
+  const useIbCol = _tsActivePlot !== "hfe_gain" && (gIsCurrent || curves.some(c => c.ib != null));
+  const gCol = useIbCol ? "I_B_A" : lb.g;
   const xCol = lb.x;
   const yCol = lb.y;
   let csv = `${gCol},${xCol},${yCol}\n`;
   for (const curve of curves) {
-    const gVal = curve.ib != null ? curve.ib : curve.gateV;
+    const gVal = useIbCol ? curve.ib : curve.gateV;
     for (const pt of curve.points) {
       csv += `${gVal},${pt.x},${pt.y}\n`;
     }
@@ -8729,7 +9784,17 @@ function tsExportCSV() {
   toast(`Saved as ${fname}`, "ok");
 }
 
+function _ivUpdateHfeEstimate() {
+  const el = document.getElementById("ts-hfe-estimate-val");
+  if (!el || _tsActivePlot !== "hfe_gain") return;
+  const ys = _ivChart.curves.flatMap(c => c.points.map(p => p.y));
+  el.textContent = ys.length
+    ? Math.round(ys.reduce((a, b) => a + b, 0) / ys.length)
+    : "—";
+}
+
 function ivChartDraw() {
+  _ivUpdateHfeEstimate();
   const container = document.getElementById("iv-chart");
   if (!container) return;
   const W = container.offsetWidth, H = container.offsetHeight;
@@ -8746,20 +9811,31 @@ function ivChartDraw() {
   }
   container.removeAttribute("data-placeholder");
 
-  // Build unified x array and aligned y arrays for each curve
+  const isLogY = _ivIsLogY();
+
+  // Build unified x array and aligned y arrays for each curve. In log mode, a single
+  // y<=0 point anywhere in the series breaks uPlot's whole log path (not just that
+  // point) — e.g. a near-zero computed ratio right as the device turns on — so drop
+  // non-positive y points from the plotted series entirely rather than just from the
+  // axis-bounds calculation.
   const xSet = new Set();
-  for (const c of curves) for (const p of c.points) xSet.add(p.x);
+  for (const c of curves) for (const p of c.points) if (!isLogY || p.y > 0) xSet.add(p.x);
   const xs = [...xSet].sort((a, b) => a - b);
   const ys = curves.map(c => {
-    const map = new Map(c.points.map(p => [p.x, p.y]));
+    const map = new Map(c.points.filter(p => !isLogY || p.y > 0).map(p => [p.x, p.y]));
     return xs.map(x => map.has(x) ? map.get(x) : null);
   });
   const data = [xs, ...ys];
 
   const gColName = (_ivChart.cols[_ivChart.gIdx] || "");
   const gIsCurr  = gColName.startsWith("i_") || gColName.endsWith("_A");
-  const gLabel   = _ivDevLabels().g;
+  const gLabel   = _plotLabels().g;
   const makeLbl  = cv =>
+    _tsActivePlot === "vce_sat" ? `I_C/I_B=${_ivChart.vceSatRatio}` :
+    // hfe_gain: cv.ib now holds an incidental I_B *readback* sample (added for the
+    // ratio calculation, see ivChartAddPoint), not the curve-grouping value — the
+    // curve is always grouped by V_CE, so always label it as such here.
+    _tsActivePlot === "hfe_gain" ? `${gLabel}=${_fmtTick(cv.gateV)}V` :
     cv.ib != null ? `I_B=${_fmtIb(cv.ib)}` :
     gIsCurr       ? `I_B=${_fmtIb(cv.gateV)}` :
                     `${gLabel}=${_fmtTick(cv.gateV)}V`;
@@ -8767,7 +9843,8 @@ function ivChartDraw() {
   const needRebuild = !_ivChart.uplot ||
     _ivChart.uplot.series.length - 1 !== curves.length ||
     _ivChart._buildXIdx !== _ivChart.xIdx ||
-    _ivChart._buildYIdx !== _ivChart.yIdx;
+    _ivChart._buildYIdx !== _ivChart.yIdx ||
+    _ivChart._buildYScale !== _ivChart.yScale;
 
   if (needRebuild) {
     if (_ivChart.uplot) _ivChart.uplot.destroy();
@@ -8784,13 +9861,21 @@ function ivChartDraw() {
       });
     });
     const axStyle = _uplotAxisStyle();
+    // Compute the initial range up front and pass it in at construction time rather
+    // than constructing with an unset (null) range and patching it via setScale right
+    // after — a log-distr scale that briefly exists with an unresolved range during its
+    // first internal auto-ranging pass is the likely cause of the log-mode blank chart.
+    const initBounds = _ivChart.view || _ivGetCurrentBounds();
     const opts = {
       width: W, height: H, series,
       axes: [
         { ...axStyle, label: devLabels.x },
         { ...axStyle, label: devLabels.y },
       ],
-      scales: { x: { time: false, auto: false }, y: { auto: false } },
+      scales: {
+        x: { time: false, auto: false, min: initBounds.xMin, max: initBounds.xMax },
+        y: { auto: false, distr: isLogY ? 3 : 1, min: initBounds.yMin, max: initBounds.yMax },
+      },
       legend: { show: false },
       cursor: { show: false },
       select: { show: false },
@@ -8823,9 +9908,28 @@ function ivChartDraw() {
         }],
       },
     };
-    _ivChart.uplot = new uPlot(opts, data, container);
-    _ivChart._buildXIdx = _ivChart.xIdx;
-    _ivChart._buildYIdx = _ivChart.yIdx;
+    try {
+      _ivChart.uplot = new uPlot(opts, data, container);
+    } catch (e) {
+      // Log-distr construction failing for some data/edge case shouldn't leave the
+      // chart blank with no explanation — fall back to linear and surface the error.
+      console.error("uPlot construction failed" + (isLogY ? " (log scale)" : "") + ":", e);
+      if (isLogY) {
+        toast("Log scale failed to render (see console) — reverted to linear", "error");
+        _ivChart.yScale = "linear";
+        document.getElementById("hfe-yscale-seg")?.querySelectorAll(".dcsw-seg-btn")
+          .forEach((b, i) => b.classList.toggle("active", i === 0));
+        opts.scales.y.distr = 1;
+        opts.scales.y.min = null;
+        opts.scales.y.max = null;
+        _ivChart.uplot = new uPlot(opts, data, container);
+      } else {
+        throw e;
+      }
+    }
+    _ivChart._buildXIdx   = _ivChart.xIdx;
+    _ivChart._buildYIdx   = _ivChart.yIdx;
+    _ivChart._buildYScale = _ivChart.yScale;
     _ivAttachUplotEvents(_ivChart.uplot);
   } else {
     _ivChart.uplot.setSize({ width: W, height: H });
@@ -8916,6 +10020,7 @@ function _fmtIb(v) {
 }
 
 function _fmtTick(v, step) {
+  if (v == null) return "";   // log-scale split generators emit null for unlabeled minor ticks
   if (v === 0 && !step) return "0";
   const av = Math.abs(v);
   if (step) {
