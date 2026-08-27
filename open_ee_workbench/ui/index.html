@@ -1591,6 +1591,7 @@
             <button class="ts-subtab" data-plot="hfe_gain" id="ts-subtab-hfe" onclick="tsSelectPlot('hfe_gain')">DC Current Gain (h<sub>FE</sub>)</button>
             <button class="ts-subtab" data-plot="vce_sat" id="ts-subtab-vcesat" onclick="tsSelectPlot('vce_sat')">Sat. Voltage (V<sub>CE</sub>)</button>
             <button class="ts-subtab" data-plot="rds_on" id="ts-subtab-rds" onclick="tsSelectPlot('rds_on')">On-Resistance (R<sub>DS</sub>)</button>
+            <button class="ts-subtab" data-plot="vgs_th" id="ts-subtab-vgsth" onclick="tsSelectPlot('vgs_th')">Threshold Voltage (V<sub>GS(th)</sub>)</button>
           </div>
         </div>
 
@@ -1674,10 +1675,6 @@
             <div class="psi-card">
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
                 <span class="psi-card-hdr" id="iv-hdr-gate" style="color:var(--green);flex:1;">Gate / Base</span>
-                <div class="dcsw-seg" id="iv-gate-mode-seg" style="display:none;">
-                  <button class="dcsw-seg-btn active" onclick="ivSetGateMode('cc')">CC</button>
-                  <button class="dcsw-seg-btn"        onclick="ivSetGateMode('cv')">CV</button>
-                </div>
               </div>
               <div class="ts-config-grid">
                 <div class="test-param-row ts-config-span2">
@@ -2254,14 +2251,14 @@
                 <div class="test-param-row">
                   <span class="test-param-label">I<sub>D</sub> Start</span>
                   <div class="test-param-input-wrap">
-                    <input class="test-param-input" type="number" id="rds-id-start" value="10" step="1" min="0.01">
+                    <input class="test-param-input" type="number" id="rds-id-start" value="1" step="1" min="0.01">
                     <span class="test-param-unit">mA</span>
                   </div>
                 </div>
                 <div class="test-param-row">
                   <span class="test-param-label">I<sub>D</sub> Stop</span>
                   <div class="test-param-input-wrap">
-                    <input class="test-param-input" type="number" id="rds-id-stop" value="200" step="1">
+                    <input class="test-param-input" type="number" id="rds-id-stop" value="50" step="1">
                     <span class="test-param-unit">mA</span>
                   </div>
                 </div>
@@ -2301,14 +2298,28 @@
                 <div class="test-param-row">
                   <span class="test-param-label">I Limit</span>
                   <div class="test-param-input-wrap">
-                    <input class="test-param-input" type="number" id="rds-gate-ilim" value="0.1" step="0.05" min="0">
+                    <input class="test-param-input" type="number" id="rds-gate-ilim" value="0.01" step="0.05" min="0">
                     <span class="test-param-unit">A</span>
                   </div>
                 </div>
                 <div class="test-param-row">
-                  <span class="test-param-label">V<sub>GS</sub></span>
+                  <span class="test-param-label">V<sub>GS</sub> Start</span>
                   <div class="test-param-input-wrap">
-                    <input class="test-param-input" type="number" id="rds-gate-vgs" value="10" step="0.5" min="0">
+                    <input class="test-param-input" type="number" id="rds-gate-vstart" value="5" step="0.5">
+                    <span class="test-param-unit">V</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">V<sub>GS</sub> Stop</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="rds-gate-vstop" value="5" step="0.5">
+                    <span class="test-param-unit">V</span>
+                  </div>
+                </div>
+                <div class="test-param-row">
+                  <span class="test-param-label">V<sub>GS</sub> Step</span>
+                  <div class="test-param-input-wrap">
+                    <input class="test-param-input" type="number" id="rds-gate-vstep" value="1" step="0.5" min="0.001">
                     <span class="test-param-unit">V</span>
                   </div>
                 </div>
@@ -2349,15 +2360,30 @@
               <button class="btn btn-primary" id="rds-run-btn" onclick="tsRunRds()">▶ Run</button>
               <button class="btn btn-danger hidden" id="rds-stop-btn" onclick="stopTest()">■ Stop</button>
             </div>
+          </div>
+        </div><!-- /ts-rds-card -->
 
-            <!-- Threshold Voltage — one-shot spot check, separate DUT wiring -->
+        <!-- Threshold Voltage config card — FET only, one-shot spot check -->
+        <div class="test-card hidden" id="ts-vgsth-card">
+          <div class="test-card-header">
+            <div class="test-card-icon" style="background:rgba(26,86,196,.12);color:var(--accent);">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+            </div>
+            <div style="flex:1;">
+              <div class="test-card-title">Threshold Voltage (V<sub>GS(th)</sub>)</div>
+              <div class="test-card-desc">One-shot spot check — gate tied to drain (diode-connected), forcing I<sub>D</sub> through the shorted G+D node</div>
+            </div>
+          </div>
+          <div class="test-card-body">
+
             <div class="psi-card">
-              <div class="psi-card-hdr" style="color:var(--green);">Threshold Voltage — spot check</div>
               <div class="iv-note">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                 </svg>
-                <span>Tie the gate directly to the drain (diode-connected) on the DUT before measuring — this forces I<sub>D</sub> through the shorted G+D node and reads the resulting V<sub>GS(th)</sub>. Separate wiring from the sweep above.</span>
+                <span>Tie the gate directly to the drain (diode-connected) on the DUT before measuring — this forces I<sub>D</sub> through the shorted G+D node and reads the resulting V<sub>GS(th)</sub>. Separate wiring from the other Plot Specific sweeps.</span>
               </div>
               <div class="ts-config-grid">
                 <div class="test-param-row ts-config-span2">
@@ -2396,7 +2422,7 @@
               </div>
             </div>
           </div>
-        </div><!-- /ts-rds-card -->
+        </div><!-- /ts-vgsth-card -->
         </div><!-- /ts-tabbed-card -->
 
         <!-- Estimated overall hFE — mean across the current sweep, hfe_gain tab only -->
@@ -8664,6 +8690,7 @@ const _TS_TEST_META = {
   hfe_gain: { pfx: "hfe", title: "DC Current Gain (h_FE)",  csvPrefix: "hfe_gain" },
   vce_sat:  { pfx: "vcesat", title: "Collector Saturation Voltage", csvPrefix: "vce_sat" },
   rds_on:   { pfx: "rds", title: "On-Resistance (R_DS)", csvPrefix: "rds_on" },
+  vgs_th:   { pfx: "vgsth", title: "Threshold Voltage (V_GS(th))", csvPrefix: "vgs_th" },
 };
 
 const _ivChart = {
@@ -8680,7 +8707,6 @@ const _ivChart = {
   xStart:       0,     // drain/gate sweep start — X axis floor
   xLim:         null,  // drain/gate sweep stop  — X axis ceiling
   devType:      "bjt", // "fet" | "bjt" — controls axis/legend labels
-  gateMode:     "cc",  // "cc" | "cv" — only meaningful when devType === "bjt"
   polarity:     "n",   // "n" | "p" — NPN/NMOS vs PNP/PMOS; only Static/Transfer mirror on "p"
   yScale:       "linear", // "linear" | "log" — only meaningful on the hfe_gain/vce_sat/rds_on plots
   vceSatRatio:  10,    // forced I_C/I_B ratio, shown in the vce_sat legend
@@ -8717,7 +8743,7 @@ function refreshTestSpecTab() {
   const firstBuild = layout.classList.contains("hidden");
   layout.classList.remove("hidden");
   if (dcTest) _tsPopulateDropdowns(dcTest);
-  // Sync card UI to current devType/gateMode/plot state (important on first open)
+  // Sync card UI to current devType/plot state (important on first open)
   if (firstBuild) {
     tsSelectPlot(_tsActivePlot);
     ivSetDevType(_ivChart.devType);
@@ -8765,6 +8791,10 @@ function tsSelectPlot(plot) {
   document.getElementById("ts-hfe-card")?.classList.toggle("hidden", plot !== "hfe_gain");
   document.getElementById("ts-vcesat-card")?.classList.toggle("hidden", plot !== "vce_sat");
   document.getElementById("ts-rds-card")?.classList.toggle("hidden", plot !== "rds_on");
+  document.getElementById("ts-vgsth-card")?.classList.toggle("hidden", plot !== "vgs_th");
+  // Threshold Voltage is a one-shot scalar spot check, not a swept curve — it has no
+  // use for the shared live-chart panel (axes, zoom, y-scale, hFE estimate, export).
+  document.getElementById("ts-chart-panel")?.classList.toggle("hidden", plot === "vgs_th");
   const title = document.getElementById("ts-chart-title");
   if (title) title.textContent = _TS_TEST_META[plot]?.title || "Static Characteristic";
   const yscaleSeg = document.getElementById("hfe-yscale-seg");
@@ -8907,14 +8937,16 @@ function tsRunIVCurve() {
   const gateCh     = parseInt(document.getElementById("iv-gate-ch")?.value    || "2");
   const gateSettle = parseFloat(document.getElementById("iv-gate-settle")?.value || "0.1");
 
+  // Base (BJT) is always current-sourced; gate (FET) is always voltage-sourced —
+  // see _ivSyncGateLabels. The outer swept column IS I_B for BJT, so no separate
+  // I_B readback measurement is needed.
   const isBjt  = _ivChart.devType === "bjt";
-  const isCc   = isBjt && _ivChart.gateMode === "cc";
-  const mA2A   = isCc ? 0.001 : 1;   // UI inputs mA for CC mode
+  const mA2A   = isBjt ? 0.001 : 1;   // UI inputs mA for the base's current sweep
 
   const gateVStart = parseFloat(document.getElementById("iv-gate-vstart")?.value || "0") * mA2A;
-  const gateVStop  = parseFloat(document.getElementById("iv-gate-vstop")?.value  || (isCc ? "0.5" : "4")) * mA2A;
-  const gateVStep  = parseFloat(document.getElementById("iv-gate-vstep")?.value  || (isCc ? "0.1" : "1")) * mA2A;
-  const gateILim   = parseFloat(document.getElementById("iv-gate-ilim")?.value   || (isCc ? "5" : "0.1"));
+  const gateVStop  = parseFloat(document.getElementById("iv-gate-vstop")?.value  || (isBjt ? "0.5" : "4")) * mA2A;
+  const gateVStep  = parseFloat(document.getElementById("iv-gate-vstep")?.value  || (isBjt ? "0.1" : "1")) * mA2A;
+  const gateILim   = parseFloat(document.getElementById("iv-gate-ilim")?.value   || (isBjt ? "5" : "0.1"));
 
   // Current measurement
   const mtrVal = document.getElementById("iv-meter")?.value  || "psu";
@@ -8930,18 +8962,6 @@ function tsRunIVCurve() {
     settle:     0,
     label:      isBjt ? "I_C" : "I",
   }];
-  // In CV mode: add a separate I_B readback. In CC mode the outer column IS I_B.
-  if (isBjt && !isCc) {
-    measItems.push({
-      kind:       "measurement",
-      instrument: "psu_outer",
-      measure:    "current",
-      instr_ch:   gateCh,
-      samples:    1,
-      settle:     0,
-      label:      "I_B",
-    });
-  }
 
   const params = {
     num_channels:       2,
@@ -8962,9 +8982,9 @@ function tsRunIVCurve() {
     ch1_v_start:        gateVStart,
     ch1_v_step:         gateVStep,
     ch1_v_stop:         gateVStop,
-    ch1_sweep_type:     isCc ? "current" : "voltage",
-    ch1_i_limit:        isCc ? 0.001 : gateILim,   // small I-limit for CV, irrelevant for CC
-    ch1_v_compliance:   isCc ? gateILim : 5.0,      // V compliance for CC, ignored for CV
+    ch1_sweep_type:     isBjt ? "current" : "voltage",
+    ch1_i_limit:        isBjt ? 0.001 : gateILim,   // irrelevant for a current-sweep channel
+    ch1_v_compliance:   isBjt ? gateILim : 5.0,     // V compliance for the base current sweep
     ch1_settle:         gateSettle,
   };
 
@@ -9267,11 +9287,14 @@ function tsRunRds() {
   const idStep      = parseFloat(document.getElementById("rds-id-step")?.value  || "5")   * 0.001;
   const drainSettle = parseFloat(document.getElementById("rds-drain-settle")?.value || "0.1");
 
-  // Gate — CH1, outer (single fixed bias — no static gate current, unlike the BJT tests)
+  // Gate — CH1, outer (swept V_GS — one curve per step, same as the Static
+  // Characteristic's gate sweep; a flat Start=Stop gives a single curve)
   const gateSrc     = document.getElementById("rds-gate-src")?.value   || "";
   const gateCh      = parseInt(document.getElementById("rds-gate-ch")?.value    || "2");
   const gateILim    = parseFloat(document.getElementById("rds-gate-ilim")?.value || "0.1");
-  const gateVgs     = parseFloat(document.getElementById("rds-gate-vgs")?.value  || "10");
+  const gateVStart  = parseFloat(document.getElementById("rds-gate-vstart")?.value || "5");
+  const gateVStop   = parseFloat(document.getElementById("rds-gate-vstop")?.value  || "5");
+  const gateVStep   = parseFloat(document.getElementById("rds-gate-vstep")?.value  || "1");
   const gateSettle  = parseFloat(document.getElementById("rds-gate-settle")?.value || "0.1");
 
   _ivChart.curves = []; _ivChart.currentGateV = null; _ivChart.cols = [];
@@ -9313,7 +9336,7 @@ function tsRunRds() {
     ch0_v_compliance: drainVLim,
     ch0_settle: drainSettle,
     ch1_resource: gateSrc, ch1_ch: gateCh,
-    ch1_v_start: gateVgs, ch1_v_step: 1, ch1_v_stop: gateVgs,  // single value → one outer step
+    ch1_v_start: gateVStart, ch1_v_step: gateVStep, ch1_v_stop: gateVStop,
     ch1_i_limit: gateILim, ch1_settle: gateSettle, ch1_sweep_type: "voltage",
     ch1_v_compliance: 5.0,
   };
@@ -9524,10 +9547,9 @@ function ivSetDevType(type) {
   if (tcDrainVLbl) tcDrainVLbl.textContent = tcLb.g; // g = "V_CE" or "V_DS"
   const tcDrainVce = document.getElementById("tc-drain-vce");
   if (tcDrainVce) tcDrainVce.value = type === "fet" ? "5" : "5";
-  // CC/CV toggle: only visible for BJT on IV Curve
-  const gateSeg = document.getElementById("iv-gate-mode-seg");
-  if (gateSeg) gateSeg.style.display = type === "bjt" ? "" : "none";
-  ivSetGateMode(type === "bjt" ? _ivChart.gateMode : "cv");
+  // Base is always current-sourced (BJT family curves are conventionally I_B-labeled);
+  // gate is always voltage-sourced (FETs draw no static gate current) — no CC/CV choice.
+  _ivSyncGateLabels(type);
   // Polarity button labels: NPN/PNP for BJT, NMOS/PMOS for FET
   const polNBtn = document.getElementById("iv-polarity-btn-n");
   if (polNBtn) polNBtn.textContent = type === "fet" ? "NMOS" : "NPN";
@@ -9543,6 +9565,10 @@ function ivSetDevType(type) {
   const rdsTab = document.getElementById("ts-subtab-rds");
   if (rdsTab) rdsTab.classList.toggle("hidden", type === "bjt");
   if (type === "bjt" && _tsActivePlot === "rds_on") tsSelectPlot("iv_curve");
+  // Threshold Voltage spot check is a FET-only concept (BJTs don't have a V_GS(th))
+  const vgsthTab = document.getElementById("ts-subtab-vgsth");
+  if (vgsthTab) vgsthTab.classList.toggle("hidden", type === "bjt");
+  if (type === "bjt" && _tsActivePlot === "vgs_th") tsSelectPlot("iv_curve");
   tsSyncMeterCh();
   tsSyncTcMeterCh();
   tsSyncHfeMeterCh();
@@ -9570,36 +9596,35 @@ function hfeSetYScale(mode) {
   ivChartDraw();
 }
 
-function ivSetGateMode(mode) {
-  _ivChart.gateMode = mode;
-  const isCc = mode === "cc";
-  const seg  = document.getElementById("iv-gate-mode-seg");
-  if (seg) seg.querySelectorAll(".dcsw-seg-btn").forEach((b, i) => {
-    b.classList.toggle("active", (i === 0 && isCc) || (i === 1 && !isCc));
-  });
+// Base (BJT) is always current-sourced — family curves are conventionally I_B-labeled,
+// and forcing the base voltage directly leaves the plotted trace value (measured I_B)
+// disconnected from what was actually configured. Gate (FET) is always voltage-sourced,
+// since a FET draws no static gate current. So there's no CC/CV choice here, just labels
+// and defaults that follow devType.
+function _ivSyncGateLabels(type) {
+  const isBjt = type === "bjt";
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  set("iv-gate-start-label", isCc ? "I Start"  : "V Start");
-  set("iv-gate-stop-label",  isCc ? "I Stop"   : "V Stop");
-  set("iv-gate-step-label",  isCc ? "I Step"   : "V Step");
-  set("iv-gate-lim-label",   isCc ? "V Comp."  : "I Limit");
-  set("iv-gate-start-unit",  isCc ? "mA" : "V");
-  set("iv-gate-stop-unit",   isCc ? "mA" : "V");
-  set("iv-gate-step-unit",   isCc ? "mA" : "V");
-  set("iv-gate-lim-unit",    isCc ? "V"  : "A");
-  // Apply defaults when switching modes
-  if (isCc) {
+  set("iv-gate-start-label", isBjt ? "I Start" : "V Start");
+  set("iv-gate-stop-label",  isBjt ? "I Stop"  : "V Stop");
+  set("iv-gate-step-label",  isBjt ? "I Step"  : "V Step");
+  set("iv-gate-lim-label",   isBjt ? "V Comp." : "I Limit");
+  set("iv-gate-start-unit",  isBjt ? "mA" : "V");
+  set("iv-gate-stop-unit",   isBjt ? "mA" : "V");
+  set("iv-gate-step-unit",   isBjt ? "mA" : "V");
+  set("iv-gate-lim-unit",    isBjt ? "V"  : "A");
+  // Apply sensible defaults when switching device type
+  if (isBjt) {
     document.getElementById("iv-gate-vstart").value = "0";
     document.getElementById("iv-gate-vstop").value  = "5";    // mA
     document.getElementById("iv-gate-vstep").value  = "1";    // mA — most bench PSUs min step
     document.getElementById("iv-gate-ilim").value   = "5";    // V compliance
-    document.getElementById("iv-gate-vstep").step   = "0.5";
   } else {
     document.getElementById("iv-gate-vstart").value = "0";
     document.getElementById("iv-gate-vstop").value  = "4";
     document.getElementById("iv-gate-vstep").value  = "1";
     document.getElementById("iv-gate-ilim").value   = "0.1";
-    document.getElementById("iv-gate-vstep").step   = "0.5";
   }
+  document.getElementById("iv-gate-vstep").step = "0.5";
 }
 
 function _ivIsLogY() {
@@ -9881,12 +9906,17 @@ function ivChartDraw() {
       select: { show: false },
       hooks: {
         draw: [u => {
-          // in-plot legend (top-right) — entries built from current curve state
+          // in-plot legend — entries built from current curve state. PNP/PMOS mirrors
+          // Static/Transfer traces into quadrant III (fanning out from the top-right
+          // corner), so anchor the legend at the bottom-right there instead of on top
+          // of every trace's origin.
           const cs = _ivChart.curves;
+          const legendAtBottom = _ivChart.polarity === "p" &&
+            (_tsActivePlot === "iv_curve" || _tsActivePlot === "transfer");
           _uplotDrawLegend(u, cs.map((cv, ci) => ({
             color: _CURVE_COLORS[ci % _CURVE_COLORS.length],
             label: makeLbl(cv),
-          })));
+          })), { bottom: legendAtBottom });
           // live ring on last point of running curve
           if (_ivChart.status !== "running" || !cs.length) return;
           const last = cs[cs.length - 1];
@@ -9953,11 +9983,11 @@ function _uplotAxisStyle() {
 
 // Draw a legend box in the top-right corner of the uPlot canvas area.
 // entries: [{color, label}]
-function _uplotDrawLegend(u, entries) {
+function _uplotDrawLegend(u, entries, opts = {}) {
   if (!entries || !entries.length) return;
   const ctx = u.ctx;
   const dpr = devicePixelRatio || 1;
-  const { left, top, width } = u.bbox;  // physical px
+  const { left, top, width, height } = u.bbox;  // physical px
 
   ctx.save();
   ctx.font = `${10 * dpr}px 'JetBrains Mono', monospace`;
@@ -9969,7 +9999,10 @@ function _uplotDrawLegend(u, entries) {
   const boxW = maxW + swW + gap + pad * 2;
   const boxH = entries.length * rowH + pad * 2;
   const bx = left + width - boxW - 6 * dpr;
-  const by = top  + 6 * dpr;
+  // PNP/PMOS mirrors traces into quadrant III, so they fan out from the top-right
+  // corner (V=0, I=0) — anchor the legend at the bottom-right there instead, so it
+  // doesn't sit on top of every trace's origin.
+  const by = opts.bottom ? (top + height - boxH - 6 * dpr) : (top + 6 * dpr);
 
   ctx.fillStyle = "rgba(205,209,215,0.88)";
   ctx.beginPath();
@@ -10000,11 +10033,15 @@ function _niceTicks(min, max, count) {
   else if (norm < 7.5) step = 5;
   else                  step = 10;
   step *= mag;
+  const eps = step * 1e-9;
+  // Round the *end* tick up to fully enclose max (not just stop short of overshooting
+  // it) — otherwise data whose max doesn't land exactly on a step multiple (i.e. almost
+  // always, with real measurements) gets clipped above the top of the chart.
+  const start = Math.floor((min + eps) / step) * step;
+  const end   = Math.ceil((max - eps) / step) * step;
   const ticks = [];
-  let t = Math.floor(min / step) * step;
-  while (t <= max + step * 1e-9) {
+  for (let t = start; t <= end + eps; t += step) {
     ticks.push(Math.round(t / step) * step);
-    t += step;
     if (ticks.length > 30) break;
   }
   return ticks;

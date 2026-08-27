@@ -1078,8 +1078,7 @@ def api_automation_run():
                     for i in range(first_changed, num_ch):
                         h = handles_outer_first[i]
                         _set_v(h, combo[i])
-                        if i < num_ch - 1:
-                            time.sleep(h["cfg"]["settle"])
+                        time.sleep(h["cfg"]["settle"])
 
                     prev_combo = combo
                     step += 1
