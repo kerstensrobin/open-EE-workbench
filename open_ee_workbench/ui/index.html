@@ -3440,6 +3440,20 @@ async function api(method, path, body) {
 const GET  = (p)    => api("GET",  p);
 const POST = (p, b) => api("POST", p, b);
 
+// uPlot/chart canvases have a transparent backdrop (chart chrome is CSS, not
+// drawn pixels) — toDataURL() on them directly yields a transparent PNG that
+// renders black in most viewers. Flatten onto white before exporting.
+function _canvasToOpaquePng(canvas, bg = "#ffffff") {
+  const out = document.createElement("canvas");
+  out.width = canvas.width;
+  out.height = canvas.height;
+  const ctx = out.getContext("2d");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(canvas, 0, 0);
+  return out.toDataURL("image/png");
+}
+
 // ── Socket.IO ──────────────────────────────────────────────────────
 const socket = io({ transports: ["websocket","polling"] });
 socket.on("connect",    () => logMsg("[socket] connected"));
@@ -7367,10 +7381,10 @@ function _dmmLogExportPng() {
   if (_dmmLog.view === "histogram") {
     const c = document.getElementById("dmml-canvas");
     if (!c) { toast("No chart data to export", "error"); return; }
-    dataUrl = c.toDataURL("image/png");
+    dataUrl = _canvasToOpaquePng(c);
   } else {
     if (!_dmmLog.uplot) { toast("No chart data to export", "error"); return; }
-    dataUrl = _dmmLog.uplot.ctx.canvas.toDataURL("image/png");
+    dataUrl = _canvasToOpaquePng(_dmmLog.uplot.ctx.canvas);
   }
   POST("/api/plot/save-image", {
     filename: `dmm_logger_${view}`,
@@ -7756,7 +7770,7 @@ function _psuLogToggleChannel(i, enabled) {
 
 function _psuLogExportPng() {
   if (!_psuLog.elapsed.length || !_psuLog.uplot) { toast("No chart data to export", "error"); return; }
-  const dataUrl = _psuLog.uplot.ctx.canvas.toDataURL("image/png");
+  const dataUrl = _canvasToOpaquePng(_psuLog.uplot.ctx.canvas);
   POST("/api/plot/save-image", {
     filename: "psu_logger_time_series",
     data: dataUrl,
@@ -9770,7 +9784,7 @@ function tsExportImage() {
     toast("No chart data to export", "error"); return;
   }
   const prefix = _TS_TEST_META[_tsActivePlot]?.csvPrefix || "static_char";
-  const dataUrl = _ivChart.uplot.ctx.canvas.toDataURL("image/png");
+  const dataUrl = _canvasToOpaquePng(_ivChart.uplot.ctx.canvas);
   POST("/api/plot/save-image", { filename: prefix, data: dataUrl, output_path: state.outputPath || "" })
     .then(r => toast(`Saved → ${r.path}`, "ok"))
     .catch(e => toast("Image save failed: " + e.message, "error"));
