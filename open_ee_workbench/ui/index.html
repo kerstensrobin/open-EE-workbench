@@ -784,6 +784,18 @@
     }
     .sb-loop-del { background:none; border:none; cursor:pointer; color:var(--purple); opacity:.6; font-size:11px; padding:0; line-height:1; transition:opacity .12s, color .12s; }
     .sb-loop-del:hover { opacity:1; color:var(--red); }
+    /* Plot Specific: per-device chips, shown once >=2 devices are on the chart */
+    .ts-device-row { display:flex; gap:6px; flex-wrap:wrap; padding:8px 16px 0; }
+    .ts-device-chip {
+      display:flex; align-items:center; gap:6px; padding:3px 10px 3px 8px;
+      background:var(--surface3); border:1px solid var(--border2);
+      border-radius:20px; font-size:11px; color:var(--text-dim); cursor:pointer;
+      transition:opacity .12s;
+    }
+    .ts-device-chip input[type="checkbox"] { margin:0; cursor:pointer; }
+    /* Unchecked: data for this device is kept, just excluded from the chart/exports —
+       dim the chip rather than remove it, so it's clear it can be checked back in. */
+    .ts-device-chip.excluded { opacity:.5; }
     /* Add-loop inline form */
     #sb-loop-form {
       display:none; gap:6px; align-items:center; flex-wrap:wrap;
@@ -1755,6 +1767,7 @@
 
             <div class="test-actions">
               <button class="btn btn-primary" id="ts-run-btn" onclick="tsRunIVCurve()">▶ Run</button>
+              <button class="btn btn-ghost hidden" id="ts-rerun-btn" onclick="tsRunIVCurve(true)" title="Keep the curves on screen and add this run as another device">⟳ Re-run with other device</button>
               <button class="btn btn-danger hidden" id="ts-stop-btn" onclick="stopTest()">■ Stop</button>
             </div>
           </div>
@@ -1901,6 +1914,7 @@
             </div>
             <div class="test-actions">
               <button class="btn btn-primary" id="tc-run-btn" onclick="tsRunTransfer()">▶ Run</button>
+              <button class="btn btn-ghost hidden" id="tc-rerun-btn" onclick="tsRunTransfer(true)" title="Keep the curves on screen and add this run as another device">⟳ Re-run with other device</button>
               <button class="btn btn-danger hidden" id="tc-stop-btn" onclick="stopTest()">■ Stop</button>
             </div>
           </div>
@@ -2049,6 +2063,7 @@
             </div>
             <div class="test-actions">
               <button class="btn btn-primary" id="hfe-run-btn" onclick="tsRunHfe()">▶ Run</button>
+              <button class="btn btn-ghost hidden" id="hfe-rerun-btn" onclick="tsRunHfe(true)" title="Keep the curves on screen and add this run as another device">⟳ Re-run with other device</button>
               <button class="btn btn-danger hidden" id="hfe-stop-btn" onclick="stopTest()">■ Stop</button>
             </div>
           </div>
@@ -2196,6 +2211,7 @@
             </div>
             <div class="test-actions">
               <button class="btn btn-primary" id="vcesat-run-btn" onclick="tsRunVceSat()">▶ Run</button>
+              <button class="btn btn-ghost hidden" id="vcesat-rerun-btn" onclick="tsRunVceSat(true)" title="Keep the curves on screen and add this run as another device">⟳ Re-run with other device</button>
               <button class="btn btn-danger hidden" id="vcesat-stop-btn" onclick="stopTest()">■ Stop</button>
             </div>
           </div>
@@ -2215,13 +2231,6 @@
             </div>
           </div>
           <div class="test-card-body">
-
-            <div class="iv-note">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-              </svg>
-              <span>The gate draws no static current, so unlike the BJT tests it's held at a fixed voltage rather than forced — only the drain is current-sourced and swept.</span>
-            </div>
 
             <!-- Drain (swept, current mode) -->
             <div class="psi-card">
@@ -2356,6 +2365,7 @@
             </div>
             <div class="test-actions">
               <button class="btn btn-primary" id="rds-run-btn" onclick="tsRunRds()">▶ Run</button>
+              <button class="btn btn-ghost hidden" id="rds-rerun-btn" onclick="tsRunRds(true)" title="Keep the curves on screen and add this run as another device">⟳ Re-run with other device</button>
               <button class="btn btn-danger hidden" id="rds-stop-btn" onclick="stopTest()">■ Stop</button>
             </div>
           </div>
@@ -2444,10 +2454,15 @@
               <button class="dcsw-seg-btn active" onclick="hfeSetYScale('linear')">Linear</button>
               <button class="dcsw-seg-btn"        onclick="hfeSetYScale('log')">Log</button>
             </div>
+            <div class="dcsw-seg" id="ts-multi-seg" style="display:none;" title="Multiple devices are on this chart — show each individually or as a high/low band per curve">
+              <button class="dcsw-seg-btn active" onclick="tsSetMultiMode('lines')">Per device</button>
+              <button class="dcsw-seg-btn"        onclick="tsSetMultiMode('band')">High/low band</button>
+            </div>
             <button class="btn btn-ghost" id="ts-autoscale-btn"  style="font-size:11px;display:none;" onclick="tsAutoScaleChart()">⊡ Auto</button>
             <button class="btn btn-ghost" id="ts-zoom-reset-btn" style="font-size:11px;display:none;" onclick="tsResetZoom()">↺ Reset</button>
             <button class="btn btn-ghost" style="font-size:11px;" onclick="tsClearChart()">Clear</button>
           </div>
+          <div id="ts-device-row" class="ts-device-row" style="display:none;"></div>
           <div id="iv-chart" data-placeholder="Run the sweep to see the IV curve"></div>
           <div class="ts-chart-footer">
             <span id="ts-chart-footer">Ready — configure and press Run</span>
@@ -3443,15 +3458,77 @@ const POST = (p, b) => api("POST", p, b);
 // uPlot/chart canvases have a transparent backdrop (chart chrome is CSS, not
 // drawn pixels) — toDataURL() on them directly yields a transparent PNG that
 // renders black in most viewers. Flatten onto white before exporting.
-function _canvasToOpaquePng(canvas, bg = "#ffffff") {
+// `footerLines`, if given, appends a small gray provenance strip below the chart
+// (run timestamp / workbench / equipment / settings) so an exported PNG is still
+// traceable once it's out of the app (e.g. dropped into a report).
+function _canvasToOpaquePng(canvas, bg = "#ffffff", footerLines = null) {
+  const dpr    = devicePixelRatio || 1;
+  const lines  = (footerLines || []).filter(Boolean);
+  const lineH  = 13 * dpr;
+  const padY   = 6 * dpr;
+  const footH  = lines.length ? lines.length * lineH + padY * 2 : 0;
+
   const out = document.createElement("canvas");
-  out.width = canvas.width;
-  out.height = canvas.height;
+  out.width  = canvas.width;
+  out.height = canvas.height + footH;
   const ctx = out.getContext("2d");
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, out.width, out.height);
   ctx.drawImage(canvas, 0, 0);
+
+  if (lines.length) {
+    ctx.fillStyle = "#8a8f98";
+    ctx.font = `${10 * dpr}px 'JetBrains Mono', monospace`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    lines.forEach((line, i) => {
+      ctx.fillText(line, padY, canvas.height + padY + i * lineH);
+    });
+  }
+
   return out.toDataURL("image/png");
+}
+
+// Builds the small provenance footer for a Plot Specific chart export: run
+// timestamp, workbench name, connected equipment (model + firmware parsed off
+// each IDN's last comma-separated field), and a compact summary of the sweep
+// settings used for the run currently on screen (captured in _ivChart.lastParams
+// when the sweep was started).
+function _ivExportFooterLines() {
+  const ts = new Date().toISOString().replace("T", " ").substring(0, 19) + " UTC";
+  const wbName = (state.workbench && (state.workbench.name || state.workbench)) || "—";
+
+  const equipment = (state.instruments || []).filter(i => i.ok).map(i => {
+    const model = i.model || i.idn || i.resource || "?";
+    const parts = (i.idn || "").split(",");
+    const fw    = parts.length >= 4 ? parts[3].trim() : null;
+    return fw ? `${model} (fw ${fw})` : model;
+  }).join(", ") || "no instruments connected";
+
+  const settings = _summarizeSweepParams(_ivChart.lastParams);
+  const nDevices = (_ivChart.devices?.length || 0) + 1;
+
+  const line1 = `${ts}  •  Workbench: ${wbName}` + (nDevices > 1 ? `  •  ${nDevices} devices` : "");
+  const line2 = `Equipment: ${equipment}`;
+  const line3 = settings ? `Settings: ${settings}` : null;
+  return [line1, line2, line3];
+}
+
+// Renders a DC-sweep params object (as built by the tsRun* functions — always
+// ch0_*/ch1_* set-point fields regardless of test type) into one short
+// human-readable line, e.g. "CH0 0→10V step 0.2V, CH1 0→5V step 1V".
+function _summarizeSweepParams(p) {
+  if (!p) return "";
+  const chStr = n => {
+    if (p[`ch${n}_resource`] === undefined) return null;
+    const unit = p[`ch${n}_sweep_type`] === "current" ? "A" : "V";
+    // p[`ch${n}_ch`] is the actual instrument channel the user selected (e.g. PSU
+    // CH2) — `n` itself is just this channel's position in the sweep (0=inner,
+    // 1=outer) and was previously mislabeled as the channel number in the footer.
+    const realCh = p[`ch${n}_ch`] ?? (n + 1);
+    return `CH${realCh} ${p[`ch${n}_v_start`]}→${p[`ch${n}_v_stop`]}${unit} step ${p[`ch${n}_v_step`]}${unit}`;
+  };
+  return [0, 1].map(chStr).filter(Boolean).join(", ");
 }
 
 // ── Socket.IO ──────────────────────────────────────────────────────
@@ -8660,11 +8737,22 @@ function sbExportHDF5() {
 }
 
 // ── Plot Specific tab ───────────────────────────────────────────────
-// Curve colors — readable on the app's light-gray background
+// Curve colors — a validated categorical palette (8 hues, fixed order): passes
+// CVD-separation and normal-vision-floor checks against each other, unlike the
+// hand-picked set this replaced (which collapsed e.g. red/green under deuteranopia
+// and had two near-identical cyans). Never append a 9th hue here — beyond 8 series,
+// _curveDash() below reuses these same hues with a different line style instead.
 const _CURVE_COLORS = [
-  "#1a56c4", "#15803d", "#b91c1c", "#b45309",
-  "#6d28d9", "#0891b2", "#be185d", "#0d7490",
+  "#2a78d6", "#eb6834", "#1baf7a", "#eda100",
+  "#e87ba4", "#008300", "#4a3aa7", "#e34948",
 ];
+// Line-dash patterns for each time the 8-color palette wraps around, so trace 9
+// (same hue as trace 1) reads as solid-vs-dashed rather than a duplicate color.
+const _CURVE_DASHES = [null, [6, 3], [1, 3], [6, 3, 1, 3]];
+function _curveDash(i) {
+  const cyc = Math.floor(i / _CURVE_COLORS.length) % _CURVE_DASHES.length;
+  return _CURVE_DASHES[cyc] || undefined;
+}
 
 // Active plot test: "iv_curve" | "transfer"
 let _tsActivePlot = "iv_curve";
@@ -8713,6 +8801,7 @@ const _ivChart = {
   xIdx:         1,     // drain voltage — X axis
   yIdx:         2,     // current measurement — Y axis
   ibIdx:        -1,    // column index of measured I_B; -1 = not present
+  idMeasIdx:    -1,    // column index of measured I_D readback (rds_on); -1 = not present
   status:       "idle",
   view:         null,  // null = fixed 0..iLim range; {xMin,xMax,yMin,yMax} = zoomed/auto
   iLim:         null,  // drain/collector current limit (A) — Y axis ceiling
@@ -8722,11 +8811,93 @@ const _ivChart = {
   polarity:     "n",   // "n" | "p" — NPN/NMOS vs PNP/PMOS; only Static/Transfer mirror on "p"
   yScale:       "linear", // "linear" | "log" — only meaningful on the hfe_gain/vce_sat/rds_on plots
   vceSatRatio:  10,    // forced I_C/I_B ratio, shown in the vce_sat legend
+  lastParams:   null,  // params object for the run on screen — used for the export footer
+  devices:      [],    // completed prior device runs from "Re-run with other device": [{label, curves, excluded}]
+  currentDeviceNum: 1, // device number of the run currently on screen (live or just-finished)
+  currentExcluded: false, // unchecked-from-chart state for the run currently on screen
+  deviceCounter: 2,    // next device number to hand out — monotonic, so labels stay unique after a device is removed
+  multiMode:    "lines", // "lines" | "band" — how multiple devices are rendered once devices.length >= 1
   uplot:        null,
-  _buildXIdx:   -1,
-  _buildYIdx:   -1,
-  _buildYScale: null,
+  _buildXIdx:    -1,
+  _buildYIdx:    -1,
+  _buildYScale:  null,
+  _buildSig:     null,  // "<multiMode>:<seriesCount>:<bandCount>" — forces a uPlot rebuild on structural change
 };
+
+// Called at the top of every tsRunXxx() reset block. On a plain "Run", any prior
+// devices are discarded (fresh single-device test). On "Re-run with other device",
+// the curves currently on screen are archived as a completed device before the
+// chart state is reset for the new sweep — see tsRunXxx(isRerun) call sites.
+function _ivBeginRun(isRerun) {
+  if (!isRerun) {
+    _ivChart.devices = [];
+    _ivChart.currentDeviceNum = 1;
+    _ivChart.currentExcluded = false;
+    _ivChart.deviceCounter = 2;
+    return;
+  }
+  // Archive the run that's ending under the device number it was assigned when IT
+  // started (currentDeviceNum). Its checkbox state carries over so a device that was
+  // unchecked before the next re-run stays unchecked once archived.
+  if (_ivChart.curves.some(c => c.points.length)) {
+    _ivChart.devices.push({ label: `Device ${_ivChart.currentDeviceNum}`, curves: _ivChart.curves, excluded: _ivChart.currentExcluded });
+  }
+  _ivChart.currentDeviceNum = _ivChart.deviceCounter;
+  _ivChart.currentExcluded = false;
+  _ivChart.deviceCounter++;
+}
+
+// Checks/unchecks one device (identified by its position in _ivDeviceSets(), the
+// same order the ts-device-row chips are rendered in) — e.g. to set aside a DUT that
+// turned out to be broken without losing its data, since it can be re-checked back
+// in at any time. The last position is always the run currently on screen (live or
+// just-finished); anything before that is an archived device from an earlier
+// "Re-run with other device" click.
+function tsToggleDevice(di, included) {
+  const sets = _ivDeviceSets();
+  if (di < 0 || di >= sets.length) return;
+  if (di === sets.length - 1) {
+    _ivChart.currentExcluded = !included;
+  } else {
+    _ivChart.devices[di].excluded = !included;
+  }
+  ivChartDraw();
+  _ivRefreshMultiUI(_TS_TEST_META[_tsActivePlot]?.pfx || "ts");
+}
+
+// Keeps the rerun button, the lines/band toggle, and the device-count footer tag in
+// sync with the current device set — called after a run finishes, after Clear, and
+// after toggling a device's checkbox.
+function _ivRefreshMultiUI(pfx) {
+  const sets = _ivDeviceSets().filter(d => d.curves.some(c => c.points.length));
+  const hasData = sets.length > 0;
+  document.getElementById(`${pfx}-rerun-btn`)?.classList.toggle("hidden", !hasData);
+  const included = sets.filter(d => !d.excluded);
+  const multiSeg = document.getElementById("ts-multi-seg");
+  if (multiSeg) {
+    multiSeg.style.display = sets.length >= 2 ? "" : "none";
+    if (included.length < 2 && _ivChart.multiMode === "band") {
+      _ivChart.multiMode = "lines";
+      multiSeg.querySelectorAll(".dcsw-seg-btn").forEach((b, i) => b.classList.toggle("active", i === 0));
+    }
+  }
+  _ivRefreshDeviceChips(sets);
+}
+
+function _ivRefreshDeviceChips(sets) {
+  const row = document.getElementById("ts-device-row");
+  if (!row) return;
+  sets = sets || _ivDeviceSets().filter(d => d.curves.some(c => c.points.length));
+  if (sets.length < 2) { row.style.display = "none"; row.innerHTML = ""; return; }
+  row.style.display = "";
+  row.innerHTML = sets.map((d, di) => {
+    const checked = !d.excluded;
+    return `<label class="ts-device-chip${checked ? "" : " excluded"}" title="Uncheck to hide this device from the chart without losing its data">
+      <input type="checkbox" ${checked ? "checked" : ""} onchange="tsToggleDevice(${di}, this.checked)">
+      ${escHtml(d.label)}
+    </label>`;
+  }).join("");
+}
 
 let _ivDrag = null;   // {startX, startY, bounds}
 
@@ -8901,7 +9072,7 @@ function tsSyncMeterCh() {
   }
 }
 
-function tsRunIVCurve() {
+function tsRunIVCurve(isRerun = false) {
   if (state.autoRunning) { toast("A test is already running", "error"); return; }
   if (!state.connected)  { toast("Not connected to instruments", "error"); return; }
 
@@ -8919,6 +9090,7 @@ function tsRunIVCurve() {
   const pol = _ivChart.polarity === "p" ? -1 : 1;
 
   // Reset chart
+  _ivBeginRun(isRerun);
   _ivChart.curves       = [];
   _ivChart.currentGateV = null;
   _ivChart.cols         = [];
@@ -9000,6 +9172,7 @@ function tsRunIVCurve() {
     ch1_settle:         gateSettle,
   };
 
+  _ivChart.lastParams = params;
   POST("/api/automation/run", { test_id: "iv_curve", params, output_path: state.outputPath || "" })
     .catch(e => {
       toast("Failed to start IV Curve: " + e.message, "error");
@@ -9012,6 +9185,7 @@ function tsTestFinished(error, csv_path) {
   const pfx = _TS_TEST_META[state.autoTestId]?.pfx || "ts";
   document.getElementById(`${pfx}-run-btn`)?.classList.remove("hidden");
   document.getElementById(`${pfx}-stop-btn`)?.classList.add("hidden");
+  _ivRefreshMultiUI(pfx);
   const prog = document.getElementById(`${pfx}-prog`);
   if (prog) prog.classList.remove("visible");
   const fill = document.getElementById(`${pfx}-prog-fill`);
@@ -9023,14 +9197,15 @@ function tsTestFinished(error, csv_path) {
     } else {
       const total = _ivChart.curves.reduce((s, c) => s + c.points.length, 0);
       const nc    = _ivChart.curves.length;
-      footer.textContent = `${nc} curve${nc !== 1 ? "s" : ""} · ${total} pts${csv_path ? " · 💾 " + csv_path : ""}`;
+      const devTag = _ivChart.devices.length ? ` · ${_ivChart.devices.length + 1} devices` : "";
+      footer.textContent = `${nc} curve${nc !== 1 ? "s" : ""} · ${total} pts${devTag}${csv_path ? " · 💾 " + csv_path : ""}`;
     }
   }
   _ivChart.status = error ? "error" : "done";
   ivChartDraw();
 }
 
-function tsRunTransfer() {
+function tsRunTransfer(isRerun = false) {
   if (state.autoRunning) { toast("A test is already running", "error"); return; }
   if (!state.connected)  { toast("Not connected to instruments", "error"); return; }
 
@@ -9055,6 +9230,7 @@ function tsRunTransfer() {
   const drainSettle = parseFloat(document.getElementById("tc-drain-settle")?.value || "0.1");
   const pol = _ivChart.polarity === "p" ? -1 : 1;
 
+  _ivBeginRun(isRerun);
   _ivChart.curves = []; _ivChart.currentGateV = null; _ivChart.cols = [];
   _ivChart.gIdx = 0; _ivChart.xIdx = 1; _ivChart.yIdx = 2; _ivChart.ibIdx = -1;
   _ivChart.status = "running"; _ivChart.view = null;
@@ -9097,6 +9273,7 @@ function tsRunTransfer() {
     ch1_v_compliance: 5.0,
   };
 
+  _ivChart.lastParams = params;
   POST("/api/automation/run", { test_id: "transfer", params, output_path: state.outputPath || "" })
     .catch(e => {
       toast("Failed to start Transfer Characteristic: " + e.message, "error");
@@ -9104,7 +9281,7 @@ function tsRunTransfer() {
     });
 }
 
-function tsRunHfe() {
+function tsRunHfe(isRerun = false) {
   if (state.autoRunning) { toast("A test is already running", "error"); return; }
   if (!state.connected)  { toast("Not connected to instruments", "error"); return; }
 
@@ -9131,6 +9308,7 @@ function tsRunHfe() {
   const drainILim   = parseFloat(document.getElementById("hfe-drain-ilim")?.value   || "0.5");
   const drainSettle = parseFloat(document.getElementById("hfe-drain-settle")?.value || "0.1");
 
+  _ivBeginRun(isRerun);
   _ivChart.curves = []; _ivChart.currentGateV = null; _ivChart.cols = [];
   _ivChart.gIdx = 0; _ivChart.xIdx = 1; _ivChart.yIdx = 2; _ivChart.ibIdx = -1;
   _ivChart.status = "running"; _ivChart.view = null;
@@ -9189,6 +9367,7 @@ function tsRunHfe() {
     ch1_v_compliance: 5.0,
   };
 
+  _ivChart.lastParams = params;
   POST("/api/automation/run", { test_id: "hfe_gain", params, output_path: state.outputPath || "" })
     .catch(e => {
       toast("Failed to start DC Current Gain sweep: " + e.message, "error");
@@ -9196,7 +9375,7 @@ function tsRunHfe() {
     });
 }
 
-function tsRunVceSat() {
+function tsRunVceSat(isRerun = false) {
   if (state.autoRunning) { toast("A test is already running", "error"); return; }
   if (!state.connected)  { toast("Not connected to instruments", "error"); return; }
 
@@ -9227,6 +9406,7 @@ function tsRunVceSat() {
   const ibStop  = icStop  / ratio;
   const ibStep  = Math.abs(ibStop - ibStart) / n || (icStep / ratio);
 
+  _ivBeginRun(isRerun);
   _ivChart.vceSatRatio  = ratio;
   _ivChart.curves       = [];
   _ivChart.currentGateV = null;
@@ -9276,6 +9456,7 @@ function tsRunVceSat() {
     ch1_settle: gateSettle,
   };
 
+  _ivChart.lastParams = params;
   POST("/api/automation/run", { test_id: "vce_sat", params, output_path: state.outputPath || "" })
     .catch(e => {
       toast("Failed to start Saturation Voltage sweep: " + e.message, "error");
@@ -9283,7 +9464,7 @@ function tsRunVceSat() {
     });
 }
 
-function tsRunRds() {
+function tsRunRds(isRerun = false) {
   if (state.autoRunning) { toast("A test is already running", "error"); return; }
   if (!state.connected)  { toast("Not connected to instruments", "error"); return; }
 
@@ -9309,8 +9490,10 @@ function tsRunRds() {
   const gateVStep   = parseFloat(document.getElementById("rds-gate-vstep")?.value  || "1");
   const gateSettle  = parseFloat(document.getElementById("rds-gate-settle")?.value || "0.1");
 
+  _ivBeginRun(isRerun);
   _ivChart.curves = []; _ivChart.currentGateV = null; _ivChart.cols = [];
   _ivChart.gIdx = 0; _ivChart.xIdx = 1; _ivChart.yIdx = 2; _ivChart.ibIdx = -1;
+  _ivChart.idMeasIdx = -1;
   _ivChart.status = "running"; _ivChart.view = null;
   _ivChart.iLim   = null;      // R_DS(on) magnitude isn't known ahead of the sweep
   _ivChart.xStart = idStart;   // I_D range is the configured sweep, known upfront
@@ -9336,6 +9519,14 @@ function tsRunRds() {
     kind: "measurement", instrument: isPsu ? "psu" : mtrVal,
     measure: "voltage", instr_ch: isPsu ? drainCh : mtrCh,
     samples: 1, settle: 0, label: "V_DS",
+  }, {
+    // Readback of the actual delivered drain current — the commanded I_D is a
+    // current-limit set-point, not a guarantee; once the source can't hit it any
+    // more (compliance reached) this readback stops tracking the set-point, which
+    // is how the chart detects and truncates the curve there (see ivChartAddPoint).
+    kind: "measurement", instrument: "psu",
+    measure: "current", instr_ch: drainCh,
+    samples: 1, settle: 0, label: "I_D_meas",
   }];
 
   const params = {
@@ -9353,6 +9544,7 @@ function tsRunRds() {
     ch1_v_compliance: 5.0,
   };
 
+  _ivChart.lastParams = params;
   POST("/api/automation/run", { test_id: "rds_on", params, output_path: state.outputPath || "" })
     .catch(e => {
       toast("Failed to start On-Resistance sweep: " + e.message, "error");
@@ -9394,6 +9586,7 @@ function tsMeasureVgsTh() {
     ch0_settle: 0.15,
   };
 
+  _ivChart.lastParams = params;
   POST("/api/automation/run", { test_id: "vgs_th", params, output_path: state.outputPath || "" })
     .catch(e => {
       toast("Failed to measure V_GS(th): " + e.message, "error");
@@ -9412,6 +9605,7 @@ function ivChartAddPoint(cols, row) {
     _ivChart.xIdx  = Math.min(1, cols.length - 1);
     _ivChart.yIdx  = Math.min(2, cols.length - 1);
     _ivChart.ibIdx = cols.indexOf("I_B");   // -1 if not present (FET mode)
+    _ivChart.idMeasIdx = cols.indexOf("I_D_meas"); // -1 if not present (rds_on only)
     _ivChartPopulateAxisSelectors();
   }
 
@@ -9429,6 +9623,7 @@ function ivChartAddPoint(cols, row) {
   if (xRaw == null || yRaw == null) return;
 
   let x, y, g;
+  let rdsCapped = false;  // set below for rds_on once the source can't hit the set-point
   if (isHfe) {
     // Prefer the measured I_B readback over the commanded set-point (xRaw) — bench-PSU
     // constant-current regulation is imprecise at the low currents this sweep runs at,
@@ -9451,10 +9646,18 @@ function ivChartAddPoint(cols, row) {
     g = 0;
     if (x == null) return;
   } else if (isRdsOn) {
-    const id = +xRaw, vds = +yRaw;  // xIdx = swept drain current, yIdx = measured V_DS
-    if (!id) return;                // guard divide-by-zero on the I_D=0 start point
-    x = id;
-    y = vds / id;
+    const idSet = +xRaw, vds = +yRaw;  // xIdx = swept drain current set-point, yIdx = measured V_DS
+    if (!idSet) return;                // guard divide-by-zero on the I_D=0 start point
+    const idMeasured = _ivChart.idMeasIdx >= 0 && row[_ivChart.idMeasIdx] != null
+      ? +row[_ivChart.idMeasIdx] : null;
+    // Once the source can no longer deliver the commanded I_D (current-limit set-point
+    // reached its own compliance ceiling), the readback stops tracking the set-point —
+    // further "increases" in I_D are fictitious and R_DS(on)=V_DS/I_D falls artificially,
+    // making the trace look like it turns over and heads back down. Truncate here rather
+    // than plot that.
+    rdsCapped = idMeasured != null && idMeasured < idSet * 0.9;
+    x = idMeasured != null ? idMeasured : idSet;
+    y = vds / x;
     g = gRaw != null ? +gRaw : gRaw;   // V_GS, fixed for the whole sweep — one curve
   } else {
     x = +xRaw * pol;
@@ -9474,6 +9677,8 @@ function ivChartAddPoint(cols, row) {
     if (cur.ib == null && _ivChart.ibIdx >= 0 && row[_ivChart.ibIdx] != null) {
       cur.ib = +row[_ivChart.ibIdx] * pol;
     }
+    if (cur.capped) return;      // rds_on: source stopped tracking I_D — stay truncated
+    if (rdsCapped) { cur.capped = true; return; }  // drop this point too, it's the first bad one
     cur.points.push({ x, y });
   }
   ivChartDraw();
@@ -9515,6 +9720,16 @@ function tsClearChart() {
   _ivChart.xLim         = null;
   _ivChart._buildXIdx   = -1;
   _ivChart._buildYIdx   = -1;
+  _ivChart.devices           = [];
+  _ivChart.currentDeviceNum  = 1;
+  _ivChart.currentExcluded   = false;
+  _ivChart.deviceCounter     = 2;
+  _ivChart.multiMode         = "lines";
+  for (const pfx of ["ts", "tc", "hfe", "vcesat", "rds"]) {
+    document.getElementById(`${pfx}-rerun-btn`)?.classList.add("hidden");
+  }
+  document.getElementById("ts-multi-seg").style.display = "none";
+  document.getElementById("ts-device-row").style.display = "none";
   document.getElementById("ts-zoom-reset-btn").style.display = "none";
   document.getElementById("ts-autoscale-btn").style.display  = "none";
   const row = document.getElementById("ts-axis-row");
@@ -9608,6 +9823,15 @@ function hfeSetYScale(mode) {
   ivChartDraw();
 }
 
+function tsSetMultiMode(mode) {
+  _ivChart.multiMode = mode;
+  const seg = document.getElementById("ts-multi-seg");
+  if (seg) seg.querySelectorAll(".dcsw-seg-btn").forEach((b, i) => {
+    b.classList.toggle("active", (i === 0 && mode === "lines") || (i === 1 && mode === "band"));
+  });
+  ivChartDraw();
+}
+
 // Base (BJT) is always current-sourced — family curves are conventionally I_B-labeled,
 // and forcing the base voltage directly leaves the plotted trace value (measured I_B)
 // disconnected from what was actually configured. Gate (FET) is always voltage-sourced,
@@ -9681,9 +9905,25 @@ function _ivSetView(v) {
   ivChartDraw();
 }
 
+// All device datasets on the chart: any archived ones from "Re-run with other
+// device", plus the run currently on screen (live or just-finished).
+function _ivDeviceSets() {
+  const label = `Device ${_ivChart.currentDeviceNum}`;
+  return [..._ivChart.devices, { label, curves: _ivChart.curves, excluded: _ivChart.currentExcluded }];
+}
+// Devices still checked-in on their ts-device-row chip — everything that actually
+// participates in the rendered chart, bounds, and exports. Unchecked devices keep
+// their data (see tsToggleDevice) but are excluded from all of these.
+function _ivIncludedDeviceSets() {
+  return _ivDeviceSets().filter(d => !d.excluded);
+}
+function _ivAllPoints() {
+  return _ivIncludedDeviceSets().flatMap(d => d.curves.flatMap(c => c.points));
+}
+
 function _ivGetCurrentBounds() {
   if (_ivChart.view) return { ..._ivChart.view };
-  const allPts = _ivChart.curves.flatMap(c => c.points);
+  const allPts = _ivAllPoints();
   // X range: use configured sweep limits (same logic as ivChartDraw), ordered for
   // _niceTicks (which requires min < max — PNP/PMOS mirroring can flip either bound negative).
   const xA = _ivChart.xStart ?? 0;
@@ -9780,20 +10020,21 @@ function _ivApplyViewToUplot(u, v) {
 }
 
 function tsExportImage() {
-  if (!_ivChart.uplot || !_ivChart.curves.some(cv => cv.points.length)) {
+  if (!_ivChart.uplot || !_ivAllPoints().length) {
     toast("No chart data to export", "error"); return;
   }
   const prefix = _TS_TEST_META[_tsActivePlot]?.csvPrefix || "static_char";
-  const dataUrl = _canvasToOpaquePng(_ivChart.uplot.ctx.canvas);
+  const dataUrl = _canvasToOpaquePng(_ivChart.uplot.ctx.canvas, "#ffffff", _ivExportFooterLines());
   POST("/api/plot/save-image", { filename: prefix, data: dataUrl, output_path: state.outputPath || "" })
     .then(r => toast(`Saved → ${r.path}`, "ok"))
     .catch(e => toast("Image save failed: " + e.message, "error"));
 }
 
 function tsExportCSV() {
-  const curves = _ivChart.curves;
-  const cols   = _ivChart.cols;
-  if (!curves.some(cv => cv.points.length)) { toast("No data to export", "error"); return; }
+  const deviceSets = _ivIncludedDeviceSets();
+  const curves     = _ivChart.curves;   // for the g-column heuristic below — same across devices
+  const cols       = _ivChart.cols;
+  if (!_ivAllPoints().length) { toast("No data to export", "error"); return; }
   const lb         = _plotLabels();
   const gColName   = (_ivChart.cols[_ivChart.gIdx] || "");
   const gIsCurrent = gColName.startsWith("i_") || gColName.endsWith("_A");
@@ -9804,11 +10045,16 @@ function tsExportCSV() {
   const gCol = useIbCol ? "I_B_A" : lb.g;
   const xCol = lb.x;
   const yCol = lb.y;
-  let csv = `${gCol},${xCol},${yCol}\n`;
-  for (const curve of curves) {
-    const gVal = useIbCol ? curve.ib : curve.gateV;
-    for (const pt of curve.points) {
-      csv += `${gVal},${pt.x},${pt.y}\n`;
+  // "Device" column only matters once there's more than one — omit it for the
+  // common single-device case so the CSV shape doesn't change unnecessarily.
+  const multiDevice = deviceSets.length > 1;
+  let csv = (multiDevice ? "Device," : "") + `${gCol},${xCol},${yCol}\n`;
+  for (const dev of deviceSets) {
+    for (const curve of dev.curves) {
+      const gVal = useIbCol ? curve.ib : curve.gateV;
+      for (const pt of curve.points) {
+        csv += (multiDevice ? `${dev.label},` : "") + `${gVal},${pt.x},${pt.y}\n`;
+      }
     }
   }
   const fname = `iv_curve_${new Date().toISOString().slice(0,19).replace(/[T:]/g,"-")}.csv`;
@@ -9830,6 +10076,136 @@ function _ivUpdateHfeEstimate() {
     : "—";
 }
 
+function _hexToRgba(hex, alpha) {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.substring(0, 2), 16), g = parseInt(h.substring(2, 4), 16), b = parseInt(h.substring(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// Linear-interpolates a device curve's y at an arbitrary x, using only that curve's
+// own points (assumed sorted ascending in x, true for every sweep here). Returns
+// null outside the curve's own [first, last] x range — deliberately never
+// extrapolates past where a device's data actually stopped.
+function _ivInterpY(points, x) {
+  const n = points.length;
+  if (!n) return null;
+  if (x < points[0].x || x > points[n - 1].x) return null;
+  if (x === points[0].x) return points[0].y;
+  for (let i = 1; i < n; i++) {
+    if (points[i].x >= x) {
+      const p0 = points[i - 1], p1 = points[i];
+      if (p1.x === p0.x) return p1.y;
+      const t = (x - p0.x) / (p1.x - p0.x);
+      return p0.y + t * (p1.y - p0.y);
+    }
+  }
+  return points[n - 1].y;
+}
+
+// Linear-interpolates a device curve's x at an arbitrary y, using only that curve's
+// own points — the mirror image of _ivInterpY. Walks the points in their natural
+// (x-ascending) order and returns the x where the FIRST segment bracketing the
+// given y is found; with the tiny amount of measurement noise in these sweeps a
+// curve is never far from monotonic in y, so this is stable in practice. Returns
+// null if no segment (or endpoint) touches that y — i.e. this device's curve never
+// reached it.
+function _ivInterpX(points, y) {
+  const n = points.length;
+  if (!n) return null;
+  for (let i = 1; i < n; i++) {
+    const p0 = points[i - 1], p1 = points[i];
+    const lo = Math.min(p0.y, p1.y), hi = Math.max(p0.y, p1.y);
+    if (y < lo || y > hi) continue;
+    if (p1.y === p0.y) return p1.x;
+    const t = (y - p0.y) / (p1.y - p0.y);
+    return p0.x + t * (p1.x - p0.x);
+  }
+  if (y === points[0].y) return points[0].x;
+  if (y === points[n - 1].y) return points[n - 1].x;
+  return null;
+}
+
+// Builds the list of renderable series for the chart's current state, plus (band
+// mode only) the envelope polygons drawn separately in ivChartDraw's hooks.draw
+// since they're not a function of x that uPlot's own series/bands machinery could
+// fill between (see below). In the common single-device case this is just one
+// series per curve, same as always. Once "Re-run with other device" has archived
+// one or more prior runs, ts-multi-seg picks between:
+//   "lines" — every device's curves overlaid; color = curve/gate-group identity
+//             (matches across devices), dash = device index.
+//   "band"  — one envelope shape per curve-group wrapping every device's curve in
+//             it, plus a mean line (from _ivInterpY, restricted to x's where every
+//             device in the group still has data). The envelope is built by
+//             *y*-slice (leftmost/rightmost x at each y — _ivInterpX) rather than
+//             by x-slice (topmost/bottommost y at each x — _ivInterpY): near a
+//             device's own current-cap spike the curve runs nearly vertical, so an
+//             x-slice sees a huge y-jump between adjacent samples the moment one
+//             device is mid-spike while another is still flat, which is what made
+//             the x-sliced envelope look jagged there. The same region is exactly
+//             where x changes smoothly per unit y, so a y-slice stays smooth
+//             through it; the flat run-in before any device spikes is where several
+//             devices share close to the same y, so the y-slice there is naturally
+//             a wide (correct) span rather than a degenerate one.
+function _ivBuildRenderPlan(makeLbl) {
+  const deviceSets = _ivIncludedDeviceSets().filter(d => d.curves.some(c => c.points.length));
+  const multi = deviceSets.length > 1;
+
+  if (!multi || _ivChart.multiMode !== "band") {
+    const items = [];
+    deviceSets.forEach((dev, di) => {
+      dev.curves.forEach((cv, ci) => {
+        items.push({
+          label:      multi ? `${makeLbl(cv)} (${dev.label})` : makeLbl(cv),
+          color:      _CURVE_COLORS[ci % _CURVE_COLORS.length],
+          dash:       multi ? _CURVE_DASHES[di % _CURVE_DASHES.length] : _curveDash(ci),
+          points:     cv.points,
+          showPoints: true,
+        });
+      });
+    });
+    return { items, outlines: [], means: [] };
+  }
+
+  const maxGroups = Math.max(...deviceSets.map(d => d.curves.length));
+  const outlines = [];
+  const means = [];
+  for (let gi = 0; gi < maxGroups; gi++) {
+    const perDevice = deviceSets.map(d => d.curves[gi]).filter(Boolean);
+    if (!perDevice.length) continue;
+    const color = _CURVE_COLORS[gi % _CURVE_COLORS.length];
+
+    // Same y-slice grid drives both the envelope and the mean — averaging x per y
+    // (rather than y per x) keeps the mean smooth through the near-vertical spike
+    // region for the same reason the envelope needed it (see the comment above):
+    // a tiny y step there covers a real x range, where a tiny x step would have
+    // covered a huge, noisy y range. Both are drawn as raw canvas paths (see
+    // ivChartDraw) rather than fed through uPlot as ordinary series — like the
+    // envelope, a y-sliced mean isn't guaranteed to be a function of x either (x can
+    // move backward as the device count driving the average changes), and uPlot's
+    // per-x data model would scramble that into self-crossing spikes.
+    const ysSet = new Set();
+    for (const c of perDevice) for (const p of c.points) ysSet.add(p.y);
+    const ysSorted = [...ysSet].sort((a, b) => a - b);
+    const left = [], right = [], mean = [];
+    for (const y of ysSorted) {
+      const xsAt = perDevice.map(c => _ivInterpX(c.points, y)).filter(x => x != null);
+      if (!xsAt.length) continue;
+      left.push({ x: Math.min(...xsAt), y });
+      right.push({ x: Math.max(...xsAt), y });
+      // Mean only where every device in the cohort still has data at this y — once
+      // one drops out (see the rds_on truncation in ivChartAddPoint), continuing the
+      // average over a shrinking, no-longer-representative subset would be
+      // misleading, so the mean line stops there while the envelope keeps going.
+      if (xsAt.length === perDevice.length) {
+        mean.push({ x: xsAt.reduce((a, b) => a + b, 0) / xsAt.length, y });
+      }
+    }
+    if (left.length >= 2) outlines.push({ points: left.concat(right.slice().reverse()), color });
+    if (mean.length >= 2) means.push({ points: mean, color, label: `${makeLbl(perDevice[0])} (n=${perDevice.length})` });
+  }
+  return { items: [], outlines, means };
+}
+
 function ivChartDraw() {
   _ivUpdateHfeEstimate();
   const container = document.getElementById("iv-chart");
@@ -9837,8 +10213,8 @@ function ivChartDraw() {
   const W = container.offsetWidth, H = container.offsetHeight;
   if (W < 20 || H < 20) return;
 
-  const curves = _ivChart.curves;
-  const allPts = curves.flatMap(c => c.points);
+  const allPts = _ivAllPoints();
+  _ivRefreshDeviceChips();
 
   if (!allPts.length) {
     if (_ivChart.uplot) { _ivChart.uplot.destroy(); _ivChart.uplot = null; }
@@ -9849,20 +10225,6 @@ function ivChartDraw() {
   container.removeAttribute("data-placeholder");
 
   const isLogY = _ivIsLogY();
-
-  // Build unified x array and aligned y arrays for each curve. In log mode, a single
-  // y<=0 point anywhere in the series breaks uPlot's whole log path (not just that
-  // point) — e.g. a near-zero computed ratio right as the device turns on — so drop
-  // non-positive y points from the plotted series entirely rather than just from the
-  // axis-bounds calculation.
-  const xSet = new Set();
-  for (const c of curves) for (const p of c.points) if (!isLogY || p.y > 0) xSet.add(p.x);
-  const xs = [...xSet].sort((a, b) => a - b);
-  const ys = curves.map(c => {
-    const map = new Map(c.points.filter(p => !isLogY || p.y > 0).map(p => [p.x, p.y]));
-    return xs.map(x => map.has(x) ? map.get(x) : null);
-  });
-  const data = [xs, ...ys];
 
   const gColName = (_ivChart.cols[_ivChart.gIdx] || "");
   const gIsCurr  = gColName.startsWith("i_") || gColName.endsWith("_A");
@@ -9877,8 +10239,26 @@ function ivChartDraw() {
     gIsCurr       ? `I_B=${_fmtIb(cv.gateV)}` :
                     `${gLabel}=${_fmtTick(cv.gateV)}V`;
 
+  const { items, outlines, means } = _ivBuildRenderPlan(makeLbl);
+
+  // Build unified x array and aligned y arrays for each series. In log mode, a single
+  // y<=0 point anywhere in the series breaks uPlot's whole log path (not just that
+  // point) — e.g. a near-zero computed ratio right as the device turns on — so drop
+  // non-positive y points from the plotted series entirely rather than just from the
+  // axis-bounds calculation.
+  const xSet = new Set();
+  for (const it of items) for (const p of it.points) if (!isLogY || p.y > 0) xSet.add(p.x);
+  const xs = [...xSet].sort((a, b) => a - b);
+  const ys = items.map(it => {
+    const map = new Map(it.points.filter(p => !isLogY || p.y > 0).map(p => [p.x, p.y]));
+    return xs.map(x => map.has(x) ? map.get(x) : null);
+  });
+  const data = [xs, ...ys];
+
+  const buildSig = `${_ivChart.multiMode}:${items.length}:${outlines.length}:${means.length}`;
   const needRebuild = !_ivChart.uplot ||
-    _ivChart.uplot.series.length - 1 !== curves.length ||
+    _ivChart.uplot.series.length - 1 !== items.length ||
+    _ivChart._buildSig !== buildSig ||
     _ivChart._buildXIdx !== _ivChart.xIdx ||
     _ivChart._buildYIdx !== _ivChart.yIdx ||
     _ivChart._buildYScale !== _ivChart.yScale;
@@ -9887,14 +10267,19 @@ function ivChartDraw() {
     if (_ivChart.uplot) _ivChart.uplot.destroy();
     const devLabels = _plotLabels();
     const series = [{}];
-    curves.forEach((cv, ci) => {
-      const color = _CURVE_COLORS[ci % _CURVE_COLORS.length];
+    items.forEach(it => {
       series.push({
-        label: makeLbl(cv),
-        stroke: color,
-        width: 1.5,
-        alpha: 0.85,
-        points: { show: true, size: 4, fill: color },
+        label:  it.label || "",
+        stroke: it.color,
+        width:  1.5,
+        alpha:  0.85,
+        dash:   it.dash,
+        points: { show: it.showPoints, size: 4, fill: it.color },
+        // hfe_gain/rds_on plot a *measured* readback on X, so each curve's own x
+        // values rarely land on another curve's — the shared/merged x axis (built
+        // below) fills those mismatches with nulls, which would otherwise break the
+        // line between two perfectly valid, adjacent points of the same curve.
+        spanGaps: true,
       });
     });
     const axStyle = _uplotAxisStyle();
@@ -9918,18 +10303,57 @@ function ivChartDraw() {
       select: { show: false },
       hooks: {
         draw: [u => {
-          // in-plot legend — entries built from current curve state. PNP/PMOS mirrors
-          // Static/Transfer traces into quadrant III (fanning out from the top-right
-          // corner), so anchor the legend at the bottom-right there instead of on top
-          // of every trace's origin.
-          const cs = _ivChart.curves;
+          // Band mode: fill each curve-group's y-sliced envelope, then stroke its
+          // y-sliced mean on top (see _ivBuildRenderPlan/_ivInterpX) — both drawn as
+          // raw canvas paths rather than uPlot series since neither is guaranteed to
+          // be a function of x. Done before anything else draws so the legend stays
+          // legible on top.
+          if (outlines.length || means.length) {
+            const dpr = devicePixelRatio || 1;
+            u.ctx.save();
+            outlines.forEach(o => {
+              if (o.points.length < 3) return;
+              u.ctx.beginPath();
+              o.points.forEach((p, i) => {
+                const px = u.valToPos(p.x, "x", true);
+                const py = u.valToPos(p.y, "y", true);
+                if (i === 0) u.ctx.moveTo(px, py); else u.ctx.lineTo(px, py);
+              });
+              u.ctx.closePath();
+              u.ctx.fillStyle = _hexToRgba(o.color, 0.16);
+              u.ctx.fill();
+              u.ctx.strokeStyle = _hexToRgba(o.color, 0.55);
+              u.ctx.lineWidth = 1.5 * dpr;
+              u.ctx.stroke();
+            });
+            means.forEach(m => {
+              if (m.points.length < 2) return;
+              u.ctx.beginPath();
+              m.points.forEach((p, i) => {
+                const px = u.valToPos(p.x, "x", true);
+                const py = u.valToPos(p.y, "y", true);
+                if (i === 0) u.ctx.moveTo(px, py); else u.ctx.lineTo(px, py);
+              });
+              u.ctx.strokeStyle = m.color;
+              u.ctx.lineWidth = 1.5 * dpr;
+              u.ctx.globalAlpha = 0.9;
+              u.ctx.stroke();
+              u.ctx.globalAlpha = 1;
+            });
+            u.ctx.restore();
+          }
+          // in-plot legend — built from whichever of items (lines mode) / means
+          // (band mode) is populated. PNP/PMOS mirrors Static/Transfer traces into
+          // quadrant III (fanning out from the top-right corner), so anchor the
+          // legend at the bottom-right there instead of on top of every trace's origin.
           const legendAtBottom = _ivChart.polarity === "p" &&
             (_tsActivePlot === "iv_curve" || _tsActivePlot === "transfer");
-          _uplotDrawLegend(u, cs.map((cv, ci) => ({
-            color: _CURVE_COLORS[ci % _CURVE_COLORS.length],
-            label: makeLbl(cv),
-          })), { bottom: legendAtBottom });
-          // live ring on last point of running curve
+          const legendEntries = means.length
+            ? means.map(m => ({ color: m.color, dash: null, label: m.label }))
+            : items.filter(it => it.label).map(it => ({ color: it.color, dash: it.dash, label: it.label }));
+          _uplotDrawLegend(u, legendEntries, { bottom: legendAtBottom });
+          // live ring on last point of the currently-running device's last curve
+          const cs = _ivChart.curves;
           if (_ivChart.status !== "running" || !cs.length) return;
           const last = cs[cs.length - 1];
           if (!last.points.length) return;
@@ -9972,6 +10396,7 @@ function ivChartDraw() {
     _ivChart._buildXIdx   = _ivChart.xIdx;
     _ivChart._buildYIdx   = _ivChart.yIdx;
     _ivChart._buildYScale = _ivChart.yScale;
+    _ivChart._buildSig    = buildSig;
     _ivAttachUplotEvents(_ivChart.uplot);
   } else {
     _ivChart.uplot.setSize({ width: W, height: H });
@@ -10023,8 +10448,22 @@ function _uplotDrawLegend(u, entries, opts = {}) {
 
   for (let i = 0; i < entries.length; i++) {
     const ry = by + pad + i * rowH;
-    ctx.fillStyle = entries[i].color;
-    ctx.fillRect(bx + pad, ry + 2 * dpr, swW, rowH - 5 * dpr);
+    const swY = ry + (rowH - 5 * dpr) / 2 + 2 * dpr;
+    if (entries[i].dash) {
+      // Beyond 8 series, the palette repeats a hue with a different dash — draw the
+      // swatch as a dashed line segment (matching the trace) instead of a solid block.
+      ctx.strokeStyle = entries[i].color;
+      ctx.lineWidth = 2 * dpr;
+      ctx.setLineDash(entries[i].dash.map(v => v * dpr));
+      ctx.beginPath();
+      ctx.moveTo(bx + pad, swY);
+      ctx.lineTo(bx + pad + swW, swY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      ctx.fillStyle = entries[i].color;
+      ctx.fillRect(bx + pad, ry + 2 * dpr, swW, rowH - 5 * dpr);
+    }
     ctx.fillStyle = "#1a1d25";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
