@@ -3460,10 +3460,11 @@ const POST = (p, b) => api("POST", p, b);
 // renders black in most viewers. Flatten onto white before exporting.
 // `footerLines`, if given, appends a small gray provenance strip below the chart
 // (run timestamp / workbench / equipment / settings) so an exported PNG is still
-// traceable once it's out of the app (e.g. dropped into a report).
+// traceable once it's out of the app (e.g. dropped into a report). An attribution
+// line is always appended after those, on every exported chart.
 function _canvasToOpaquePng(canvas, bg = "#ffffff", footerLines = null) {
   const dpr    = devicePixelRatio || 1;
-  const lines  = (footerLines || []).filter(Boolean);
+  const lines  = [...(footerLines || []).filter(Boolean), "Made with open-EE-workbench — nacho.works/open-eew"];
   const lineH  = 13 * dpr;
   const padY   = 6 * dpr;
   const footH  = lines.length ? lines.length * lineH + padY * 2 : 0;
@@ -3500,9 +3501,10 @@ function _ivExportFooterLines() {
 
   const equipment = (state.instruments || []).filter(i => i.ok).map(i => {
     const model = i.model || i.idn || i.resource || "?";
+    const brand = i.manufacturer && !model.startsWith(i.manufacturer) ? `${i.manufacturer.trim()} ` : "";
     const parts = (i.idn || "").split(",");
     const fw    = parts.length >= 4 ? parts[3].trim() : null;
-    return fw ? `${model} (fw ${fw})` : model;
+    return fw ? `${brand}${model} (fw ${fw})` : `${brand}${model}`;
   }).join(", ") || "no instruments connected";
 
   const settings = _summarizeSweepParams(_ivChart.lastParams);
@@ -8809,7 +8811,7 @@ const _ivChart = {
   xLim:         null,  // drain/gate sweep stop  — X axis ceiling
   devType:      "bjt", // "fet" | "bjt" — controls axis/legend labels
   polarity:     "n",   // "n" | "p" — NPN/NMOS vs PNP/PMOS; only Static/Transfer mirror on "p"
-  yScale:       "linear", // "linear" | "log" — only meaningful on the hfe_gain/vce_sat/rds_on plots
+  yScale:       "linear", // "linear" | "log" — applies on every Plot Specific chart (not the vgs_th spot check, which has no chart)
   vceSatRatio:  10,    // forced I_C/I_B ratio, shown in the vce_sat legend
   lastParams:   null,  // params object for the run on screen — used for the export footer
   devices:      [],    // completed prior device runs from "Re-run with other device": [{label, curves, excluded}]
@@ -8981,7 +8983,7 @@ function tsSelectPlot(plot) {
   const title = document.getElementById("ts-chart-title");
   if (title) title.textContent = _TS_TEST_META[plot]?.title || "Static Characteristic";
   const yscaleSeg = document.getElementById("hfe-yscale-seg");
-  if (yscaleSeg) yscaleSeg.style.display = (plot === "hfe_gain" || plot === "vce_sat" || plot === "rds_on") ? "" : "none";
+  if (yscaleSeg) yscaleSeg.style.display = "";
   document.getElementById("ts-hfe-estimate")?.classList.toggle("hidden", plot !== "hfe_gain");
   tsClearChart();
 }
@@ -9864,8 +9866,7 @@ function _ivSyncGateLabels(type) {
 }
 
 function _ivIsLogY() {
-  return (_tsActivePlot === "hfe_gain" || _tsActivePlot === "vce_sat" || _tsActivePlot === "rds_on")
-      && _ivChart.yScale === "log";
+  return _ivChart.yScale === "log";
 }
 
 function tsResetZoom() {
@@ -10134,18 +10135,27 @@ function _ivInterpX(points, y) {
 //   "lines" — every device's curves overlaid; color = curve/gate-group identity
 //             (matches across devices), dash = device index.
 //   "band"  — one envelope shape per curve-group wrapping every device's curve in
-//             it, plus a mean line (from _ivInterpY, restricted to x's where every
-//             device in the group still has data). The envelope is built by
-//             *y*-slice (leftmost/rightmost x at each y — _ivInterpX) rather than
-//             by x-slice (topmost/bottommost y at each x — _ivInterpY): near a
-//             device's own current-cap spike the curve runs nearly vertical, so an
-//             x-slice sees a huge y-jump between adjacent samples the moment one
-//             device is mid-spike while another is still flat, which is what made
-//             the x-sliced envelope look jagged there. The same region is exactly
-//             where x changes smoothly per unit y, so a y-slice stays smooth
-//             through it; the flat run-in before any device spikes is where several
-//             devices share close to the same y, so the y-slice there is naturally
-//             a wide (correct) span rather than a degenerate one.
+//             it, plus a mean line. Which axis the envelope is sliced along is
+//             plot-dependent (see _ivBandSliceAxis below):
+//             *y*-slice (leftmost/rightmost x at each y — _ivInterpX) is used for
+//             rds_on: near a device's own current-cap spike the curve runs nearly
+//             vertical, so an x-slice sees a huge y-jump between adjacent samples
+//             the moment one device is mid-spike while another is still flat, which
+//             is what made the x-sliced envelope look jagged there. The same region
+//             is exactly where x changes smoothly per unit y, so a y-slice stays
+//             smooth through it; the flat run-in before any device spikes is where
+//             several devices share close to the same y, so the y-slice there is
+//             naturally a wide (correct) span rather than a degenerate one.
+//             *x*-slice (topmost/bottommost y at each x — _ivInterpY) is used for
+//             iv_curve: the static characteristic's knee runs nearly horizontal
+//             (I_D changes fast for very little V_DS, then flattens), the opposite
+//             shape from rds_on's spike — there a y-slice degenerates the same way
+//             an x-slice degenerates for rds_on, so this plot needs the envelope
+//             built the other way around: high/low bounds computed against the
+//             horizontal (x) axis, not the vertical (y) one.
+function _ivBandSliceAxis() {
+  return _tsActivePlot === "iv_curve" ? "x" : "y";
+}
 function _ivBuildRenderPlan(makeLbl) {
   const deviceSets = _ivIncludedDeviceSets().filter(d => d.curves.some(c => c.points.length));
   const multi = deviceSets.length > 1;
@@ -10169,38 +10179,58 @@ function _ivBuildRenderPlan(makeLbl) {
   const maxGroups = Math.max(...deviceSets.map(d => d.curves.length));
   const outlines = [];
   const means = [];
+  const sliceAxis = _ivBandSliceAxis();
   for (let gi = 0; gi < maxGroups; gi++) {
     const perDevice = deviceSets.map(d => d.curves[gi]).filter(Boolean);
     if (!perDevice.length) continue;
     const color = _CURVE_COLORS[gi % _CURVE_COLORS.length];
 
-    // Same y-slice grid drives both the envelope and the mean — averaging x per y
-    // (rather than y per x) keeps the mean smooth through the near-vertical spike
-    // region for the same reason the envelope needed it (see the comment above):
-    // a tiny y step there covers a real x range, where a tiny x step would have
-    // covered a huge, noisy y range. Both are drawn as raw canvas paths (see
-    // ivChartDraw) rather than fed through uPlot as ordinary series — like the
-    // envelope, a y-sliced mean isn't guaranteed to be a function of x either (x can
-    // move backward as the device count driving the average changes), and uPlot's
-    // per-x data model would scramble that into self-crossing spikes.
-    const ysSet = new Set();
-    for (const c of perDevice) for (const p of c.points) ysSet.add(p.y);
-    const ysSorted = [...ysSet].sort((a, b) => a - b);
-    const left = [], right = [], mean = [];
-    for (const y of ysSorted) {
-      const xsAt = perDevice.map(c => _ivInterpX(c.points, y)).filter(x => x != null);
-      if (!xsAt.length) continue;
-      left.push({ x: Math.min(...xsAt), y });
-      right.push({ x: Math.max(...xsAt), y });
-      // Mean only where every device in the cohort still has data at this y — once
-      // one drops out (see the rds_on truncation in ivChartAddPoint), continuing the
-      // average over a shrinking, no-longer-representative subset would be
-      // misleading, so the mean line stops there while the envelope keeps going.
-      if (xsAt.length === perDevice.length) {
-        mean.push({ x: xsAt.reduce((a, b) => a + b, 0) / xsAt.length, y });
+    // Same slice grid drives both the envelope and the mean — averaging the
+    // interpolated axis per slice-value (rather than the other way around) keeps
+    // the mean smooth through whichever region runs near-parallel to the slice
+    // axis for the same reason the envelope needed it (see the comment above).
+    // Both are drawn as raw canvas paths (see ivChartDraw) rather than fed through
+    // uPlot as ordinary series — like the envelope, neither the y-slice mean (not
+    // guaranteed to be a function of x) nor the x-slice mean (not guaranteed to be
+    // a function of y) fits uPlot's per-x data model, which would scramble either
+    // into self-crossing spikes if the device count driving the average shrinks.
+    const lo = [], hi = [], mean = [];
+    if (sliceAxis === "x") {
+      const xsSet = new Set();
+      for (const c of perDevice) for (const p of c.points) xsSet.add(p.x);
+      const xsSorted = [...xsSet].sort((a, b) => a - b);
+      for (const x of xsSorted) {
+        const ysAt = perDevice.map(c => _ivInterpY(c.points, x)).filter(y => y != null);
+        if (!ysAt.length) continue;
+        lo.push({ x, y: Math.min(...ysAt) });
+        hi.push({ x, y: Math.max(...ysAt) });
+        // Mean only where every device in the cohort still has data at this x — once
+        // one drops out, continuing the average over a shrinking, no-longer-
+        // representative subset would be misleading, so the mean line stops there
+        // while the envelope keeps going.
+        if (ysAt.length === perDevice.length) {
+          mean.push({ x, y: ysAt.reduce((a, b) => a + b, 0) / ysAt.length });
+        }
+      }
+    } else {
+      const ysSet = new Set();
+      for (const c of perDevice) for (const p of c.points) ysSet.add(p.y);
+      const ysSorted = [...ysSet].sort((a, b) => a - b);
+      for (const y of ysSorted) {
+        const xsAt = perDevice.map(c => _ivInterpX(c.points, y)).filter(x => x != null);
+        if (!xsAt.length) continue;
+        lo.push({ x: Math.min(...xsAt), y });
+        hi.push({ x: Math.max(...xsAt), y });
+        // Mean only where every device in the cohort still has data at this y — once
+        // one drops out (see the rds_on truncation in ivChartAddPoint), continuing
+        // the average over a shrinking, no-longer-representative subset would be
+        // misleading, so the mean line stops there while the envelope keeps going.
+        if (xsAt.length === perDevice.length) {
+          mean.push({ x: xsAt.reduce((a, b) => a + b, 0) / xsAt.length, y });
+        }
       }
     }
-    if (left.length >= 2) outlines.push({ points: left.concat(right.slice().reverse()), color });
+    if (lo.length >= 2) outlines.push({ points: lo.concat(hi.slice().reverse()), color });
     if (mean.length >= 2) means.push({ points: mean, color, label: `${makeLbl(perDevice[0])} (n=${perDevice.length})` });
   }
   return { items: [], outlines, means };
@@ -10303,11 +10333,11 @@ function ivChartDraw() {
       select: { show: false },
       hooks: {
         draw: [u => {
-          // Band mode: fill each curve-group's y-sliced envelope, then stroke its
-          // y-sliced mean on top (see _ivBuildRenderPlan/_ivInterpX) — both drawn as
-          // raw canvas paths rather than uPlot series since neither is guaranteed to
-          // be a function of x. Done before anything else draws so the legend stays
-          // legible on top.
+          // Band mode: fill each curve-group's envelope (x-sliced or y-sliced
+          // depending on the plot, see _ivBuildRenderPlan/_ivBandSliceAxis), then
+          // stroke its mean on top — both drawn as raw canvas paths rather than
+          // uPlot series since neither is guaranteed to be a function of x. Done
+          // before anything else draws so the legend stays legible on top.
           if (outlines.length || means.length) {
             const dpr = devicePixelRatio || 1;
             u.ctx.save();

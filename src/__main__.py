@@ -1,5 +1,5 @@
 """
-Entry point for  python <folder>  or  python -m open_ee_workbench.
+Entry point for  python <folder>  or  python -m src.
 """
 from app import main
 

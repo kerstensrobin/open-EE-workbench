@@ -20,7 +20,7 @@ import threading
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent / "open_ee_workbench"))
+sys.path.insert(0, str(Path(__file__).parent / "src"))
 from core.browser import find_chrome
 
 # cmd.exe defaults to a legacy codepage (e.g. cp1252) that can't encode "→"/"…" —
@@ -46,7 +46,7 @@ if sys.platform == "win32":
         pass
 
 ROOT    = Path(__file__).parent.resolve()
-APP_DIR = ROOT / "open_ee_workbench"
+APP_DIR = ROOT / "src"
 PYTHON  = sys.executable
 VENV    = ROOT / ".venv"
 VENV_PYTHON = VENV / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
@@ -283,9 +283,9 @@ def patch_launchers():
         "#!/usr/bin/env bash\n"
         'cd "$(dirname "$0")"\n'
         'if [ -f .venv/bin/python ]; then\n'
-        "    exec .venv/bin/python open_ee_workbench/app.py \"$@\"\n"
+        "    exec .venv/bin/python src/app.py \"$@\"\n"
         "else\n"
-        '    exec python3 open_ee_workbench/app.py "$@"\n'
+        '    exec python3 src/app.py "$@"\n'
         "fi\n"
     )
     launcher.chmod(launcher.stat().st_mode | 0o755)
@@ -296,9 +296,9 @@ def patch_launchers():
         'cd /d "%~dp0"\n'
         'if exist .venv\\Scripts\\python.exe (\n'
         '    set "PATH=%~dp0.venv\\Scripts;%PATH%"\n'
-        '    .venv\\Scripts\\python.exe open_ee_workbench\\app.py %*\n'
+        '    .venv\\Scripts\\python.exe src\\app.py %*\n'
         ") else (\n"
-        "    python open_ee_workbench\\app.py %*\n"
+        "    python src\\app.py %*\n"
         ")\n"
     )
 

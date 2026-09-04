@@ -11,7 +11,7 @@ import os
 from datetime import date
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def today_output_dir(base: str | None = None) -> Path:

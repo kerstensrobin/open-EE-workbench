@@ -9,7 +9,7 @@ __pycache__/
 /open-EE-workbench.desktop
 
 # Runtime output — generated per run, not source
-/open_ee_workbench/results/*
-!/open_ee_workbench/results/.gitkeep
-/open_ee_workbench/custom_tests/
-/open_ee_workbench/workbenches/bench_*.json
+/results/*
+!/results/.gitkeep
+/src/custom_tests/
+/src/workbenches/bench_*.json

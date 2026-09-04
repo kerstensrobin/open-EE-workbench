@@ -16,14 +16,14 @@ Built on PyVISA and PyVISA-py with SCPI dialect coverage across **149 instrument
 ```bash
 git clone https://github.com/kerstensrobin/open-EE-workbench
 cd open-EE-workbench
-python install.py                            # install deps + optional desktop launcher
-python open_ee_workbench/core/nachoVisa.py    # scan bench, save workbench
-./open-eew                                    # launch GUI  (open-eew.bat on Windows)
+python install.py                  # install deps + optional desktop launcher
+python src/core/nachoVisa.py       # scan bench, save workbench
+./open-eew                         # launch GUI  (open-eew.bat on Windows)
 ```
 
 On Linux, USB instruments need a one-time udev rule:
 ```bash
-python open_ee_workbench/core/nachoVisa.py --fix-udev   # then re-plug USB instruments
+python src/core/nachoVisa.py --fix-udev   # then re-plug USB instruments
 ```
 
 **[Note for Windows users]** If no USB instruments are found and you don't already have a vendor VISA implementation installed, there might be some driver tweaks needed. See the **[Wiki](https://github.com/kerstensrobin/open-EE-workbench/wiki/Windows-USB-Setup)** for the full walkthrough.
@@ -41,7 +41,7 @@ python open_ee_workbench/core/nachoVisa.py --fix-udev   # then re-plug USB instr
 | **Python** | Full Python scripting console with syntax highlighting, a MATLAB-style file explorer (defaults to `scripts/`, path is changeable), and multi-script tabs — open several scripts at once and switch between them. Scripts opened from disk save back to their original file. Instruments, families, PyMeasure, and helper functions are pre-injected into scope — no boilerplate needed. |
 | **CLI scripts** | Standalone Python scripts for screenshots, sweeps, and waveform analysis. |
 
-![Workbench tab](open_ee_workbench/ui/open-eew_overview.png)
+![Workbench tab](src/ui/open-eew_overview.png)
 
 ---
 
@@ -54,7 +54,8 @@ open-EE-workbench/
 ├── open-eew.bat                launch script (Windows)
 ├── LICENSE
 ├── README.md
-└── open_ee_workbench/          the program
+├── results/                    test output — CSV data, scope captures, plots
+└── src/                        the program
     ├── app.py                  Flask + SocketIO server, entry point
     ├── core/
     │   ├── eewBackbone.json    SCPI command database (149 families, 40+ vendors)
@@ -67,8 +68,7 @@ open-EE-workbench/
     ├── ui/                     single-file web front-end (index.html)
     ├── workbenches/            per-bench instrument config JSON files
     ├── scripts/                standalone Python scripts (sweeps, screenshots, …)
-    ├── custom_tests/           tests saved from the Sandbox tab (auto-created)
-    └── results/                test output — CSV data, scope captures, plots
+    └── custom_tests/           tests saved from the Sandbox tab (auto-created)
 ```
 
 ---
@@ -97,7 +97,7 @@ open-EE-workbench/
 | Frequency counter | 1 |
 | Motion controller | 1 |
 
-To add a new instrument, add an entry to `open_ee_workbench/core/eewBackbone.json` — no code changes needed.
+To add a new instrument, add an entry to `src/core/eewBackbone.json` — no code changes needed.
 → **[eewBackbone](https://github.com/kerstensrobin/open-EE-workbench/wiki/eewBackbone)**
 
 ---
