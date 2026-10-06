@@ -37,6 +37,7 @@ _SCOPE_SET_OPS = {
     "timebase_scale", "timebase_position",
     "trigger_level", "trigger_slope", "trigger_source",
     "labels_on", "labels_off",
+    "annotation_text", "annotation_on", "annotation_off",
 }
 
 DMM_OPS = {

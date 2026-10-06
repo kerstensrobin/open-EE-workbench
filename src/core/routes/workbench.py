@@ -150,6 +150,8 @@ def api_load_workbench(name: str):
             seen.add(key)
             family = _family_for(instr)
             instr["write_ops"] = _write_ops_for_family(family) if family else []
+            # Scopes that can show an on-screen title (e.g. :DISPlay:ANNotation on Keysight)
+            instr["has_annotation"] = bool(family and "annotation_text" in family.get("commands", {}))
             unique.append(instr)
     wb["_unique"] = unique
 

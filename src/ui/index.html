@@ -3933,6 +3933,20 @@ function scopeSetLabel(inp, ch) {
   scopeSet('labels_on', {});
 }
 
+function scopeSetTitle(inp) {
+  // Double quotes would terminate the SCPI string argument
+  const title = inp.value.replace(/"/g, "").trim().slice(0, 64);
+  inp.value = title;
+  if (title === (inp.dataset.sent || "")) return;   // Enter then blur: send once
+  inp.dataset.sent = title;
+  if (title) {
+    scopeSet('annotation_text', {text: title});
+    scopeSet('annotation_on', {});
+  } else {
+    scopeSet('annotation_off', {});
+  }
+}
+
 function _scopeChSelOpts(nCh) {
   return Array.from({length:nCh},(_,i)=>`<option value="${i+1}">CH${i+1}</option>`).join("");
 }
@@ -4098,6 +4112,14 @@ function buildScopeCard(instr) {
           <option value="5000">5 s</option>
         </select>
       </div>
+      ${instr.has_annotation ? `
+      <div class="scope-tb-row">
+        <span class="scope-tb-label">Title</span>
+        <input class="scope-ch-label-inp" type="text" maxlength="64" placeholder="screen title (empty = off)"
+               title="Title shown on the scope display and in screenshots"
+               onkeydown="if(event.key==='Enter')scopeSetTitle(this)"
+               onblur="scopeSetTitle(this)"/>
+      </div>` : ''}
       <div style="display:flex;gap:6px;">
         <button class="screenshot-btn" id="screenshot-btn" onclick="doScreenshot()" style="flex:1;">📷 Screenshot</button>
         <button class="screenshot-btn" id="screenshot-folder-btn" onclick="openScreenshotFolder()" disabled
