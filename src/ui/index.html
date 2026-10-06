@@ -10292,6 +10292,15 @@ function ivChartDraw() {
                     `${gLabel}=${_fmtTick(cv.gateV)}V`;
 
   const { items, outlines, means } = _ivBuildRenderPlan(makeLbl);
+  // The draw hook below runs on every redraw (including a plain setData() when the
+  // uPlot instance is reused, not just at construction) — stash the freshly built
+  // outlines/means/items where it can read them live each time, rather than closing
+  // over this call's locals, which would go stale the first time a redraw happens
+  // without a full rebuild (e.g. toggling a device chip when the curve-group count
+  // doesn't change) and silently keep painting the previous state.
+  _ivChart._renderItems    = items;
+  _ivChart._renderOutlines = outlines;
+  _ivChart._renderMeans    = means;
 
   // Build unified x array and aligned y arrays for each series. In log mode, a single
   // y<=0 point anywhere in the series breaks uPlot's whole log path (not just that
@@ -10360,6 +10369,8 @@ function ivChartDraw() {
           // stroke its mean on top — both drawn as raw canvas paths rather than
           // uPlot series since neither is guaranteed to be a function of x. Done
           // before anything else draws so the legend stays legible on top.
+          const outlines = _ivChart._renderOutlines || [];
+          const means    = _ivChart._renderMeans || [];
           if (outlines.length || means.length) {
             const dpr = devicePixelRatio || 1;
             u.ctx.save();
@@ -10400,9 +10411,10 @@ function ivChartDraw() {
           // legend at the bottom-right there instead of on top of every trace's origin.
           const legendAtBottom = _ivChart.polarity === "p" &&
             (_tsActivePlot === "iv_curve" || _tsActivePlot === "transfer");
+          const legendItems = _ivChart._renderItems || [];
           const legendEntries = means.length
             ? means.map(m => ({ color: m.color, dash: null, label: m.label }))
-            : items.filter(it => it.label).map(it => ({ color: it.color, dash: it.dash, label: it.label }));
+            : legendItems.filter(it => it.label).map(it => ({ color: it.color, dash: it.dash, label: it.label }));
           _uplotDrawLegend(u, legendEntries, { bottom: legendAtBottom });
           // live ring on last point of the currently-running device's last curve
           const cs = _ivChart.curves;
