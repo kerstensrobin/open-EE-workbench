@@ -5,7 +5,8 @@ install.py — set up open-EE-workbench on a new machine.
     python install.py
 
 What it does:
-  1. Installs required Python packages via pip
+  1. Installs required Python packages via pip (plus, on Windows, libusb and
+     the WinUSB driver for USB instruments)
   2. Creates open-EE-workbench.desktop (Linux) so the app appears in
      your application menu and can be launched from the desktop
 """
@@ -233,6 +234,7 @@ def install_deps():
             subprocess.check_call([str(VENV_PYTHON), "-m", "pip", "install", pkg])
 
     ensure_libusb_windows()
+    ensure_usb_driver_windows()
 
 
 # ── 1b. libusb DLL (Windows only) ─────────────────────────────────────────────
@@ -247,11 +249,8 @@ def install_deps():
 # arch, so we can stage it next to python.exe and have the launcher put that
 # directory on PATH — no manual DLL hunting, no admin rights needed.
 #
-# NOTE: this does not replace Zadig. If an instrument's USB interface is
-# already claimed by another driver (Windows' in-box USBTMC class driver, or
-# a vendor IO Suite), libusb still cannot open it — that rebind is a manual,
-# per-device, admin-elevated step (see README) that can't be done safely by
-# a generic installer.
+# libusb alone is not enough: Windows has no USBTMC driver, so instruments are
+# driverless until ensure_usb_driver_windows() (below) binds WinUSB to them.
 def ensure_libusb_windows():
     if sys.platform != "win32":
         return
@@ -273,6 +272,36 @@ def ensure_libusb_windows():
             "implementation (NI-VISA, Keysight IO Libraries, etc.) is installed.",
             file=sys.stderr,
         )
+
+
+# ── 1c. USB instrument driver (Windows only) ──────────────────────────────────
+#
+# Binds Windows' inbox WinUSB driver to every USBTMC instrument, present or
+# plugged in later (see core/usbtmc_winusb.ps1). Skipped when a vendor VISA is
+# installed — it brings its own driver and PyVISA prefers it.
+def ensure_usb_driver_windows():
+    if sys.platform != "win32":
+        return
+    from core import winusb
+
+    if winusb.vendor_visa_installed():
+        print("\n[install] A vendor VISA is installed — it provides the USB instrument driver.")
+        return
+
+    print(
+        "\nWindows has no built-in driver for USB lab instruments. The installer can add\n"
+        "one (Windows' own WinUSB driver), which needs a single admin prompt."
+    )
+    try:
+        ans = input("Install the USB instrument driver? [Y/n] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        ans = "n"
+    if ans not in ("", "y"):
+        print("[install] Skipped. Run it later with:\n"
+              "          python src/core/nachoVisa.py --install-usb-driver")
+        return
+    winusb.install_driver()
 
 
 # ── 2. Desktop launcher (Linux only) ─────────────────────────────────────────

@@ -26,7 +26,12 @@ On Linux, USB instruments need a one-time udev rule:
 python src/core/nachoVisa.py --fix-udev   # then re-plug USB instruments
 ```
 
-**[Note for Windows users]** If no USB instruments are found and you don't already have a vendor VISA implementation installed, there might be some driver tweaks needed. See the **[Wiki](https://github.com/kerstensrobin/open-EE-workbench/wiki/Windows-USB-Setup)** for the full walkthrough.
+**[Note for Windows users]** Windows has no built-in driver for USB instruments. Unless a vendor VISA (Keysight IO Libraries, NI-VISA, …) is already installed, `install.py` offers to bind Windows' own WinUSB driver to every USB test & measurement instrument — one admin prompt, and instruments plugged in later work too. To do it (or undo it) later:
+```bash
+python src/core/nachoVisa.py --install-usb-driver
+python src/core/nachoVisa.py --remove-usb-driver
+```
+See the **[Wiki](https://github.com/kerstensrobin/open-EE-workbench/wiki/Windows-USB-Setup)** for background and manual alternatives.
 
 ---
 

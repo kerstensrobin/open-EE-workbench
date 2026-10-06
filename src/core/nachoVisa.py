@@ -31,11 +31,17 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+try:
+    import winusb as _winusb
+    _winusb.add_libusb_to_path()   # must run before pyvisa is imported below
+except ImportError:
+    _winusb = None
+
 REQUIRED_PACKAGES = [
     ("pyvisa",    "pyvisa",    "PyVISA — VISA resource manager"),
     ("pyvisa_py", "pyvisa-py", "PyVISA-py — pure-Python VISA backend"),
     ("usb",       "pyusb",     "PyUSB — low-level USB device access"),
-    ("zeroconf",  "zeroconf",  "zeroconf — mDNS/LAN instrument discovery"),
+    # zeroconf (HiSLIP mDNS discovery) is optional — install.py offers it separately.
 ]
 
 _debug = False
@@ -364,6 +370,16 @@ def build_arg_parser():
         "--fix-udev",
         action="store_true",
         help="(Linux only) Write udev rules for detected USBTMC devices and reload udev.",
+    )
+    parser.add_argument(
+        "--install-usb-driver",
+        action="store_true",
+        help="(Windows only) Bind the WinUSB driver to all USBTMC instruments (one admin prompt).",
+    )
+    parser.add_argument(
+        "--remove-usb-driver",
+        action="store_true",
+        help="(Windows only) Remove the WinUSB driver installed by --install-usb-driver.",
     )
     parser.add_argument(
         "--debug",
@@ -907,6 +923,41 @@ def suggest_udev_fix(devices: List[dict]):
     print()
 
 
+def print_windows_driver_hint() -> bool:
+    """Name driverless USBTMC instruments. Returns True if any were found."""
+    if _winusb is None:
+        return False
+    driverless = _winusb.driverless_usbtmc()
+    if not driverless:
+        return False
+    print("Windows USB driver missing:")
+    print("  These USB instruments are connected but Windows has no driver for them,")
+    print("  so they cannot be opened:")
+    for name in driverless:
+        print(f"    - {name}")
+    print("  Fix: install the USB instrument driver (one admin prompt):")
+    print("    python src/core/nachoVisa.py --install-usb-driver")
+    print()
+    return True
+
+
+def offer_windows_driver_install() -> bool:
+    """If driverless USBTMC instruments are connected, offer to install the driver.
+
+    Returns True if the driver was installed (caller should re-scan).
+    """
+    if not print_windows_driver_hint():
+        return False
+    try:
+        answer = input("Install the USB instrument driver now? [Y/n] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return False
+    if answer not in ("", "y"):
+        return False
+    return _winusb.install_driver()
+
+
 def print_usb_diagnostics():
     devices, errors = probe_usb_devices()
     if errors:
@@ -1096,6 +1147,15 @@ def main():
         fix_udev()
         return
 
+    if args.install_usb_driver or args.remove_usb_driver:
+        if _winusb is None:
+            print("Error: winusb.py not found next to this script.")
+        elif args.install_usb_driver:
+            _winusb.install_driver()
+        else:
+            _winusb.uninstall_driver()
+        return
+
     if pyvisa is None:
         print_dependency_notice("PyVISA is not installed.")
         return
@@ -1219,6 +1279,10 @@ def main():
 
     # Spinner has exited — terminal line is clear, print results.
     print_discovery_notes(discovery_notes)
+
+    if offer_windows_driver_install():
+        print("Re-run this script to discover the instruments.")
+        return
 
     if not instrument_reports:
         print_usb_diagnostics()

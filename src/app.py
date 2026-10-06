@@ -27,6 +27,10 @@ UI_DIR = ROOT / "ui"
 # core/ and its siblings must be importable by bare module name
 sys.path.insert(0, str(ROOT / "core"))
 
+# Before anything imports pyvisa: pyvisa-py probes for libusb only once.
+from core.winusb import add_libusb_to_path
+add_libusb_to_path()
+
 from core.browser import find_chrome
 
 # ── PyVISA-Py USBTMC bug fix ──────────────────────────────────────────────────
