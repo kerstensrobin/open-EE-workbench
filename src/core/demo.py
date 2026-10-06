@@ -38,7 +38,7 @@ class DemoResource:
         self._idn            = idn
         self._type           = instr_type
         self._slot           = slot          # used to de-correlate multiple DMMs
-        self._visa_lock      = threading.Lock()
+        self._visa_lock      = threading.RLock()  # re-entrant: _run_steps nests inside _rlock()
         self._sp: dict       = {}            # set-points written via write()
         self.timeout         = 8000
         self.chunk_size      = _SCREENSHOT_CHUNK_SIZE

@@ -2,7 +2,6 @@
 routes/connection.py — /api/connect and /api/disconnect blueprints.
 """
 import json as _json
-import threading
 import time
 
 from flask import Blueprint, jsonify, request
@@ -12,7 +11,7 @@ from core.backbone import get_command, _classify, HELPERS_OK, active_name, load_
 from core.demo import DemoResource
 from core.helpers import (
     _find_instrument, _run_steps, _op, _log, _rlock,
-    _start_polling, _write_ops_for_family, _family_for,
+    _start_polling, _write_ops_for_family, _family_for, LockedResource,
 )
 
 bp = Blueprint("connection", __name__)
@@ -71,9 +70,8 @@ def api_connect():
                 if rm is None:
                     from nachoVisa import open_resource_manager
                     rm = open_resource_manager()
-                res = rm.open_resource(rstr)
+                res = LockedResource(rm.open_resource(rstr))   # serialise concurrent VISA ops
                 res.timeout    = 8000
-                res._visa_lock = threading.Lock()   # serialise concurrent VISA ops
                 if "SOCKET" in rstr.upper():
                     res.read_termination  = "\n"
                     res.write_termination = "\n"

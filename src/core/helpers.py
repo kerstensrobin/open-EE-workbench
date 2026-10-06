@@ -52,9 +52,57 @@ def _family_for(entry: dict):
         return None
 
 
+# ── Thread-safe resource wrapper ──────────────────────────────────────────────
+
+class LockedResource:
+    """Wrap a PyVISA resource so every I/O call holds a per-instrument lock.
+
+    Routes run on a thread pool, so the poller, the scope auto-measure loop and
+    UI clicks can all hit one instrument at once. Without serialisation a
+    second command lands between a query and its read: the instrument aborts
+    the pending response (Keysight scopes show "Query INTERRUPTED"), and the
+    first thread's read then blocks until the VISA timeout.
+
+    The lock is re-entrant and exposed as `_visa_lock`, so `with _rlock(res):`
+    still groups a multi-step sequence (e.g. write + read_raw) atomically.
+    Attribute reads/writes (timeout, chunk_size, terminations …) pass through.
+    """
+    _LOCKED_METHODS = frozenset({
+        "write", "write_raw", "write_ascii_values", "write_binary_values",
+        "read", "read_raw", "read_bytes", "read_ascii_values", "read_binary_values",
+        "query", "query_ascii_values", "query_binary_values",
+        "clear", "flush", "close",
+    })
+
+    def __init__(self, resource):
+        object.__setattr__(self, "_resource", resource)
+        object.__setattr__(self, "_visa_lock", threading.RLock())
+
+    def __getattr__(self, name):
+        attr = getattr(self._resource, name)
+        if name not in self._LOCKED_METHODS:
+            return attr
+        lock = self._visa_lock
+
+        def _locked(*args, **kwargs):
+            with lock:
+                return attr(*args, **kwargs)
+        return _locked
+
+    def __setattr__(self, name, value):
+        setattr(self._resource, name, value)
+
+
 # ── SCPI execution helpers ────────────────────────────────────────────────────
 
 def _run_steps(resource, steps: list, role: str = None, poll: bool = False) -> object:
+    # Hold the instrument for the whole sequence so e.g. a measurement's
+    # enable-write and its query can't be split by another thread.
+    with _rlock(resource):
+        return _run_steps_unlocked(resource, steps, role=role, poll=poll)
+
+
+def _run_steps_unlocked(resource, steps: list, role: str = None, poll: bool = False) -> object:
     result = None
     for action, scpi in steps:
         if action == "write":
