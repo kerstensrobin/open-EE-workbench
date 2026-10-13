@@ -162,6 +162,16 @@ REQUIRED = [
     "pywebview",
     "pymeasure",
     "numpy",
+]
+
+# Installed best-effort, after REQUIRED: a failure here must not abort the
+# install, since the rest of the app runs fine without it (h5py export is
+# used by one route that already degrades gracefully when it's missing).
+# On Windows especially, h5py sometimes has no prebuilt wheel for a given
+# Python version and falls back to building from source, which needs the
+# HDF5 C library and fails outright — that used to take the whole install
+# down with it, including flask, pyvisa, etc.
+BEST_EFFORT = [
     "h5py",
 ]
 
@@ -174,8 +184,12 @@ def _venv_pkg():
 
 
 def ensure_venv(spinner: Spinner):
-    if VENV_PYTHON.exists():
-        return
+    # Always rebuild from scratch rather than reusing what's there — a venv left
+    # over from an interrupted or failed install (e.g. missing flask) looks the
+    # same as a good one once VENV_PYTHON exists, so reuse could mask that.
+    if VENV.exists():
+        spinner.update("Removing existing virtual environment")
+        shutil.rmtree(VENV)
 
     spinner.update("Creating virtual environment")
     try:
@@ -226,6 +240,23 @@ def install_deps():
     if returncode != 0:
         sys.exit("Failed to install required packages:\n" + output)
     print(f"Virtual environment ready → {VENV}")
+
+    spinner_msg = "Installing best-effort packages"
+    failures = []
+    with Spinner(spinner_msg) as spinner:
+        for pkg in BEST_EFFORT:
+            spinner.update(f"{spinner_msg}: {pkg}")
+            returncode, output = _pip_install_with_progress(
+                spinner, ["--upgrade", pkg], spinner_msg
+            )
+            if returncode != 0:
+                failures.append((pkg, output))
+    for pkg, output in failures:
+        print(
+            f"\n[install] Could not install {pkg} — some features that depend on it "
+            f"will be unavailable, but the app will still run.\n{output}",
+            file=sys.stderr,
+        )
 
     print("\nOptional packages (skip with Ctrl-C to accept defaults):")
     for pkg, desc in OPTIONAL.items():
