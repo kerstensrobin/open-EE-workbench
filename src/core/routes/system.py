@@ -29,6 +29,7 @@ def api_check_update():
             ["git", "describe", "--tags", "--always"],
             cwd=os.path.dirname(os.path.abspath(__file__)),
             stderr=subprocess.DEVNULL, text=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         ).strip()
     except Exception:
         current = "unknown"
@@ -127,6 +128,44 @@ def api_report_issue():
     else:
         instr_section = "_No instruments connected at time of report._"
 
+    # SCPI history (core/shared.py: _scpi_log) is kept regardless of the UI's
+    # verboseScpi/verbosePoll display filters, so it reflects real traffic
+    # even if the console pane was filtering it out when the bug happened.
+    scpi_entries = list(_sh._scpi_log)
+    if scpi_entries:
+        def _fmt_entry(e):
+            ts = datetime.fromtimestamp(e["t"]).strftime("%H:%M:%S")
+            r  = f"[{e['role']}] " if e.get("role") else ""
+            tail = f"  ←  {e['result']}" if e.get("result") is not None else ""
+            return f"{ts}  {r}{e['cmd']}{tail}"
+
+        tail_n = 40
+        tail_lines = "\n".join(_fmt_entry(e) for e in scpi_entries[-tail_n:])
+        shown = min(tail_n, len(scpi_entries))
+        log_path = None
+        try:
+            log_path = today_output_dir() / f"scpi_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+            log_path.write_text(
+                "\n".join(_fmt_entry(e) for e in scpi_entries), encoding="utf-8"
+            )
+        except Exception:
+            pass
+        attach_note = (
+            f"\n📎 Full log ({len(scpi_entries)} entries) saved to `{log_path}` "
+            "— drag it into this issue if it's relevant.\n" if log_path else ""
+        )
+        scpi_section = f"""\
+<details>
+<summary>SCPI log (last {shown} of {len(scpi_entries)})</summary>
+
+```
+{tail_lines}
+```
+</details>
+{attach_note}"""
+    else:
+        scpi_section = "_No SCPI traffic recorded this session._"
+
     body = f"""\
 ## Description
 
@@ -152,6 +191,10 @@ def api_report_issue():
 ### Instruments
 
 {instr_section}
+
+### SCPI log
+
+{scpi_section}
 
 ### System
 
@@ -274,13 +317,140 @@ def api_pick_folder():
 
 import ctypes
 import threading
+import uuid
 
 _py_running = False
 _py_thread: threading.Thread | None = None
 
+_pending_confirms: dict[str, threading.Event] = {}
+_confirm_answers: dict[str, bool] = {}
+
 
 def _py_emit(msg, cls="py-out"):
     _sh.sio.emit("python_output", {"msg": msg, "cls": cls})
+
+
+def _confirm_resource_takeover(resource_name: str) -> bool:
+    """Ask the UI whether to disconnect the Workbench tab so a Python-console
+    script can open its own raw session to an instrument the Workbench
+    already holds. Blocks the console's exec thread until the UI answers (or
+    120s pass, treated as "no").
+
+    USB instruments allow only one open session — if the Workbench tab is
+    connected and a script calls pyvisa.ResourceManager().open_resource() on
+    the same resource in-process, the two sessions fight over the device
+    (seen as outright connection failures or SCPI "Query INTERRUPTED" errors
+    from traffic neither session knows about). This can't be solved by the
+    existing per-resource lock (core/helpers.py: LockedResource) because that
+    only serialises I/O *within* the app's own session — a script-opened
+    session is invisible to it.
+    """
+    confirm_id = uuid.uuid4().hex
+    event = threading.Event()
+    _pending_confirms[confirm_id] = event
+    _sh.sio.emit("python_confirm", {
+        "id": confirm_id,
+        "resource": resource_name,
+        "message": (
+            f"The Workbench tab is currently using {resource_name}. "
+            "Disconnect it and open the instrument from this script instead?"
+        ),
+    })
+    try:
+        # Short slices, not one long wait: the console's Stop button works by
+        # raising KeyboardInterrupt in this thread, which only lands between
+        # Python bytecodes — a single blocking wait would hold it off.
+        deadline = _time.monotonic() + 120
+        while not event.wait(0.25):
+            if _time.monotonic() > deadline:
+                return False
+        return _confirm_answers.pop(confirm_id, False)
+    finally:
+        _pending_confirms.pop(confirm_id, None)
+        _confirm_answers.pop(confirm_id, None)
+
+
+@bp.route("/api/python/confirm", methods=["POST"])
+def api_python_confirm():
+    d = request.json or {}
+    confirm_id = d.get("id", "")
+    event = _pending_confirms.get(confirm_id)
+    if event is None:
+        return jsonify({"error": "unknown or expired confirmation"}), 404
+    _confirm_answers[confirm_id] = bool(d.get("proceed"))
+    event.set()
+    return jsonify({"status": "ok"})
+
+
+def _resource_key(resource_name: str):
+    """Canonical form of a VISA resource name for equality checks.
+
+    The same instrument can be spelled many ways: pyvisa-py lists USB IDs in
+    decimal ("USB0::10893::36609::…") while scripts and datasheets use hex
+    ("USB0::0x2A8D::0x8F01::…"), and the board number, "::0" interface
+    number and case are all optional/insensitive.
+    """
+    try:
+        from pyvisa import rname
+        parsed = rname.parse_resource_name(resource_name)
+    except Exception:
+        return resource_name.strip().upper()
+    fields = []
+    for f in parsed._fields:
+        v = str(getattr(parsed, f, "") or "")
+        try:
+            fields.append(int(v, 0))
+        except ValueError:
+            fields.append(v.upper())
+    return (type(parsed).__name__, tuple(fields))
+
+
+def _held_by_workbench(resource_name: str) -> str | None:
+    """Return the Workbench's own spelling of resource_name if it holds it."""
+    key = _resource_key(resource_name)
+    for held in list(_sh._state.get("resources", {})):
+        if _resource_key(held) == key:
+            return held
+    return None
+
+
+_console = threading.local()   # .active is True on the console's exec thread
+
+
+def _install_takeover_guard():
+    """Make open_resource() on an address the Workbench tab already holds
+    pause for user confirmation instead of silently fighting over the device.
+    See _confirm_resource_takeover().
+
+    Patched on pyvisa's ResourceManager class rather than handed to scripts
+    as a wrapped module: scripts start with their own `import pyvisa` (which
+    would replace any wrapper in their namespace), and libraries such as
+    pymeasure open sessions through pyvisa too. Only calls made on the
+    console's exec thread are checked, so the Workbench's own connects are
+    unaffected.
+    """
+    from pyvisa.highlevel import ResourceManager
+    real_open = ResourceManager.open_resource
+    if getattr(real_open, "_eew_guard", False):
+        return
+
+    def open_resource(self, resource_name, *a, **kw):
+        if getattr(_console, "active", False) and _held_by_workbench(resource_name):
+            if not _confirm_resource_takeover(resource_name):
+                raise RuntimeError(
+                    f"Cancelled: the Workbench tab is connected to {resource_name!r}. "
+                    "Disconnect it first (or accept the takeover prompt) before this "
+                    "script can open it."
+                )
+            from core.routes.connection import _disconnect_all
+            # pyvisa hands out one shared ResourceManager per backend, so `self`
+            # is usually the Workbench's own: release its instruments but keep
+            # the session open, or this very call fails with InvalidSession.
+            _disconnect_all(close_rm=False)
+        return real_open(self, resource_name, *a, **kw)
+
+    open_resource._eew_guard = True
+    ResourceManager.open_resource = open_resource
 
 
 @bp.route("/api/python/run", methods=["POST"])
@@ -336,7 +506,9 @@ def api_python_run():
         if path:
             ns["__file__"] = path
         if _sh.PYVISA_OK:
+            _install_takeover_guard()
             ns["pyvisa"] = _sh.pyvisa
+        _console.active = True
         try:
             import pymeasure as _pymeasure
             ns["pymeasure"] = _pymeasure
@@ -368,6 +540,7 @@ def api_python_run():
                     _py_emit(line, "py-err")
             _sh.sio.emit("python_done", {"error": str(exc)})
         finally:
+            _console.active = False
             _py_running = False
             _py_thread = None
 
@@ -516,7 +689,7 @@ def api_export_hdf5():
         import h5py
         import numpy as np
     except ImportError:
-        return jsonify({"error": "h5py is not installed — run install.py to add it"}), 500
+        return jsonify({"error": "h5py is not installed — re-run the installer (install-windows.bat / install-linux-mac.sh) to add it"}), 500
 
     d        = request.json or {}
     filename = d.get("filename", "export")

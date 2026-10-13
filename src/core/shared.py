@@ -5,6 +5,7 @@ All modules import this module to access shared state.  `sio` starts as None
 and is injected by app.py after SocketIO is created.
 """
 import threading
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -42,6 +43,13 @@ _poller_idle = threading.Event()
 _poller_idle.set()   # no poller running initially
 _psu_ch_cache: dict = {}  # resource → confirmed live channel count
 _polling_enabled = False  # True only when user enables it via Resume polling button
+
+# ── SCPI traffic history ──────────────────────────────────────────────────────
+# Mirrors every "scpi_traffic" socket event into a capped server-side buffer,
+# independent of the UI's verboseScpi/verbosePoll display filters, so a bug
+# report can include real traffic even when the console pane was filtering
+# it out (or the tab was reloaded) at the time something went wrong.
+_scpi_log: deque = deque(maxlen=1000)
 
 # ── SocketIO handle (injected by app.py) ─────────────────────────────────────
 sio = None

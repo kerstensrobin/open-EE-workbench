@@ -194,8 +194,11 @@ def api_polling_resume():
 
 # ── /api/disconnect ───────────────────────────────────────────────────────────
 
-@bp.route("/api/disconnect", methods=["POST"])
-def api_disconnect():
+def _disconnect_all(close_rm: bool = True):
+    """Tear down every connected instrument. Shared by /api/disconnect and the
+    Python console's resource-takeover guard (core/routes/system.py), which
+    passes close_rm=False: pyvisa shares one ResourceManager per backend, so
+    closing it would also kill the session the script is about to use."""
     _sh._poll_stop.set()
     with _sh._lock:
         for rstr, r in _sh._state["resources"].items():
@@ -211,10 +214,15 @@ def api_disconnect():
                         pass
             try: r.close()
             except: pass
-        if _sh._state["rm"]:
+        if close_rm and _sh._state["rm"]:
             try: _sh._state["rm"].close()
             except: pass
         _sh._state.update(rm=None, resources={}, psu_channels={}, connected=False)
         _sh._psu_ch_cache.clear()
     _sh.sio.emit("disconnected", {})
+
+
+@bp.route("/api/disconnect", methods=["POST"])
+def api_disconnect():
+    _disconnect_all()
     return jsonify({"status": "disconnected"})

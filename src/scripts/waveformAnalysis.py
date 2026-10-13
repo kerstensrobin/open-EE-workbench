@@ -272,6 +272,10 @@ def main():
         sys.exit(1)
 
     scope.timeout = 10_000
+    # PyVISA's default chunk_size (20 KB) is smaller than a full screenshot, so
+    # read_raw() in _screenshot() below can return after just the first chunk
+    # — a cut-off PNG/BMP. Raise it past the largest screenshot (~1-2 MB).
+    scope.chunk_size = 2 * 1024 * 1024
     idn = scope.query("*IDN?").strip()
     fam = classify(idn)
 

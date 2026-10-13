@@ -2566,6 +2566,47 @@
   </div>
 </div>
 
+<!-- ── Backend lost modal (shown while the socket is down) ─────── -->
+<div id="backend-lost-modal" class="modal-overlay hidden">
+  <div class="modal" style="width:min(460px,95vw);">
+    <div class="modal-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+        <path d="M12 9v4"/><path d="M12 17h.01"/>
+        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/>
+      </svg>
+      <span class="modal-title">Connection to the app lost</span>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;line-height:1.5;">
+        open-EE-workbench is no longer running in the background, so this window can't do anything.
+        Close it and start open-EE-workbench again. This message disappears by itself if the
+        connection comes back.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ── Python console resource-takeover confirm modal ──────────── -->
+<div id="py-confirm-modal" class="modal-overlay hidden">
+  <div class="modal" style="width:min(460px,95vw);">
+    <div class="modal-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+        <path d="M12 9v4"/><path d="M12 17h.01"/>
+        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/>
+      </svg>
+      <span class="modal-title">Instrument in use</span>
+      <button class="btn btn-ghost" style="padding:2px 7px;font-size:13px;" onclick="pyConfirmRespond(false)">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="py-confirm-message" style="font-size:13px;line-height:1.5;"></p>
+    </div>
+    <div class="modal-footer" style="justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="pyConfirmRespond(false)">Cancel</button>
+      <button class="btn btn-primary" onclick="pyConfirmRespond(true)">Disconnect &amp; continue</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Workbench manage modal ──────────────────────────────────── -->
 <div id="wb-manage-modal" class="modal-overlay hidden">
   <div class="modal" style="width:min(420px,95vw);">
@@ -3033,6 +3074,18 @@ function closeScpiRefModal() {
 
 // ── Python console ─────────────────────────────────────────────────
 let _pyRunning = false;
+let _pyConfirmId = null;
+
+function pyConfirmRespond(proceed) {
+  document.getElementById("py-confirm-modal").classList.add("hidden");
+  if (!_pyConfirmId) return;
+  fetch("/api/python/confirm", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ id: _pyConfirmId, proceed }),
+  }).catch(() => {});
+  _pyConfirmId = null;
+}
 
 const _PY_DEFAULT_SCRIPT = `# Available in scope (no imports needed):
 #   print, time, json, math, Path, pyvisa, pymeasure
@@ -3535,13 +3588,32 @@ function _summarizeSweepParams(p) {
 
 // ── Socket.IO ──────────────────────────────────────────────────────
 const socket = io({ transports: ["websocket","polling"] });
-socket.on("connect",    () => logMsg("[socket] connected"));
-socket.on("disconnect", () => logMsg("[socket] disconnected","warn"));
+// A short grace period so a momentary blip doesn't flash the modal.
+let _backendLostTimer = null;
+socket.on("connect", () => {
+  logMsg("[socket] connected");
+  clearTimeout(_backendLostTimer);
+  document.getElementById("backend-lost-modal").classList.add("hidden");
+});
+socket.on("disconnect", () => {
+  logMsg("[socket] disconnected","warn");
+  clearTimeout(_backendLostTimer);
+  _backendLostTimer = setTimeout(() =>
+    document.getElementById("backend-lost-modal").classList.remove("hidden"), 3000);
+});
 socket.on("log", ({ msg, cls }) => logMsg(msg, cls));
 socket.on("python_output", ({ msg, cls }) => _pyAppend(msg, cls));
 socket.on("python_done", ({ error } = {}) => {
   _pySetRunning(false);
   if (error) _pyAppend("✗ Interrupted", "py-err");
+  document.getElementById("py-confirm-modal").classList.add("hidden");
+  _pyConfirmId = null;
+});
+socket.on("python_confirm", ({ id, resource, message }) => {
+  _pyConfirmId = id;
+  document.getElementById("py-confirm-message").textContent =
+    message || `The Workbench tab is currently using ${resource}.`;
+  document.getElementById("py-confirm-modal").classList.remove("hidden");
 });
 socket.on("scpi_traffic", ({ role, cmd, result, poll }) => {
   if (poll ? !verbosePoll : !verboseScpi) return;
@@ -10292,6 +10364,15 @@ function ivChartDraw() {
                     `${gLabel}=${_fmtTick(cv.gateV)}V`;
 
   const { items, outlines, means } = _ivBuildRenderPlan(makeLbl);
+  // The draw hook below runs on every redraw (including a plain setData() when the
+  // uPlot instance is reused, not just at construction) — stash the freshly built
+  // outlines/means/items where it can read them live each time, rather than closing
+  // over this call's locals, which would go stale the first time a redraw happens
+  // without a full rebuild (e.g. toggling a device chip when the curve-group count
+  // doesn't change) and silently keep painting the previous state.
+  _ivChart._renderItems    = items;
+  _ivChart._renderOutlines = outlines;
+  _ivChart._renderMeans    = means;
 
   // Build unified x array and aligned y arrays for each series. In log mode, a single
   // y<=0 point anywhere in the series breaks uPlot's whole log path (not just that
@@ -10360,6 +10441,8 @@ function ivChartDraw() {
           // stroke its mean on top — both drawn as raw canvas paths rather than
           // uPlot series since neither is guaranteed to be a function of x. Done
           // before anything else draws so the legend stays legible on top.
+          const outlines = _ivChart._renderOutlines || [];
+          const means    = _ivChart._renderMeans || [];
           if (outlines.length || means.length) {
             const dpr = devicePixelRatio || 1;
             u.ctx.save();
@@ -10400,9 +10483,10 @@ function ivChartDraw() {
           // legend at the bottom-right there instead of on top of every trace's origin.
           const legendAtBottom = _ivChart.polarity === "p" &&
             (_tsActivePlot === "iv_curve" || _tsActivePlot === "transfer");
+          const legendItems = _ivChart._renderItems || [];
           const legendEntries = means.length
             ? means.map(m => ({ color: m.color, dash: null, label: m.label }))
-            : items.filter(it => it.label).map(it => ({ color: it.color, dash: it.dash, label: it.label }));
+            : legendItems.filter(it => it.label).map(it => ({ color: it.color, dash: it.dash, label: it.label }));
           _uplotDrawLegend(u, legendEntries, { bottom: legendAtBottom });
           // live ring on last point of the currently-running device's last curve
           const cs = _ivChart.curves;

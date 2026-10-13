@@ -42,9 +42,12 @@ def add_libusb_to_path():
 
 
 def _powershell(command: str, timeout: float = 30) -> subprocess.CompletedProcess:
+    # CREATE_NO_WINDOW: the app runs under pythonw.exe (no console), where a
+    # console child would otherwise flash up its own window.
     return subprocess.run(
         ["powershell", "-NoProfile", "-NonInteractive", "-Command", command],
         capture_output=True, text=True, timeout=timeout,
+        creationflags=subprocess.CREATE_NO_WINDOW,
     )
 
 

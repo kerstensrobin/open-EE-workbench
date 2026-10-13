@@ -2,7 +2,11 @@
 """
 install.py — set up open-EE-workbench on a new machine.
 
-    python install.py
+Students don't run this directly: they double-click install-windows.bat or
+run install-linux-mac.sh in the project root, which find Python and call
+this (on Windows via the install_gui.pyw window). Directly:
+
+    python src/installer/install.py
 
 What it does:
   1. Installs required Python packages via pip (plus, on Windows, libusb and
@@ -21,7 +25,7 @@ import threading
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # src/
 from core.browser import find_chrome
 
 # cmd.exe defaults to a legacy codepage (e.g. cp1252) that can't encode "→"/"…" —
@@ -46,7 +50,7 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-ROOT    = Path(__file__).parent.resolve()
+ROOT    = Path(__file__).resolve().parents[2]   # project root (this is src/installer/)
 APP_DIR = ROOT / "src"
 PYTHON  = sys.executable
 VENV    = ROOT / ".venv"
@@ -111,13 +115,19 @@ class Spinner:
     Interactive steps (input() prompts) must happen outside this context
     manager — concurrent spinner redraws and prompt input would garble
     the terminal.
+
+    When stdout isn't a real terminal (piped to a GUI subprocess, redirected
+    to a log file, …) the cursor-movement escapes that animate the box in
+    place would just show up as literal garbage, so this falls back to
+    plain "[install] <message>" lines instead.
     """
 
     def __init__(self, message: str = "Working"):
         self._message = message
         self._stop = threading.Event()
         self._lock = threading.Lock()
-        self._thread = threading.Thread(target=self._spin, daemon=True)
+        self._tty = sys.stdout.isatty()
+        self._thread = threading.Thread(target=self._spin, daemon=True) if self._tty else None
 
     def _write_spinner_row(self, frame: str, msg: str):
         line = _logo_line(_SPINNER_ROW, frame, msg)
@@ -138,16 +148,22 @@ class Spinner:
     def update(self, message: str):
         with self._lock:
             self._message = message
+        if not self._tty:
+            print(f"[install] {message}", flush=True)
 
     def __enter__(self):
-        _print_logo(frame=_SPINNER_FRAMES[0], msg=self._message)
-        self._thread.start()
+        if self._tty:
+            _print_logo(frame=_SPINNER_FRAMES[0], msg=self._message)
+            self._thread.start()
+        else:
+            print(f"[install] {self._message}", flush=True)
         return self
 
     def __exit__(self, *args):
-        self._stop.set()
-        self._thread.join()
-        print()
+        if self._tty:
+            self._stop.set()
+            self._thread.join()
+            print()
 
 
 # ── 1. Dependencies ───────────────────────────────────────────────────────────
@@ -173,6 +189,7 @@ REQUIRED = [
 # down with it, including flask, pyvisa, etc.
 BEST_EFFORT = [
     "h5py",
+    "psutil",   # lets pyvisa-py's VXI-11 discovery scan every network interface
 ]
 
 OPTIONAL = {
@@ -203,7 +220,7 @@ def ensure_venv(spinner: Spinner):
                 f"\n[error] Could not create virtual environment.\n"
                 f"        On Ubuntu/Debian, install the venv package first:\n\n"
                 f"            sudo apt install {_venv_pkg()}\n\n"
-                f"        Then re-run:  python3 install.py"
+                f"        Then re-run:  bash install-linux-mac.sh"
             )
         raise
 
@@ -230,7 +247,13 @@ def _pip_install_with_progress(spinner: Spinner, args: list, label: str = "Insta
     return proc.returncode, "".join(output)
 
 
-def install_deps():
+def install_deps(optional_choices: dict | None = None, usb_driver: str | None = None):
+    """optional_choices: {pkg_name: "y"/"n"} to pre-answer OPTIONAL prompts
+    (e.g. from a GUI) instead of calling input(). usb_driver: "y"/"n" to
+    pre-answer ensure_usb_driver_windows() the same way. Either left as None
+    preserves the existing interactive prompt.
+    """
+    optional_choices = optional_choices or {}
     with Spinner("Preparing virtual environment") as spinner:
         ensure_venv(spinner)
         spinner.update("Installing required packages")
@@ -260,12 +283,61 @@ def install_deps():
 
     print("\nOptional packages (skip with Ctrl-C to accept defaults):")
     for pkg, desc in OPTIONAL.items():
-        ans = input(f"  Install {pkg} ({desc})? [y/N] ").strip().lower()
+        if pkg in optional_choices:
+            ans = optional_choices[pkg]
+        else:
+            try:
+                ans = input(f"  Install {pkg} ({desc})? [y/N] ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                ans = "n"
         if ans == "y":
             subprocess.check_call([str(VENV_PYTHON), "-m", "pip", "install", pkg])
+            if pkg == "zeroconf":
+                ensure_zeroconf_importable()
 
     ensure_libusb_windows()
-    ensure_usb_driver_windows()
+    ensure_usb_driver_windows(usb_driver)
+
+
+def ensure_zeroconf_importable():
+    """Fall back to zeroconf's pure-Python modules if its compiled ones won't load.
+
+    zeroconf's wheels ship Cython-compiled .pyd files next to the .py sources
+    they were built from. Windows 11 Smart App Control blocks unsigned DLLs
+    without download reputation ("DLL load failed … An Application Control
+    policy has blocked this file"), so `import zeroconf` fails even though pip
+    installed it, and pyvisa-py reports it as missing. Removing the compiled
+    modules makes Python import the .py sources instead, which zeroconf
+    supports as a first-class mode (just slower, irrelevant for discovery).
+    """
+    def _imports() -> bool:
+        return subprocess.run(
+            [str(VENV_PYTHON), "-c", "import zeroconf"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        ).returncode == 0
+
+    if _imports():
+        return
+    try:
+        # find_spec locates the package without executing its __init__.
+        pkg_dir = Path(subprocess.check_output(
+            [str(VENV_PYTHON), "-c",
+             "import importlib.util; print(importlib.util.find_spec('zeroconf').origin)"],
+            text=True,
+        ).strip()).parent
+        for ext in ("*.pyd", "*.so"):
+            for f in pkg_dir.rglob(ext):
+                f.unlink()
+    except (subprocess.CalledProcessError, OSError) as exc:
+        print(f"[install] Could not repair zeroconf ({exc}).", file=sys.stderr)
+        return
+    if _imports():
+        print("[install] zeroconf's compiled modules were blocked (Windows Smart App "
+              "Control?) — using its pure-Python version instead.")
+    else:
+        print("[install] zeroconf is installed but cannot be imported — HiSLIP "
+              "instrument discovery will be unavailable.", file=sys.stderr)
 
 
 # ── 1b. libusb DLL (Windows only) ─────────────────────────────────────────────
@@ -310,7 +382,8 @@ def ensure_libusb_windows():
 # Binds Windows' inbox WinUSB driver to every USBTMC instrument, present or
 # plugged in later (see core/usbtmc_winusb.ps1). Skipped when a vendor VISA is
 # installed — it brings its own driver and PyVISA prefers it.
-def ensure_usb_driver_windows():
+def ensure_usb_driver_windows(choice: str | None = None):
+    """choice: pre-answer ("y"/"n") to skip the input() prompt, e.g. from a GUI."""
     if sys.platform != "win32":
         return
     from core import winusb
@@ -323,11 +396,14 @@ def ensure_usb_driver_windows():
         "\nWindows has no built-in driver for USB lab instruments. The installer can add\n"
         "one (Windows' own WinUSB driver), which needs a single admin prompt."
     )
-    try:
-        ans = input("Install the USB instrument driver? [Y/n] ").strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        print()
-        ans = "n"
+    if choice is not None:
+        ans = choice
+    else:
+        try:
+            ans = input("Install the USB instrument driver? [Y/n] ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            ans = "n"
     if ans not in ("", "y"):
         print("[install] Skipped. Run it later with:\n"
               "          python src/core/nachoVisa.py --install-usb-driver")
@@ -335,35 +411,53 @@ def ensure_usb_driver_windows():
     winusb.install_driver()
 
 
-# ── 2. Desktop launcher (Linux only) ─────────────────────────────────────────
+# ── 2. Launcher (open-eew.bat on Windows, open-eew elsewhere) ────────────────
 
-def patch_launchers():
-    launcher = ROOT / "open-eew"
-    launcher.write_text(
-        "#!/usr/bin/env bash\n"
-        'cd "$(dirname "$0")"\n'
-        'if [ -f .venv/bin/python ]; then\n'
-        "    exec .venv/bin/python src/app.py \"$@\"\n"
-        "else\n"
-        '    exec python3 src/app.py "$@"\n'
-        "fi\n"
-    )
-    launcher.chmod(launcher.stat().st_mode | 0o755)
+def write_launcher():
+    """Write the start file for this platform into the project root.
 
+    The launchers aren't in the repo: before installing, the root holds only
+    the install-* files, and afterwards exactly one way to start the app.
+    """
+    if sys.platform != "win32":
+        launcher = ROOT / "open-eew"
+        launcher.write_text(
+            "#!/usr/bin/env bash\n"
+            'cd "$(dirname "$0")"\n'
+            'if [ -f .venv/bin/python ]; then\n'
+            "    exec .venv/bin/python src/app.py \"$@\"\n"
+            "else\n"
+            '    exec python3 src/app.py "$@"\n'
+            "fi\n"
+        )
+        launcher.chmod(launcher.stat().st_mode | 0o755)
+        print(f"\n[install] Start the app with: {launcher}")
+        return
+
+    # pythonw.exe via `start`: no console window lingers that a user could
+    # close (killing the backend while the app window stayed open). The app
+    # logs to results\open-eew.log instead.
     bat = ROOT / "open-eew.bat"
     bat.write_text(
         "@echo off\n"
         'cd /d "%~dp0"\n'
-        'if exist .venv\\Scripts\\python.exe (\n'
+        "rem No console window: the app runs under pythonw.exe and logs to\n"
+        "rem results\\open-eew.log. Run .venv\\Scripts\\python.exe src\\app.py\n"
+        "rem directly to see its output in this window instead.\n"
+        'if exist .venv\\Scripts\\pythonw.exe (\n'
         '    set "PATH=%~dp0.venv\\Scripts;%PATH%"\n'
-        '    .venv\\Scripts\\python.exe src\\app.py %*\n'
+        '    start "" .venv\\Scripts\\pythonw.exe src\\app.py %*\n'
         ") else (\n"
         "    python src\\app.py %*\n"
         ")\n"
     )
+    print(f"\n[install] Start the app by double-clicking {bat.name} in {ROOT}")
 
 
-def make_desktop():
+# ── 3. Desktop entry (Linux only) ────────────────────────────────────────────
+
+def make_desktop(choice: str | None = None):
+    """choice: pre-answer ("y"/"n") to skip the input() prompt, e.g. from a GUI."""
     if sys.platform != "linux":
         print("\n[install] Desktop launcher is Linux-only — skipping.")
         return
@@ -393,9 +487,12 @@ Keywords=VISA;SCPI;oscilloscope;power supply;DMM;AWG;lab;instrument;
     desktop_file.chmod(desktop_file.stat().st_mode | 0o755)
     print(f"\n[install] Launcher written → {desktop_file}")
 
-    ans = input(
-        "Install into ~/.local/share/applications so it appears in your app menu? [y/N] "
-    ).strip().lower()
+    if choice is not None:
+        ans = choice
+    else:
+        ans = input(
+            "Install into ~/.local/share/applications so it appears in your app menu? [y/N] "
+        ).strip().lower()
     if ans == "y":
         apps_dir = Path.home() / ".local" / "share" / "applications"
         apps_dir.mkdir(parents=True, exist_ok=True)
@@ -442,11 +539,28 @@ def print_chrome_note():
     )
 
 
+def _yn(s):
+    if s not in ("y", "n"):
+        raise argparse.ArgumentTypeError("expected 'y' or 'n'")
+    return s
+
+
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--zeroconf", type=_yn, default=None,
+                         help="Pre-answer the zeroconf optional-package prompt (y/n) instead of asking")
+    parser.add_argument("--usb-driver", type=_yn, default=None,
+                         help="Pre-answer the Windows USB driver prompt (y/n) instead of asking")
+    parser.add_argument("--desktop-entry", type=_yn, default=None,
+                         help="Pre-answer the Linux app-menu entry prompt (y/n) instead of asking")
+    args = parser.parse_args()
+
     print(f"open-EE-workbench installer\nProject root: {ROOT}\n")
-    install_deps()
-    patch_launchers()
+    install_deps(optional_choices={"zeroconf": args.zeroconf} if args.zeroconf else None,
+                 usb_driver=args.usb_driver)
+    write_launcher()
     print_pywebview_apt_note()
     print_chrome_note()
-    make_desktop()
+    make_desktop(choice=args.desktop_entry)
     print("\nDone.")
