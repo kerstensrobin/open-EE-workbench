@@ -16,10 +16,12 @@ Built on PyVISA and PyVISA-py with SCPI dialect coverage across **149 instrument
 ```bash
 git clone https://github.com/kerstensrobin/open-EE-workbench
 cd open-EE-workbench
-python install.py                  # install deps + optional desktop launcher
+python install.py                  # install deps + optional desktop launcher  (Windows: install.bat)
 python src/core/nachoVisa.py       # scan bench, save workbench
 ./open-eew                         # launch GUI  (open-eew.bat on Windows)
 ```
+
+**[Note for Windows users]** If `python` isn't recognized in your terminal (Python wasn't added to PATH during install), run `install.bat` instead of `python install.py` — it also tries the `py` launcher, which Windows registers separately from PATH.
 
 On Linux, USB instruments need a one-time udev rule:
 ```bash
@@ -55,6 +57,7 @@ See the **[Wiki](https://github.com/kerstensrobin/open-EE-workbench/wiki/Windows
 ```
 open-EE-workbench/
 ├── install.py                  dependency installer (creates .venv)
+├── install.bat                 Windows installer wrapper (finds Python without PATH)
 ├── open-eew                    launch script (Linux / Mac)
 ├── open-eew.bat                launch script (Windows)
 ├── LICENSE
