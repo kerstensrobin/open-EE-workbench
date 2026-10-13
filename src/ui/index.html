@@ -2566,6 +2566,26 @@
   </div>
 </div>
 
+<!-- ── Backend lost modal (shown while the socket is down) ─────── -->
+<div id="backend-lost-modal" class="modal-overlay hidden">
+  <div class="modal" style="width:min(460px,95vw);">
+    <div class="modal-header">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+        <path d="M12 9v4"/><path d="M12 17h.01"/>
+        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/>
+      </svg>
+      <span class="modal-title">Connection to the app lost</span>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;line-height:1.5;">
+        open-EE-workbench is no longer running in the background, so this window can't do anything.
+        Close it and start open-EE-workbench again. This message disappears by itself if the
+        connection comes back.
+      </p>
+    </div>
+  </div>
+</div>
+
 <!-- ── Python console resource-takeover confirm modal ──────────── -->
 <div id="py-confirm-modal" class="modal-overlay hidden">
   <div class="modal" style="width:min(460px,95vw);">
@@ -3568,8 +3588,19 @@ function _summarizeSweepParams(p) {
 
 // ── Socket.IO ──────────────────────────────────────────────────────
 const socket = io({ transports: ["websocket","polling"] });
-socket.on("connect",    () => logMsg("[socket] connected"));
-socket.on("disconnect", () => logMsg("[socket] disconnected","warn"));
+// A short grace period so a momentary blip doesn't flash the modal.
+let _backendLostTimer = null;
+socket.on("connect", () => {
+  logMsg("[socket] connected");
+  clearTimeout(_backendLostTimer);
+  document.getElementById("backend-lost-modal").classList.add("hidden");
+});
+socket.on("disconnect", () => {
+  logMsg("[socket] disconnected","warn");
+  clearTimeout(_backendLostTimer);
+  _backendLostTimer = setTimeout(() =>
+    document.getElementById("backend-lost-modal").classList.remove("hidden"), 3000);
+});
 socket.on("log", ({ msg, cls }) => logMsg(msg, cls));
 socket.on("python_output", ({ msg, cls }) => _pyAppend(msg, cls));
 socket.on("python_done", ({ error } = {}) => {

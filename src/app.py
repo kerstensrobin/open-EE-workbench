@@ -15,6 +15,7 @@ Usage
 import argparse
 import atexit
 import logging
+import os
 import subprocess
 import sys
 import threading
@@ -23,6 +24,19 @@ from pathlib import Path
 
 ROOT   = Path(__file__).parent
 UI_DIR = ROOT / "ui"
+
+# Under pythonw.exe (how open-eew.bat starts the app on Windows, so there is
+# no console window a user could close and kill the backend with) stdout and
+# stderr are None: print() output would vanish and any direct
+# sys.stdout.write() would raise. Send both to a log file instead.
+if sys.stdout is None or sys.stderr is None:
+    _log_dir = ROOT.parent / "results"
+    _log_dir.mkdir(exist_ok=True)
+    _log_file = open(_log_dir / "open-eew.log", "a", encoding="utf-8",
+                     errors="replace", buffering=1)
+    sys.stdout = sys.stdout or _log_file
+    sys.stderr = sys.stderr or _log_file
+    print(f"\n── open-EE-workbench started {time.strftime('%Y-%m-%d %H:%M:%S')} ──")
 
 # core/ and its siblings must be importable by bare module name
 sys.path.insert(0, str(ROOT / "core"))
@@ -169,10 +183,47 @@ def manifest():
 
 
 # ── SocketIO ──────────────────────────────────────────────────────────────────
+# The backend lives as long as some UI window is connected. When the window
+# is handed to an already-running Chrome (see main()), closing it can't be
+# observed any other way — and with no console window either, the server
+# would otherwise keep running invisibly, holding the instruments open.
+_IDLE_SHUTDOWN_S = 30   # long enough to ride out page reloads and brief sleeps
+_ui_clients = 0
+_ui_idle_since = 0.0
+_ui_lock = threading.Lock()
+
+
 @sio.on("connect")
 def _on_connect():
+    global _ui_clients
+    with _ui_lock:
+        _ui_clients += 1
     from core.helpers import _log
     _log("[system] UI connected")
+
+
+@sio.on("disconnect")
+def _on_disconnect(*_args):
+    global _ui_clients, _ui_idle_since
+    with _ui_lock:
+        _ui_clients = max(0, _ui_clients - 1)
+        idle = _ui_clients == 0
+        if idle:
+            _ui_idle_since = time.monotonic()
+    if idle:
+        timer = threading.Timer(_IDLE_SHUTDOWN_S, _shutdown_if_idle)
+        timer.daemon = True   # never hold up a normal exit
+        timer.start()
+
+
+def _shutdown_if_idle():
+    with _ui_lock:
+        # A newer disconnect has its own timer pending; let that one decide.
+        if _ui_clients or time.monotonic() - _ui_idle_since < _IDLE_SHUTDOWN_S - 1:
+            return
+    print("[system] No UI connected — shutting down.")
+    _cleanup()
+    os._exit(0)
 
 
 # ── Graceful shutdown ─────────────────────────────────────────────────────────

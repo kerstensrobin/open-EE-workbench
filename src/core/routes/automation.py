@@ -943,6 +943,7 @@ def api_automation_run():
                         result = subprocess.run(
                             [script], env=env,
                             capture_output=True, text=True, timeout=30,
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                         )
                         out = (result.stdout or "").strip().split("\n")[0]
                         if out:

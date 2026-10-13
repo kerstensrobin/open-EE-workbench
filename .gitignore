@@ -5,7 +5,10 @@
 __pycache__/
 *.pyc
 
-# Generated at install time (double-click launcher, Linux only)
+# Generated at install time: the start file for the platform installed on,
+# and the Linux app-menu entry
+/open-eew
+/open-eew.bat
 /open-EE-workbench.desktop
 
 # Runtime output — generated per run, not source

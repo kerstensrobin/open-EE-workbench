@@ -29,6 +29,7 @@ def api_check_update():
             ["git", "describe", "--tags", "--always"],
             cwd=os.path.dirname(os.path.abspath(__file__)),
             stderr=subprocess.DEVNULL, text=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         ).strip()
     except Exception:
         current = "unknown"
@@ -356,8 +357,14 @@ def _confirm_resource_takeover(resource_name: str) -> bool:
         ),
     })
     try:
-        answered = event.wait(timeout=120)
-        return _confirm_answers.pop(confirm_id, False) if answered else False
+        # Short slices, not one long wait: the console's Stop button works by
+        # raising KeyboardInterrupt in this thread, which only lands between
+        # Python bytecodes — a single blocking wait would hold it off.
+        deadline = _time.monotonic() + 120
+        while not event.wait(0.25):
+            if _time.monotonic() > deadline:
+                return False
+        return _confirm_answers.pop(confirm_id, False)
     finally:
         _pending_confirms.pop(confirm_id, None)
         _confirm_answers.pop(confirm_id, None)
@@ -375,39 +382,75 @@ def api_python_confirm():
     return jsonify({"status": "ok"})
 
 
-class _GuardedResourceManager:
-    """Wraps a real pyvisa.ResourceManager so open_resource() on an address
-    the Workbench tab already holds pauses for user confirmation instead of
-    silently fighting over the device. See _confirm_resource_takeover()."""
+def _resource_key(resource_name: str):
+    """Canonical form of a VISA resource name for equality checks.
 
-    def __init__(self, real_rm):
-        self._real = real_rm
+    The same instrument can be spelled many ways: pyvisa-py lists USB IDs in
+    decimal ("USB0::10893::36609::…") while scripts and datasheets use hex
+    ("USB0::0x2A8D::0x8F01::…"), and the board number, "::0" interface
+    number and case are all optional/insensitive.
+    """
+    try:
+        from pyvisa import rname
+        parsed = rname.parse_resource_name(resource_name)
+    except Exception:
+        return resource_name.strip().upper()
+    fields = []
+    for f in parsed._fields:
+        v = str(getattr(parsed, f, "") or "")
+        try:
+            fields.append(int(v, 0))
+        except ValueError:
+            fields.append(v.upper())
+    return (type(parsed).__name__, tuple(fields))
+
+
+def _held_by_workbench(resource_name: str) -> str | None:
+    """Return the Workbench's own spelling of resource_name if it holds it."""
+    key = _resource_key(resource_name)
+    for held in list(_sh._state.get("resources", {})):
+        if _resource_key(held) == key:
+            return held
+    return None
+
+
+_console = threading.local()   # .active is True on the console's exec thread
+
+
+def _install_takeover_guard():
+    """Make open_resource() on an address the Workbench tab already holds
+    pause for user confirmation instead of silently fighting over the device.
+    See _confirm_resource_takeover().
+
+    Patched on pyvisa's ResourceManager class rather than handed to scripts
+    as a wrapped module: scripts start with their own `import pyvisa` (which
+    would replace any wrapper in their namespace), and libraries such as
+    pymeasure open sessions through pyvisa too. Only calls made on the
+    console's exec thread are checked, so the Workbench's own connects are
+    unaffected.
+    """
+    from pyvisa.highlevel import ResourceManager
+    real_open = ResourceManager.open_resource
+    if getattr(real_open, "_eew_guard", False):
+        return
 
     def open_resource(self, resource_name, *a, **kw):
-        if resource_name in _sh._state.get("resources", {}):
-            from core.routes.connection import _disconnect_all
+        if getattr(_console, "active", False) and _held_by_workbench(resource_name):
             if not _confirm_resource_takeover(resource_name):
                 raise RuntimeError(
                     f"Cancelled: the Workbench tab is connected to {resource_name!r}. "
                     "Disconnect it first (or accept the takeover prompt) before this "
                     "script can open it."
                 )
-            _disconnect_all()
-        return self._real.open_resource(resource_name, *a, **kw)
+            from core.routes.connection import _disconnect_all
+            # pyvisa hands out one shared ResourceManager per backend, so `self`
+            # is usually the Workbench's own: release its instruments but keep
+            # the session open, or this very call fails with InvalidSession.
+            _disconnect_all(close_rm=False)
+        return real_open(self, resource_name, *a, **kw)
 
-    def __getattr__(self, name):
-        return getattr(self._real, name)
-
-
-class _GuardedPyvisaModule:
-    def __init__(self, real_module):
-        self._real = real_module
-
-    def ResourceManager(self, *a, **kw):
-        return _GuardedResourceManager(self._real.ResourceManager(*a, **kw))
-
-    def __getattr__(self, name):
-        return getattr(self._real, name)
+    open_resource._eew_guard = True
+    ResourceManager.open_resource = open_resource
 
 
 @bp.route("/api/python/run", methods=["POST"])
@@ -463,7 +506,9 @@ def api_python_run():
         if path:
             ns["__file__"] = path
         if _sh.PYVISA_OK:
-            ns["pyvisa"] = _GuardedPyvisaModule(_sh.pyvisa)
+            _install_takeover_guard()
+            ns["pyvisa"] = _sh.pyvisa
+        _console.active = True
         try:
             import pymeasure as _pymeasure
             ns["pymeasure"] = _pymeasure
@@ -495,6 +540,7 @@ def api_python_run():
                     _py_emit(line, "py-err")
             _sh.sio.emit("python_done", {"error": str(exc)})
         finally:
+            _console.active = False
             _py_running = False
             _py_thread = None
 
@@ -643,7 +689,7 @@ def api_export_hdf5():
         import h5py
         import numpy as np
     except ImportError:
-        return jsonify({"error": "h5py is not installed — run install.py to add it"}), 500
+        return jsonify({"error": "h5py is not installed — re-run the installer (install-windows.bat / install-linux-mac.sh) to add it"}), 500
 
     d        = request.json or {}
     filename = d.get("filename", "export")

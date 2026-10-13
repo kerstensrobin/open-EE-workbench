@@ -13,22 +13,28 @@ Built on PyVISA and PyVISA-py with SCPI dialect coverage across **149 instrument
 
 ## Quick start
 
-```bash
-git clone https://github.com/kerstensrobin/open-EE-workbench
-cd open-EE-workbench
-python install.py                  # install deps + optional desktop launcher  (Windows: install.bat)
-python src/core/nachoVisa.py       # scan bench, save workbench
-./open-eew                         # launch GUI  (open-eew.bat on Windows)
-```
+**1. Install** — download or clone this repository, then:
 
-**[Note for Windows users]** If `python` isn't recognized in your terminal, run `install.bat` instead of `python install.py` — it also tries the `py` launcher (registered separately from PATH), and if Python isn't installed at all it offers to install it for you via `winget`. Prefer a GUI? Double-click `install_gui.pyw` instead — same installer, no terminal.
+| | |
+|---|---|
+| **Windows** | Double-click **`install-windows.bat`** and click *Install* in the window that opens. No Python yet? It offers to install it for you. |
+| **Mac / Linux** | In a terminal, in this folder: **`bash install-linux-mac.sh`** |
+
+**2. Start** — the installer creates the start file for your system in this folder:
+
+| | |
+|---|---|
+| **Windows** | Double-click **`open-eew.bat`** (or click *Start open-EE-workbench* when the installer finishes) |
+| **Mac / Linux** | **`./open-eew`** |
+
+To scan the bench and save a workbench from the command line instead: `python src/core/nachoVisa.py`
 
 On Linux, USB instruments need a one-time udev rule:
 ```bash
 python src/core/nachoVisa.py --fix-udev   # then re-plug USB instruments
 ```
 
-**[Note for Windows users]** Windows has no built-in driver for USB instruments. Unless a vendor VISA (Keysight IO Libraries, NI-VISA, …) is already installed, `install.py` offers to bind Windows' own WinUSB driver to every USB test & measurement instrument — one admin prompt, and instruments plugged in later work too. To do it (or undo it) later:
+**[Note for Windows users]** Windows has no built-in driver for USB instruments. Unless a vendor VISA (Keysight IO Libraries, NI-VISA, …) is already installed, the installer offers to bind Windows' own WinUSB driver to every USB test & measurement instrument — one admin prompt, and instruments plugged in later work too. To do it (or undo it) later:
 ```bash
 python src/core/nachoVisa.py --install-usb-driver
 python src/core/nachoVisa.py --remove-usb-driver
@@ -56,11 +62,9 @@ See the **[Wiki](https://github.com/kerstensrobin/open-EE-workbench/wiki/Windows
 
 ```
 open-EE-workbench/
-├── install.py                  dependency installer (creates .venv)
-├── install.bat                 Windows installer wrapper (finds/installs Python without PATH)
-├── install_gui.pyw             Windows installer GUI (double-click, no terminal)
-├── open-eew                    launch script (Linux / Mac)
-├── open-eew.bat                launch script (Windows)
+├── install-windows.bat         installer (Windows) — double-click
+├── install-linux-mac.sh        installer (Mac / Linux) — bash install-linux-mac.sh
+├── open-eew.bat / open-eew     start file (Windows / Mac + Linux), created by the installer
 ├── LICENSE
 ├── README.md
 ├── results/                    test output — CSV data, scope captures, plots
@@ -74,6 +78,7 @@ open-EE-workbench/
     │   ├── setWorkbench.py     drive instruments to a saved state
     │   ├── demo.py             offline demo resources (no hardware needed)
     │   └── routes/             Flask API blueprints (connection, instruments, …)
+    ├── installer/              install.py + install_gui.pyw, run by the install-* files above
     ├── ui/                     single-file web front-end (index.html)
     ├── workbenches/            per-bench instrument config JSON files
     ├── scripts/                standalone Python scripts (sweeps, screenshots, …)
