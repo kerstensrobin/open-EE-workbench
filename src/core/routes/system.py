@@ -127,6 +127,44 @@ def api_report_issue():
     else:
         instr_section = "_No instruments connected at time of report._"
 
+    # SCPI history (core/shared.py: _scpi_log) is kept regardless of the UI's
+    # verboseScpi/verbosePoll display filters, so it reflects real traffic
+    # even if the console pane was filtering it out when the bug happened.
+    scpi_entries = list(_sh._scpi_log)
+    if scpi_entries:
+        def _fmt_entry(e):
+            ts = datetime.fromtimestamp(e["t"]).strftime("%H:%M:%S")
+            r  = f"[{e['role']}] " if e.get("role") else ""
+            tail = f"  ←  {e['result']}" if e.get("result") is not None else ""
+            return f"{ts}  {r}{e['cmd']}{tail}"
+
+        tail_n = 40
+        tail_lines = "\n".join(_fmt_entry(e) for e in scpi_entries[-tail_n:])
+        shown = min(tail_n, len(scpi_entries))
+        log_path = None
+        try:
+            log_path = today_output_dir() / f"scpi_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+            log_path.write_text(
+                "\n".join(_fmt_entry(e) for e in scpi_entries), encoding="utf-8"
+            )
+        except Exception:
+            pass
+        attach_note = (
+            f"\n📎 Full log ({len(scpi_entries)} entries) saved to `{log_path}` "
+            "— drag it into this issue if it's relevant.\n" if log_path else ""
+        )
+        scpi_section = f"""\
+<details>
+<summary>SCPI log (last {shown} of {len(scpi_entries)})</summary>
+
+```
+{tail_lines}
+```
+</details>
+{attach_note}"""
+    else:
+        scpi_section = "_No SCPI traffic recorded this session._"
+
     body = f"""\
 ## Description
 
@@ -152,6 +190,10 @@ def api_report_issue():
 ### Instruments
 
 {instr_section}
+
+### SCPI log
+
+{scpi_section}
 
 ### System
 
@@ -274,13 +316,98 @@ def api_pick_folder():
 
 import ctypes
 import threading
+import uuid
 
 _py_running = False
 _py_thread: threading.Thread | None = None
 
+_pending_confirms: dict[str, threading.Event] = {}
+_confirm_answers: dict[str, bool] = {}
+
 
 def _py_emit(msg, cls="py-out"):
     _sh.sio.emit("python_output", {"msg": msg, "cls": cls})
+
+
+def _confirm_resource_takeover(resource_name: str) -> bool:
+    """Ask the UI whether to disconnect the Workbench tab so a Python-console
+    script can open its own raw session to an instrument the Workbench
+    already holds. Blocks the console's exec thread until the UI answers (or
+    120s pass, treated as "no").
+
+    USB instruments allow only one open session — if the Workbench tab is
+    connected and a script calls pyvisa.ResourceManager().open_resource() on
+    the same resource in-process, the two sessions fight over the device
+    (seen as outright connection failures or SCPI "Query INTERRUPTED" errors
+    from traffic neither session knows about). This can't be solved by the
+    existing per-resource lock (core/helpers.py: LockedResource) because that
+    only serialises I/O *within* the app's own session — a script-opened
+    session is invisible to it.
+    """
+    confirm_id = uuid.uuid4().hex
+    event = threading.Event()
+    _pending_confirms[confirm_id] = event
+    _sh.sio.emit("python_confirm", {
+        "id": confirm_id,
+        "resource": resource_name,
+        "message": (
+            f"The Workbench tab is currently using {resource_name}. "
+            "Disconnect it and open the instrument from this script instead?"
+        ),
+    })
+    try:
+        answered = event.wait(timeout=120)
+        return _confirm_answers.pop(confirm_id, False) if answered else False
+    finally:
+        _pending_confirms.pop(confirm_id, None)
+        _confirm_answers.pop(confirm_id, None)
+
+
+@bp.route("/api/python/confirm", methods=["POST"])
+def api_python_confirm():
+    d = request.json or {}
+    confirm_id = d.get("id", "")
+    event = _pending_confirms.get(confirm_id)
+    if event is None:
+        return jsonify({"error": "unknown or expired confirmation"}), 404
+    _confirm_answers[confirm_id] = bool(d.get("proceed"))
+    event.set()
+    return jsonify({"status": "ok"})
+
+
+class _GuardedResourceManager:
+    """Wraps a real pyvisa.ResourceManager so open_resource() on an address
+    the Workbench tab already holds pauses for user confirmation instead of
+    silently fighting over the device. See _confirm_resource_takeover()."""
+
+    def __init__(self, real_rm):
+        self._real = real_rm
+
+    def open_resource(self, resource_name, *a, **kw):
+        if resource_name in _sh._state.get("resources", {}):
+            from core.routes.connection import _disconnect_all
+            if not _confirm_resource_takeover(resource_name):
+                raise RuntimeError(
+                    f"Cancelled: the Workbench tab is connected to {resource_name!r}. "
+                    "Disconnect it first (or accept the takeover prompt) before this "
+                    "script can open it."
+                )
+            _disconnect_all()
+        return self._real.open_resource(resource_name, *a, **kw)
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+class _GuardedPyvisaModule:
+    def __init__(self, real_module):
+        self._real = real_module
+
+    def ResourceManager(self, *a, **kw):
+        return _GuardedResourceManager(self._real.ResourceManager(*a, **kw))
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
 
 
 @bp.route("/api/python/run", methods=["POST"])
@@ -336,7 +463,7 @@ def api_python_run():
         if path:
             ns["__file__"] = path
         if _sh.PYVISA_OK:
-            ns["pyvisa"] = _sh.pyvisa
+            ns["pyvisa"] = _GuardedPyvisaModule(_sh.pyvisa)
         try:
             import pymeasure as _pymeasure
             ns["pymeasure"] = _pymeasure

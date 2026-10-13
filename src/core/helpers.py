@@ -102,17 +102,25 @@ def _run_steps(resource, steps: list, role: str = None, poll: bool = False) -> o
         return _run_steps_unlocked(resource, steps, role=role, poll=poll)
 
 
+def _emit_scpi(role, cmd, result, poll):
+    """Emit a scpi_traffic socket event and mirror it into the capped
+    server-side history (_sh._scpi_log) used by the report-issue route —
+    kept regardless of the UI's verboseScpi/verbosePoll display filters.
+    """
+    _sh.sio.emit("scpi_traffic", {"role": role, "cmd": cmd, "result": result, "poll": poll})
+    _sh._scpi_log.append({"t": time.time(), "role": role, "cmd": cmd,
+                           "result": result, "poll": poll})
+
+
 def _run_steps_unlocked(resource, steps: list, role: str = None, poll: bool = False) -> object:
     result = None
     for action, scpi in steps:
         if action == "write":
             resource.write(scpi)
-            _sh.sio.emit("scpi_traffic", {"role": role, "cmd": scpi,
-                                          "result": None, "poll": poll})
+            _emit_scpi(role, scpi, None, poll)
         elif action == "query":
             result = resource.query(scpi).strip()
-            _sh.sio.emit("scpi_traffic", {"role": role, "cmd": scpi,
-                                          "result": result, "poll": poll})
+            _emit_scpi(role, scpi, result, poll)
         elif action == "raw_query":
             resource.write(scpi)
             # Use a large chunk_size so USBTMC.read() accumulates the full
@@ -127,9 +135,7 @@ def _run_steps_unlocked(resource, steps: list, role: str = None, poll: bool = Fa
                         resource.chunk_size = orig_chunk
                     except Exception:
                         pass
-            _sh.sio.emit("scpi_traffic", {"role": role, "cmd": scpi,
-                                          "result": f"<{len(result)} bytes>",
-                                          "poll": poll})
+            _emit_scpi(role, scpi, f"<{len(result)} bytes>", poll)
     return result
 
 

@@ -111,13 +111,19 @@ class Spinner:
     Interactive steps (input() prompts) must happen outside this context
     manager — concurrent spinner redraws and prompt input would garble
     the terminal.
+
+    When stdout isn't a real terminal (piped to a GUI subprocess, redirected
+    to a log file, …) the cursor-movement escapes that animate the box in
+    place would just show up as literal garbage, so this falls back to
+    plain "[install] <message>" lines instead.
     """
 
     def __init__(self, message: str = "Working"):
         self._message = message
         self._stop = threading.Event()
         self._lock = threading.Lock()
-        self._thread = threading.Thread(target=self._spin, daemon=True)
+        self._tty = sys.stdout.isatty()
+        self._thread = threading.Thread(target=self._spin, daemon=True) if self._tty else None
 
     def _write_spinner_row(self, frame: str, msg: str):
         line = _logo_line(_SPINNER_ROW, frame, msg)
@@ -138,16 +144,22 @@ class Spinner:
     def update(self, message: str):
         with self._lock:
             self._message = message
+        if not self._tty:
+            print(f"[install] {message}", flush=True)
 
     def __enter__(self):
-        _print_logo(frame=_SPINNER_FRAMES[0], msg=self._message)
-        self._thread.start()
+        if self._tty:
+            _print_logo(frame=_SPINNER_FRAMES[0], msg=self._message)
+            self._thread.start()
+        else:
+            print(f"[install] {self._message}", flush=True)
         return self
 
     def __exit__(self, *args):
-        self._stop.set()
-        self._thread.join()
-        print()
+        if self._tty:
+            self._stop.set()
+            self._thread.join()
+            print()
 
 
 # ── 1. Dependencies ───────────────────────────────────────────────────────────
@@ -230,7 +242,13 @@ def _pip_install_with_progress(spinner: Spinner, args: list, label: str = "Insta
     return proc.returncode, "".join(output)
 
 
-def install_deps():
+def install_deps(optional_choices: dict | None = None, usb_driver: str | None = None):
+    """optional_choices: {pkg_name: "y"/"n"} to pre-answer OPTIONAL prompts
+    (e.g. from a GUI) instead of calling input(). usb_driver: "y"/"n" to
+    pre-answer ensure_usb_driver_windows() the same way. Either left as None
+    preserves the existing interactive prompt.
+    """
+    optional_choices = optional_choices or {}
     with Spinner("Preparing virtual environment") as spinner:
         ensure_venv(spinner)
         spinner.update("Installing required packages")
@@ -260,12 +278,19 @@ def install_deps():
 
     print("\nOptional packages (skip with Ctrl-C to accept defaults):")
     for pkg, desc in OPTIONAL.items():
-        ans = input(f"  Install {pkg} ({desc})? [y/N] ").strip().lower()
+        if pkg in optional_choices:
+            ans = optional_choices[pkg]
+        else:
+            try:
+                ans = input(f"  Install {pkg} ({desc})? [y/N] ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                ans = "n"
         if ans == "y":
             subprocess.check_call([str(VENV_PYTHON), "-m", "pip", "install", pkg])
 
     ensure_libusb_windows()
-    ensure_usb_driver_windows()
+    ensure_usb_driver_windows(usb_driver)
 
 
 # ── 1b. libusb DLL (Windows only) ─────────────────────────────────────────────
@@ -310,7 +335,8 @@ def ensure_libusb_windows():
 # Binds Windows' inbox WinUSB driver to every USBTMC instrument, present or
 # plugged in later (see core/usbtmc_winusb.ps1). Skipped when a vendor VISA is
 # installed — it brings its own driver and PyVISA prefers it.
-def ensure_usb_driver_windows():
+def ensure_usb_driver_windows(choice: str | None = None):
+    """choice: pre-answer ("y"/"n") to skip the input() prompt, e.g. from a GUI."""
     if sys.platform != "win32":
         return
     from core import winusb
@@ -323,11 +349,14 @@ def ensure_usb_driver_windows():
         "\nWindows has no built-in driver for USB lab instruments. The installer can add\n"
         "one (Windows' own WinUSB driver), which needs a single admin prompt."
     )
-    try:
-        ans = input("Install the USB instrument driver? [Y/n] ").strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        print()
-        ans = "n"
+    if choice is not None:
+        ans = choice
+    else:
+        try:
+            ans = input("Install the USB instrument driver? [Y/n] ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            ans = "n"
     if ans not in ("", "y"):
         print("[install] Skipped. Run it later with:\n"
               "          python src/core/nachoVisa.py --install-usb-driver")
@@ -363,7 +392,8 @@ def patch_launchers():
     )
 
 
-def make_desktop():
+def make_desktop(choice: str | None = None):
+    """choice: pre-answer ("y"/"n") to skip the input() prompt, e.g. from a GUI."""
     if sys.platform != "linux":
         print("\n[install] Desktop launcher is Linux-only — skipping.")
         return
@@ -393,9 +423,12 @@ Keywords=VISA;SCPI;oscilloscope;power supply;DMM;AWG;lab;instrument;
     desktop_file.chmod(desktop_file.stat().st_mode | 0o755)
     print(f"\n[install] Launcher written → {desktop_file}")
 
-    ans = input(
-        "Install into ~/.local/share/applications so it appears in your app menu? [y/N] "
-    ).strip().lower()
+    if choice is not None:
+        ans = choice
+    else:
+        ans = input(
+            "Install into ~/.local/share/applications so it appears in your app menu? [y/N] "
+        ).strip().lower()
     if ans == "y":
         apps_dir = Path.home() / ".local" / "share" / "applications"
         apps_dir.mkdir(parents=True, exist_ok=True)
@@ -442,11 +475,28 @@ def print_chrome_note():
     )
 
 
+def _yn(s):
+    if s not in ("y", "n"):
+        raise argparse.ArgumentTypeError("expected 'y' or 'n'")
+    return s
+
+
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--zeroconf", type=_yn, default=None,
+                         help="Pre-answer the zeroconf optional-package prompt (y/n) instead of asking")
+    parser.add_argument("--usb-driver", type=_yn, default=None,
+                         help="Pre-answer the Windows USB driver prompt (y/n) instead of asking")
+    parser.add_argument("--desktop-entry", type=_yn, default=None,
+                         help="Pre-answer the Linux app-menu entry prompt (y/n) instead of asking")
+    args = parser.parse_args()
+
     print(f"open-EE-workbench installer\nProject root: {ROOT}\n")
-    install_deps()
+    install_deps(optional_choices={"zeroconf": args.zeroconf} if args.zeroconf else None,
+                 usb_driver=args.usb_driver)
     patch_launchers()
     print_pywebview_apt_note()
     print_chrome_note()
-    make_desktop()
+    make_desktop(choice=args.desktop_entry)
     print("\nDone.")

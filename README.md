@@ -21,7 +21,7 @@ python src/core/nachoVisa.py       # scan bench, save workbench
 ./open-eew                         # launch GUI  (open-eew.bat on Windows)
 ```
 
-**[Note for Windows users]** If `python` isn't recognized in your terminal (Python wasn't added to PATH during install), run `install.bat` instead of `python install.py` — it also tries the `py` launcher, which Windows registers separately from PATH.
+**[Note for Windows users]** If `python` isn't recognized in your terminal, run `install.bat` instead of `python install.py` — it also tries the `py` launcher (registered separately from PATH), and if Python isn't installed at all it offers to install it for you via `winget`. Prefer a GUI? Double-click `install_gui.pyw` instead — same installer, no terminal.
 
 On Linux, USB instruments need a one-time udev rule:
 ```bash
@@ -57,7 +57,8 @@ See the **[Wiki](https://github.com/kerstensrobin/open-EE-workbench/wiki/Windows
 ```
 open-EE-workbench/
 ├── install.py                  dependency installer (creates .venv)
-├── install.bat                 Windows installer wrapper (finds Python without PATH)
+├── install.bat                 Windows installer wrapper (finds/installs Python without PATH)
+├── install_gui.pyw             Windows installer GUI (double-click, no terminal)
 ├── open-eew                    launch script (Linux / Mac)
 ├── open-eew.bat                launch script (Windows)
 ├── LICENSE

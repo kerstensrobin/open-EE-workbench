@@ -17,6 +17,10 @@ rm = visa.ResourceManager()
 # the VISA adress for your scope can be found in using Keysight Connection Expert, or nachoVisa.py
 scope = rm.open_resource('TCPIP::143.129.36.135::hislip0,4880::INSTR')
 scope.timeout = 10000 #Always good to involve a time-out to avoid putting the scope into an endless waiting state.
+# PyVISA's default chunk_size (20 KB) is smaller than a full screenshot, so
+# read_raw() below can return after just the first chunk — a cut-off PNG.
+# Raise it well past the largest screenshot we'd ever see (~1-2 MB).
+scope.chunk_size = 2 * 1024 * 1024
 
 measurements = {}  # This variable will be used to save your measurements.
 

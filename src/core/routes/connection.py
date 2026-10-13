@@ -194,8 +194,9 @@ def api_polling_resume():
 
 # ── /api/disconnect ───────────────────────────────────────────────────────────
 
-@bp.route("/api/disconnect", methods=["POST"])
-def api_disconnect():
+def _disconnect_all():
+    """Tear down every connected instrument. Shared by /api/disconnect and the
+    Python console's resource-takeover guard (core/routes/system.py)."""
     _sh._poll_stop.set()
     with _sh._lock:
         for rstr, r in _sh._state["resources"].items():
@@ -217,4 +218,9 @@ def api_disconnect():
         _sh._state.update(rm=None, resources={}, psu_channels={}, connected=False)
         _sh._psu_ch_cache.clear()
     _sh.sio.emit("disconnected", {})
+
+
+@bp.route("/api/disconnect", methods=["POST"])
+def api_disconnect():
+    _disconnect_all()
     return jsonify({"status": "disconnected"})
