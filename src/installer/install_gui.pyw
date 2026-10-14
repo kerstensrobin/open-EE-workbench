@@ -91,9 +91,6 @@ class InstallerGUI:
         self.install_btn = ttk.Button(btn_row, text="Install", command=self.start_install)
         self.install_btn.pack(side="left")
         ttk.Button(btn_row, text="Close", command=root.destroy).pack(side="right")
-        # Shown once an install succeeds — install.py has written the launcher.
-        self.start_btn = ttk.Button(btn_row, text="Start open-EE-workbench",
-                                    command=self.start_app)
 
         self.progress = ttk.Progressbar(root, mode="indeterminate")
         self.progress.pack(fill="x", padx=14, pady=(0, 8))
@@ -172,7 +169,6 @@ class InstallerGUI:
                     if payload == 0:
                         self._append(f"\n✓ Install finished. From now on, start the app with "
                                      f"{_launcher().name} in {ROOT}\n")
-                        self.start_btn.pack(side="left", padx=(8, 0))
                     else:
                         self._append(f"\n✗ Install failed (exit code {payload}). See the log above.\n")
                         messagebox.showerror(
@@ -183,16 +179,6 @@ class InstallerGUI:
         except queue.Empty:
             pass
         self.root.after(80, self._poll_queue)
-
-    def start_app(self):
-        if sys.platform == "win32":
-            # The .bat hands off to pythonw.exe via `start` and exits, so the
-            # app outlives this window; CREATE_NO_WINDOW hides the brief cmd.
-            subprocess.Popen([str(_launcher())], cwd=str(ROOT),
-                             creationflags=subprocess.CREATE_NO_WINDOW)
-        else:
-            subprocess.Popen([str(_launcher())], cwd=str(ROOT), start_new_session=True)
-        self.root.destroy()
 
 
 def main():
