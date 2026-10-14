@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time as _time
 import urllib.request as _urlreq
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
@@ -223,92 +224,106 @@ def api_report_issue():
 
 
 # ── Folder picker ─────────────────────────────────────────────────────────────
+#
+# tkinter is not thread-safe and, on Windows, its native directory dialog is
+# backed by COM's IFileDialog — showing it from a fresh thread per request
+# (as Flask's threaded dev server would otherwise do) risks COM apartment
+# mismatches that hang the dialog forever instead of opening it. Route every
+# call through one dedicated, persistent thread so tkinter/COM only ever see
+# a single, consistent thread.
+_tk_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="folder-picker")
+
+
+def _run_folder_picker(initial: str) -> str | None:
+    import tkinter as _tk
+    from tkinter import filedialog as _fd
+
+    result = {"path": None}
+
+    root = _tk.Tk()
+    root.withdraw()
+
+    dlg = _tk.Toplevel(root)
+    dlg.title("Select output folder")
+    dlg.resizable(True, False)
+    dlg.attributes("-topmost", True)
+
+    folder_var = _tk.StringVar(value=initial)
+
+    # ── Row 1: folder path + Browse ───────────────────────────────
+    r1 = _tk.Frame(dlg, padx=10, pady=8)
+    r1.pack(fill="x")
+    _tk.Label(r1, text="Folder:", width=12, anchor="w").pack(side="left")
+    _tk.Entry(r1, textvariable=folder_var, width=44).pack(
+        side="left", fill="x", expand=True, padx=(0, 6))
+
+    def _browse():
+        p = _fd.askdirectory(parent=dlg, title="Select folder",
+                              initialdir=folder_var.get() or initial)
+        if p:
+            folder_var.set(p)
+
+    _tk.Button(r1, text="Browse…", command=_browse).pack(side="left")
+
+    # ── Row 2: new subfolder + Create ─────────────────────────────
+    r2 = _tk.Frame(dlg, padx=10, pady=2)
+    r2.pack(fill="x")
+    _tk.Label(r2, text="New subfolder:", width=12, anchor="w").pack(side="left")
+    sub_var   = _tk.StringVar()
+    sub_entry = _tk.Entry(r2, textvariable=sub_var, width=44)
+    sub_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
+
+    def _create():
+        name = sub_var.get().strip()
+        if not name:
+            return
+        base     = folder_var.get().strip() or str(Path.home())
+        new_path = Path(base) / name
+        try:
+            new_path.mkdir(parents=True, exist_ok=True)
+            folder_var.set(str(new_path))
+            sub_var.set("")
+        except Exception as exc:
+            _tk.messagebox.showerror("Error", str(exc), parent=dlg)
+
+    sub_entry.bind("<Return>", lambda _: _create())
+    _tk.Button(r2, text="Create", command=_create).pack(side="left")
+
+    # ── Row 3: OK / Cancel ────────────────────────────────────────
+    r3 = _tk.Frame(dlg, padx=10, pady=10)
+    r3.pack(fill="x")
+
+    def _ok():
+        result["path"] = folder_var.get().strip() or None
+        dlg.destroy()
+
+    def _cancel():
+        dlg.destroy()
+
+    dlg.protocol("WM_DELETE_WINDOW", _cancel)
+    _tk.Button(r3, text="Cancel", command=_cancel, width=8).pack(side="right")
+    _tk.Button(r3, text="OK",     command=_ok,     width=8).pack(
+        side="right", padx=(0, 6))
+
+    dlg.update_idletasks()
+    sw, sh = dlg.winfo_screenwidth(), dlg.winfo_screenheight()
+    w,  h  = dlg.winfo_reqwidth(),    dlg.winfo_reqheight()
+    dlg.geometry(f"+{(sw-w)//2}+{(sh-h)//2}")
+
+    dlg.grab_set()
+    root.wait_window(dlg)
+    root.destroy()
+
+    return result["path"]
+
 
 @bp.route("/api/pick-folder", methods=["POST"])
 def api_pick_folder():
     """Open a native OS folder-picker dialog and return the chosen path."""
+    initial = (request.json or {}).get("initial", str(Path.home()))
     try:
-        import tkinter as _tk
-        from tkinter import filedialog as _fd
-
-        initial = (request.json or {}).get("initial", str(Path.home()))
-        result  = {"path": None}
-
-        root = _tk.Tk()
-        root.withdraw()
-
-        dlg = _tk.Toplevel(root)
-        dlg.title("Select output folder")
-        dlg.resizable(True, False)
-        dlg.attributes("-topmost", True)
-
-        folder_var = _tk.StringVar(value=initial)
-
-        # ── Row 1: folder path + Browse ───────────────────────────────
-        r1 = _tk.Frame(dlg, padx=10, pady=8)
-        r1.pack(fill="x")
-        _tk.Label(r1, text="Folder:", width=12, anchor="w").pack(side="left")
-        _tk.Entry(r1, textvariable=folder_var, width=44).pack(
-            side="left", fill="x", expand=True, padx=(0, 6))
-
-        def _browse():
-            p = _fd.askdirectory(parent=dlg, title="Select folder",
-                                  initialdir=folder_var.get() or initial)
-            if p:
-                folder_var.set(p)
-
-        _tk.Button(r1, text="Browse…", command=_browse).pack(side="left")
-
-        # ── Row 2: new subfolder + Create ─────────────────────────────
-        r2 = _tk.Frame(dlg, padx=10, pady=2)
-        r2.pack(fill="x")
-        _tk.Label(r2, text="New subfolder:", width=12, anchor="w").pack(side="left")
-        sub_var   = _tk.StringVar()
-        sub_entry = _tk.Entry(r2, textvariable=sub_var, width=44)
-        sub_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
-
-        def _create():
-            name = sub_var.get().strip()
-            if not name:
-                return
-            base     = folder_var.get().strip() or str(Path.home())
-            new_path = Path(base) / name
-            try:
-                new_path.mkdir(parents=True, exist_ok=True)
-                folder_var.set(str(new_path))
-                sub_var.set("")
-            except Exception as exc:
-                _tk.messagebox.showerror("Error", str(exc), parent=dlg)
-
-        sub_entry.bind("<Return>", lambda _: _create())
-        _tk.Button(r2, text="Create", command=_create).pack(side="left")
-
-        # ── Row 3: OK / Cancel ────────────────────────────────────────
-        r3 = _tk.Frame(dlg, padx=10, pady=10)
-        r3.pack(fill="x")
-
-        def _ok():
-            result["path"] = folder_var.get().strip() or None
-            dlg.destroy()
-
-        def _cancel():
-            dlg.destroy()
-
-        dlg.protocol("WM_DELETE_WINDOW", _cancel)
-        _tk.Button(r3, text="Cancel", command=_cancel, width=8).pack(side="right")
-        _tk.Button(r3, text="OK",     command=_ok,     width=8).pack(
-            side="right", padx=(0, 6))
-
-        dlg.update_idletasks()
-        sw, sh = dlg.winfo_screenwidth(), dlg.winfo_screenheight()
-        w,  h  = dlg.winfo_reqwidth(),    dlg.winfo_reqheight()
-        dlg.geometry(f"+{(sw-w)//2}+{(sh-h)//2}")
-
-        dlg.grab_set()
-        root.wait_window(dlg)
-        root.destroy()
-
-        return jsonify({"path": result["path"]})
+        path = _tk_executor.submit(_run_folder_picker, initial).result()
+        return jsonify({"path": path})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 

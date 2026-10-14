@@ -3087,21 +3087,6 @@ function pyConfirmRespond(proceed) {
   _pyConfirmId = null;
 }
 
-const _PY_DEFAULT_SCRIPT = `# Available in scope (no imports needed):
-#   print, time, json, math, Path, pyvisa, pymeasure
-#   resources  — dict[resource_str → pyvisa resource]
-#   families   — dict[resource_str → resolved family dict]
-#   wb         — active workbench dict, or None
-#   _find_instrument(type)  → (resource, family_id)
-#   _op(resource, family, operation, **kwargs)
-#   get_command(family_id, operation)
-
-# Example — query scope IDN
-scope, fam = _find_instrument('scope')
-if scope:
-    print(scope.query('*IDN?'))
-`;
-
 function _pySetRunning(running) {
   _pyRunning = running;
   document.getElementById("py-run-btn").classList.toggle("hidden", running);
@@ -3216,7 +3201,7 @@ function _pyCloseTab(id, evt) {
   if (tab.dirty && !confirm(`Discard unsaved changes in "${tab.name}"?`)) return;
   _pyTabs.splice(idx, 1);
   if (_pyTabs.length === 0) {
-    _pyNewTab({ name: "script", content: _PY_DEFAULT_SCRIPT });
+    _pyNewTab({ name: "script", content: "" });
     return;
   }
   if (_pyActiveTabId === id) {
@@ -10792,7 +10777,7 @@ document.getElementById("test-meta-modal").addEventListener("click", e => {
 
 // ── Init ──────────────────────────────────────────────────────────
 (async () => { await loadWorkbenches(); refreshAutoTests(); })();
-_pyNewTab({ name: "script", content: _PY_DEFAULT_SCRIPT });
+_pyNewTab({ name: "script", content: "" });
 pyExplorerLoad("");
 </script>
 </body>

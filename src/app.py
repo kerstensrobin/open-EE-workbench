@@ -18,6 +18,16 @@ import logging
 import os
 import subprocess
 import sys
+
+# The output-folder picker (core/routes/system.py) runs tkinter's native
+# directory dialog on a dedicated worker thread, not the main thread. On
+# Windows that dialog is backed by COM's IFileDialog, which needs the
+# single-threaded apartment model; Python only auto-inits COM as
+# multi-threaded unless told otherwise, and the mismatch makes the dialog
+# hang indefinitely instead of opening. Must be set before anything in the
+# process first touches COM, so it comes first in the entry point.
+if sys.platform == "win32":
+    sys.coinit_flags = 2  # COINIT_APARTMENTTHREADED
 import threading
 import time
 from pathlib import Path
