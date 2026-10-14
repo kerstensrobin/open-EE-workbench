@@ -21,6 +21,26 @@ from core.paths import today_output_dir
 bp = Blueprint("system", __name__)
 
 
+# ── Windows USBTMC driver check ────────────────────────────────────────────────
+
+@bp.route("/api/windows/driverless-usb")
+def api_windows_driverless_usb():
+    """List connected USBTMC devices Windows has no driver bound for.
+
+    Windows has no built-in USBTMC driver (core/winusb.py); a device like
+    this enumerates on the bus but can never become a valid VISA resource,
+    so scan/connect just fail with VI_ERROR_RSRC_NFOUND and no indication
+    why. Returns [] on non-Windows or if nothing is driverless.
+    """
+    if sys.platform != "win32":
+        return jsonify({"devices": []})
+    try:
+        from core import winusb
+        return jsonify({"devices": winusb.driverless_usbtmc()})
+    except Exception as exc:
+        return jsonify({"devices": [], "error": str(exc)})
+
+
 # ── Update check ──────────────────────────────────────────────────────────────
 
 @bp.route("/api/check-update", methods=["GET"])

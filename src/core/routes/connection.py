@@ -12,6 +12,7 @@ from core.demo import DemoResource
 from core.helpers import (
     _find_instrument, _run_steps, _op, _log, _rlock,
     _start_polling, _write_ops_for_family, _family_for, LockedResource,
+    _windows_driverless_hint,
 )
 
 bp = Blueprint("connection", __name__)
@@ -154,8 +155,12 @@ def api_connect():
                     except Exception as exc2:
                         exc = exc2
                 if not recovered:
-                    raw_results[rstr] = (None, None, str(exc))
-                    _log(f"✗  {instr['model']}:  {exc}")
+                    msg = str(exc)
+                    hint = _windows_driverless_hint(rstr)
+                    if hint:
+                        msg = f"{msg} — {hint}"
+                    raw_results[rstr] = (None, None, msg)
+                    _log(f"✗  {instr['model']}:  {msg}")
 
         families = {}
         for instr in wb.get("_unique", []):
