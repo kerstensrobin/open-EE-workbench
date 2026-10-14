@@ -20,11 +20,13 @@ Built on PyVISA and PyVISA-py with SCPI dialect coverage across **149 instrument
 | **Windows** | Double-click **`install-windows.bat`** and click *Install* in the window that opens. No Python yet? It offers to install it for you. |
 | **Mac / Linux** | In a terminal, in this folder: **`bash install-linux-mac.sh`** |
 
+If Windows blocks `install-windows.bat` (a SmartScreen or Smart App Control warning), right-click it and choose **Run as administrator**.
+
 **2. Start** — the installer creates the start file for your system in this folder:
 
 | | |
 |---|---|
-| **Windows** | Double-click **`open-eew.bat`** (or click *Start open-EE-workbench* when the installer finishes) |
+| **Windows** | Double-click **`open-eew.bat`** |
 | **Mac / Linux** | **`./open-eew`** |
 
 To scan the bench and save a workbench from the command line instead: `python src/core/nachoVisa.py`
