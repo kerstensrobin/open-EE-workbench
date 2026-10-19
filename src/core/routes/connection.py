@@ -12,6 +12,7 @@ from core.demo import DemoResource
 from core.helpers import (
     _find_instrument, _run_steps, _op, _log, _rlock,
     _start_polling, _write_ops_for_family, _family_for, LockedResource,
+    _windows_driverless_hint,
 )
 
 bp = Blueprint("connection", __name__)
@@ -27,6 +28,45 @@ def _safe_query(res, fam, op, **kwargs):
         return result.strip() if isinstance(result, str) else None
     except Exception:
         return None
+
+
+def _find_resource_by_serial(rm, serial: str, cache: dict):
+    """Recover a USB instrument's current VISA resource string by serial
+    number when the one saved in the workbench no longer opens.
+
+    VISA re-enumerates USB resource strings (bus/address, sometimes the
+    embedded serial-derived suffix) across reboots or a different port —
+    especially on Windows/NI-VISA — so a workbench saved in one session can
+    point at a resource that no longer exists in the next, even though the
+    same physical instrument is still plugged in and otherwise identical.
+    `cache` is shared across one connect cycle so the live USB enumeration
+    (which opens every USB resource once to read its IDN) only runs once no
+    matter how many instruments need recovering.
+    """
+    if not serial or rm is None:
+        return None
+    if not cache.get("_built"):
+        cache["_built"] = True
+        try:
+            from nachoVisa import discover_resources, query_identity, parse_idn
+            live, _errs = discover_resources(rm)
+        except Exception:
+            return None
+        for live_rstr in live:
+            if not live_rstr.upper().startswith("USB"):
+                continue
+            try:
+                inst = rm.open_resource(live_rstr)
+                try:
+                    idn = query_identity(inst, live_rstr)
+                finally:
+                    inst.close()
+            except Exception:
+                continue
+            _, _, live_serial, _ = parse_idn(idn)
+            if live_serial:
+                cache[live_serial] = live_rstr
+    return cache.get(serial)
 
 
 # ── /api/connect ──────────────────────────────────────────────────────────────
@@ -49,6 +89,7 @@ def api_connect():
         rm            = None
         raw_results: dict = {}
         demo_slot_ctr = {}   # instr_type -> count (for per-slot noise de-correlation)
+        serial_cache: dict = {}   # lazy serial → live-resource map, see _find_resource_by_serial
 
         for instr in wb.get("_unique", []):
             rstr = instr.get("resource", "")
@@ -100,8 +141,26 @@ def api_connect():
                         except Exception as exc2:
                             _log(f"  ⚠ remote_mode: {exc2}")
             except Exception as exc:
-                raw_results[rstr] = (None, None, str(exc))
-                _log(f"✗  {instr['model']}:  {exc}")
+                recovered  = False
+                live_rstr  = _find_resource_by_serial(rm, instr.get("serial"), serial_cache)
+                if live_rstr and live_rstr != rstr:
+                    try:
+                        res = LockedResource(rm.open_resource(live_rstr))
+                        res.timeout = 8000
+                        idn = res.query("*IDN?").strip()
+                        raw_results[rstr] = (res, idn, None)
+                        _log(f"✓  {instr['model']}  →  {idn}  "
+                             f"(resource moved: {rstr} → {live_rstr})")
+                        recovered = True
+                    except Exception as exc2:
+                        exc = exc2
+                if not recovered:
+                    msg = str(exc)
+                    hint = _windows_driverless_hint(rstr)
+                    if hint:
+                        msg = f"{msg} — {hint}"
+                    raw_results[rstr] = (None, None, msg)
+                    _log(f"✗  {instr['model']}:  {msg}")
 
         families = {}
         for instr in wb.get("_unique", []):

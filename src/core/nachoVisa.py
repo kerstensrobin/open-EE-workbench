@@ -2,6 +2,7 @@
 # nacho.works — VISA instrument discovery & diagnostics
 
 import argparse
+import getpass
 import importlib.util
 import ipaddress
 import itertools
@@ -1019,8 +1020,8 @@ def fix_udev():
         print(f"Detected USB access group on this system: {group!r} (you are a member).")
     elif group:
         print(f"Detected USB access group on this system: {group!r} (you are NOT a member).")
-        print(f"After applying the rule, also run:  sudo usermod -aG {group} $USER")
-        print("Then log out and back in for the group change to take effect.")
+        print(f"This will also add you to that group with:  sudo usermod -aG {group} $USER")
+        print("You'll still need to log out and back in for the group change to take effect.")
     else:
         print("No known USB access group found; using MODE=\"0666\" (world-writable).")
     print()
@@ -1061,7 +1062,17 @@ def fix_udev():
             print(r.stderr.decode().strip())
             return
 
-    print("udev rules applied. Replug the device if it is still not accessible.")
+    if group and not member:
+        user = getpass.getuser()
+        r = subprocess.run(["sudo", "usermod", "-aG", group, user], capture_output=True)
+        if r.returncode != 0:
+            print(f"Failed to add {user!r} to group {group!r}: {r.stderr.decode().strip()}")
+            print(f"Run manually:  sudo usermod -aG {group} {user}")
+            return
+        print(f"Added {user!r} to group {group!r}.")
+        print("Log out and back in (or reboot), then replug the device.")
+    else:
+        print("udev rules applied. Replug the device if it is still not accessible.")
 
 
 def print_discovery_notes(notes: Sequence[str]):

@@ -16,7 +16,7 @@ from core.backbone import (
 )
 from core.helpers import (
     _find_instrument, _run_steps, _op, _log, _rlock,
-    _family_for, _write_ops_for_family,
+    _family_for, _write_ops_for_family, _windows_driverless_hint,
 )
 
 bp = Blueprint("workbench", __name__)
@@ -264,8 +264,12 @@ def api_scan():
                 instruments.append(entry)
                 _emit(f"✓  {model}  ({connection_type(rstr)})", instrument=entry)
             except Exception as exc:
-                errors.append(f"{rstr}: {exc}")
-                _emit(f"⚠  {rstr}: {exc}")
+                msg  = str(exc)
+                hint = _windows_driverless_hint(rstr)
+                if hint:
+                    msg = f"{msg} — {hint}"
+                errors.append(f"{rstr}: {msg}")
+                _emit(f"⚠  {rstr}: {msg}")
             finally:
                 if inst is not None:
                     try: inst.close()

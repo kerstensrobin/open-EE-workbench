@@ -2,11 +2,46 @@
 core/helpers.py — SCPI helper functions, instrument lookup, polling.
 """
 import re
+import sys
 import threading
 import time
 
 import core.shared as _sh
 from core.backbone import get_command, _family_index, _resolve_family, HELPERS_OK
+
+
+def _windows_driverless_hint(rstr: str) -> str:
+    """Return a hint string if `rstr` names a USB device Windows has no
+    driver bound for, else "".
+
+    Windows has no built-in USBTMC driver (see core/winusb.py): without a
+    vendor VISA, a USBTMC device just never becomes a valid VISA resource at
+    all, no matter the resource string — every open attempt (scan, connect,
+    a serial-match retry after connect) fails with VI_ERROR_RSRC_NFOUND the
+    same way, because there was never a valid resource to find. Matching
+    Windows' own device list (PNPDeviceID, hex VID/PID) against the decimal
+    VID/PID VISA already put in the resource string tells this apart from a
+    merely-stale resource string.
+    """
+    if sys.platform != "win32" or not rstr.upper().startswith("USB"):
+        return ""
+    parts = rstr.split("::")
+    if len(parts) < 3:
+        return ""
+    try:
+        vid, pid = int(parts[1]), int(parts[2])
+    except ValueError:
+        return ""
+    needle = f"VID_{vid:04X}&PID_{pid:04X}"
+    try:
+        from core import winusb
+        devices = winusb.driverless_usbtmc()
+    except Exception:
+        return ""
+    if any(needle in d.upper() for d in devices):
+        return ("no USB driver bound for this device — run "
+                "`python src/core/nachoVisa.py --install-usb-driver`, then replug it")
+    return ""
 
 
 # ── Value-key extraction ──────────────────────────────────────────────────────
