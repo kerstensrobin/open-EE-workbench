@@ -15,4 +15,8 @@ __pycache__/
 /results/*
 !/results/.gitkeep
 /src/custom_tests/
-/src/workbenches/bench_*.json
+
+# Workbench profiles are per-machine/per-bench state, not source — never commit
+# these except the demo workbench, which ships with the app.
+/src/workbenches/*.json
+!/src/workbenches/demo.json
