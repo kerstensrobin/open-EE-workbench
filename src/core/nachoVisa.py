@@ -881,11 +881,18 @@ def detect_usb_group() -> tuple[str | None, bool]:
     return None, False
 
 
-def build_udev_rule(vendor_id: str, product_id: str, group: str | None, world_writable: bool = False) -> str:
+def build_udev_rule(group: str | None, world_writable: bool = False) -> str:
+    """One rule, matched on the USBTMC interface class/subclass (0xFE/0x03) rather than a
+    specific vendor/product ID — so it covers whatever instrument is plugged in today AND
+    any other USBTMC instrument plugged in later, instead of needing --fix-udev re-run per
+    device model. TAG+="uaccess" covers the common case (a systemd-logind desktop session
+    grants the device to the active user automatically); GROUP/MODE is the fallback for
+    setups without a logind session (e.g. a bare WM started via startx).
+    """
     mode = "0666" if world_writable else "0664"
     rule = (
-        f'SUBSYSTEM=="usb", ATTRS{{idVendor}}=="{vendor_id}", '
-        f'ATTRS{{idProduct}}=="{product_id}", MODE="{mode}"'
+        'SUBSYSTEMS=="usb", ATTRS{bInterfaceClass}=="fe", '
+        f'ATTRS{{bInterfaceSubClass}}=="03", MODE="{mode}"'
     )
     if group:
         rule += f', GROUP="{group}"'
@@ -911,8 +918,10 @@ def suggest_udev_fix(devices: List[dict]):
     print("  Run with --fix-udev to apply the fix automatically, or manually create")
     print(f"  {UDEV_RULES_PATH} with:")
     print()
-    for dev in blocked:
-        print(f"    {build_udev_rule(dev['vendor_id'][2:], dev['product_id'][2:], group, world_writable)}")
+    print(f"    {build_udev_rule(group, world_writable)}")
+    print()
+    print("  (Matches any USBTMC instrument by interface class, not this specific")
+    print("  vendor/product ID, so it also covers instruments plugged in later.)")
     print()
     if group and not member:
         print(f"  Then add yourself to the '{group}' group:")
@@ -1026,12 +1035,13 @@ def fix_udev():
         print("No known USB access group found; using MODE=\"0666\" (world-writable).")
     print()
 
-    lines = [build_udev_rule(d["vendor_id"][2:], d["product_id"][2:], group, world_writable) for d in blocked]
-    content = "\n".join(lines) + "\n"
+    rule = build_udev_rule(group, world_writable)
+    content = rule + "\n"
 
     print(f"Will write {UDEV_RULES_PATH} with:")
-    for line in lines:
-        print(f"  {line}")
+    print(f"  {rule}")
+    print("  (one generic USBTMC rule — covers this instrument and any other")
+    print("  USBTMC instrument plugged in later, not just what's connected now)")
     print()
 
     try:
