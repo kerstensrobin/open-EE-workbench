@@ -184,7 +184,7 @@
     }
     #report-issue-bar {
       margin-top:16px; padding:16px 20px; border-top:1px solid var(--border); display:flex;
-      align-items:center; justify-content:center; flex-shrink:0;
+      align-items:center; justify-content:center; gap:10px; flex-shrink:0;
     }
     #report-issue-btn {
       display:inline-flex; align-items:center; gap:7px; background:transparent;
@@ -192,6 +192,7 @@
       padding:7px 16px; font:inherit; font-size:12px; cursor:pointer; transition:all .15s;
     }
     #report-issue-btn:hover { background:var(--surface3); border-color:var(--text-dim); }
+    #app-version-label { font-size:11px; color:var(--text-faint); }
 
     /* ── Cards ───────────────────────────────────────────────────── */
     .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; transition:border-color .2s; }
@@ -1353,6 +1354,7 @@
           </svg>
           Report issue / Instrument requests
         </button>
+        <span id="app-version-label"></span>
       </div>
     </div>
 
@@ -10797,8 +10799,21 @@ document.getElementById("test-meta-modal").addEventListener("click", e => {
   if (e.target === document.getElementById("test-meta-modal")) closeTestMetaModal();
 });
 
+async function loadAppVersion() {
+  const el = document.getElementById("app-version-label");
+  if (!el) return;
+  try {
+    const r = await fetch("/api/check-update");
+    const d = await r.json();
+    el.textContent = (d.current && d.current !== "unknown") ? `v${d.current.replace(/^v/, "")}` : "";
+  } catch (e) {
+    el.textContent = "";
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────
 (async () => { await loadWorkbenches(); refreshAutoTests(); })();
+loadAppVersion();
 _pyNewTab({ name: "script", content: "" });
 pyExplorerLoad("");
 </script>

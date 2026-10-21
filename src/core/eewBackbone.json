@@ -1074,6 +1074,10 @@
           "write": "SOUR{ch}:VOLT:OFFS {offset}",
           "query": "SOUR{ch}:VOLT:OFFS?"
         },
+        "set_duty_cycle": {
+          "write": "SOUR{ch}:FUNC:SQU:DCYC {value}",
+          "query": "SOUR{ch}:FUNC:SQU:DCYC?"
+        },
         "output_on": "OUTP{ch} ON",
         "output_off": "OUTP{ch} OFF"
       }
