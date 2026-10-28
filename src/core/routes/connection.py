@@ -124,6 +124,10 @@ def api_connect():
                     res.parity            = _sh.pyvisa.constants.Parity.none
                     res.read_termination  = "\n"
                     res.write_termination = "\n"
+                try:
+                    res.clear()   # flush stale I/O buffers left from a prior session
+                except Exception:
+                    pass
                 idn = res.query("*IDN?").strip()
                 raw_results[rstr] = (res, idn, None)
                 _log(f"✓  {instr['model']}  →  {idn}")
@@ -147,6 +151,10 @@ def api_connect():
                     try:
                         res = LockedResource(rm.open_resource(live_rstr))
                         res.timeout = 8000
+                        try:
+                            res.clear()   # flush stale I/O buffers left from a prior session
+                        except Exception:
+                            pass
                         idn = res.query("*IDN?").strip()
                         raw_results[rstr] = (res, idn, None)
                         _log(f"✓  {instr['model']}  →  {idn}  "
