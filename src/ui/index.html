@@ -3867,6 +3867,14 @@ function applyConnectionStatus(instruments) {
     const sub = card.querySelector(".card-subtitle");
     if (instr.ok) { card.classList.add("connected"); if (sub) sub.textContent=instr.idn||instr.model; }
     else          { card.classList.add("error");     if (sub) sub.textContent=instr.error||"Connection failed"; }
+
+    // PSU channel count is model-guessed at card build time (workbench load,
+    // before connecting) — once connected the backend has actually probed it
+    // (see connection.py's psu_ch_cache), so reshape the card to match.
+    if (instr.type === "psu" && instr.ok && typeof instr.channels === "number") {
+      const curCount = card.querySelectorAll(".psu-channel").length;
+      if (instr.channels !== curCount) _setPSUChannelCount(instr.channels);
+    }
   }
 }
 
@@ -4292,8 +4300,7 @@ socket.on("scpi_result", ({role, cmd, result, error}) => {
 });
 
 // ── PSU card ───────────────────────────────────────────────────────
-function buildPSUCard(instr) {
-  const nCh=inferPSUChannels(instr.model);
+function _psuChannelHTML(nCh) {
   let channelHTML="";
   for (let ch=1;ch<=nCh;ch++) {
     channelHTML+=`
@@ -4327,6 +4334,16 @@ function buildPSUCard(instr) {
         </div>
       </div>`;
   }
+  return channelHTML;
+}
+function _setPSUChannelCount(n) {
+  const grid = document.querySelector('.card[data-type="psu"] .psu-channels');
+  if (!grid) return;
+  grid.innerHTML = _psuChannelHTML(n);
+  _psuRefreshAllBtn();
+}
+function buildPSUCard(instr) {
+  const nCh=inferPSUChannels(instr.model);
   const div=document.createElement("div");
   div.className="card"; div.dataset.type="psu"; div.dataset.model=instr.model||"";
   div.innerHTML=`
@@ -4338,7 +4355,7 @@ function buildPSUCard(instr) {
       <div class="card-status-dot"></div>
     </div>
     <div class="card-body">
-      <div class="psu-channels">${channelHTML}</div>
+      <div class="psu-channels">${_psuChannelHTML(nCh)}</div>
       <div class="psu-footer mt8" style="display:flex;gap:6px;">
         <button class="output-toggle" id="psu-out-all"
                 style="flex:1;justify-content:center;border-radius:var(--radius);padding:6px 12px;font-size:11px;"

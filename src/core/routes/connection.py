@@ -216,14 +216,23 @@ def api_connect():
             if not psu_res or not psu_fam:
                 continue
             num_ch = 0
-            for ch in range(1, 5):
-                try:
-                    r = _safe_query(psu_res, psu_fam, "measure_voltage", ch=ch)
-                    if r is None:
+            # Nonexistent channels don't respond at all rather than erroring
+            # quickly, so probe with a short timeout — same fix as the scope's
+            # channel-count probe (see api_scope_sync) — instead of letting
+            # each missing channel eat the full 8s connect-time resource timeout.
+            orig_timeout = psu_res.timeout
+            try:
+                psu_res.timeout = 1500
+                for ch in range(1, 5):
+                    try:
+                        r = _safe_query(psu_res, psu_fam, "measure_voltage", ch=ch)
+                        if r is None:
+                            break
+                        num_ch = ch
+                    except Exception:
                         break
-                    num_ch = ch
-                except Exception:
-                    break
+            finally:
+                psu_res.timeout = orig_timeout
             psu_ch_cache[rstr] = max(num_ch, 1)
         with _sh._lock:
             _sh._state["psu_channels"] = psu_ch_cache
@@ -232,12 +241,15 @@ def api_connect():
         for instr in wb.get("_unique", []):
             rstr = instr.get("resource", "")
             res, idn, err = raw_results.get(rstr, (None, None, "not attempted"))
-            instruments_out.append({
+            out = {
                 **instr,
                 "ok":    res is not None,
                 "idn":   idn,
                 "error": err,
-            })
+            }
+            if instr.get("type") == "psu" and rstr in psu_ch_cache:
+                out["channels"] = psu_ch_cache[rstr]
+            instruments_out.append(out)
 
         _sh.sio.emit("connection_result", {
             "connected":   _sh._state["connected"],
