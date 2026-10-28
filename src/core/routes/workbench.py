@@ -18,6 +18,7 @@ from core.helpers import (
     _find_instrument, _run_steps, _op, _log, _rlock,
     _family_for, _write_ops_for_family, _windows_driverless_hint,
 )
+from core.routes.connection import _disconnect_all
 
 bp = Blueprint("workbench", __name__)
 
@@ -155,9 +156,22 @@ def api_load_workbench(name: str):
             unique.append(instr)
     wb["_unique"] = unique
 
+    new_rstrs = {instr.get("resource", "") for instr in unique}
     with _sh._lock:
+        old_wb        = _sh._state.get("workbench")
+        was_connected = bool(_sh._state.get("connected"))
+        old_rstrs     = {i.get("resource", "") for i in old_wb.get("_unique", [])} if old_wb else set()
         _sh._state["workbench"] = wb
         _sh._state["wb_name"]   = name
+
+    # A still-connected session's resources/families cache is keyed by the
+    # *previous* workbench's resource strings (see connection.py:_do). Loading
+    # a workbench with a different instrument set leaves that cache stale —
+    # every instrument route would silently fail its _find_instrument() lookup
+    # instead of erroring, so disconnect proactively and make the user reconnect.
+    if was_connected and old_rstrs != new_rstrs:
+        _disconnect_all()
+        _log("⚠ Workbench changed while connected — disconnected stale instruments. Reconnect to use the new workbench.")
 
     return jsonify(wb)
 

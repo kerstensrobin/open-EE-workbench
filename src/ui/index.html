@@ -2754,6 +2754,11 @@
     </div>
     <div class="modal-body" id="scan-modal-body">
       <div id="scan-idle">
+        <p id="scan-connected-warning" class="hidden" style="color:var(--text);font-size:12px;margin-bottom:10px;padding:8px 10px;background:var(--amber-dim);border:1px solid var(--amber);border-radius:var(--radius);line-height:1.6;">
+          ⚠ You're currently connected to <strong id="scan-connected-wb-name">a workbench</strong>.
+          Saving a scan result as the active workbench will disconnect the current session —
+          you'll need to hit Connect again afterward.
+        </p>
         <p style="color:var(--text-dim);font-size:13px;line-height:1.6;">
           Scans for VISA instruments over <strong style="color:var(--text)">USB</strong>
           and <strong style="color:var(--text)">LAN</strong> using PyVISA.
@@ -6612,6 +6617,12 @@ let _scanResults = [];
 
 function openScanModal() {
   _scanResults = [];
+  const warn = document.getElementById("scan-connected-warning");
+  warn.classList.toggle("hidden", !state.connected);
+  if (state.connected) {
+    document.getElementById("scan-connected-wb-name").textContent =
+      state.workbench?.name || $wbSelect.value || "a workbench";
+  }
   document.getElementById("scan-idle").classList.remove("hidden");
   document.getElementById("scan-running").classList.add("hidden");
   document.getElementById("scan-done").classList.add("hidden");
