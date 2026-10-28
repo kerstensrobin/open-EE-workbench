@@ -125,7 +125,11 @@ def api_connect():
                     res.read_termination  = "\n"
                     res.write_termination = "\n"
                 try:
-                    res.clear()   # flush stale I/O buffers left from a prior session
+                    res.clear()   # flush stale I/O buffers (no-op on USBTMC backends)
+                except Exception:
+                    pass
+                try:
+                    res.write("*CLS")   # clear the instrument's own error/event queue
                 except Exception:
                     pass
                 idn = res.query("*IDN?").strip()
@@ -152,7 +156,11 @@ def api_connect():
                         res = LockedResource(rm.open_resource(live_rstr))
                         res.timeout = 8000
                         try:
-                            res.clear()   # flush stale I/O buffers left from a prior session
+                            res.clear()   # flush stale I/O buffers (no-op on USBTMC backends)
+                        except Exception:
+                            pass
+                        try:
+                            res.write("*CLS")   # clear the instrument's own error/event queue
                         except Exception:
                             pass
                         idn = res.query("*IDN?").strip()
