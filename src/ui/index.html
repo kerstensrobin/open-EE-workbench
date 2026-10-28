@@ -222,6 +222,7 @@
     .card-title-wrap { flex:1; min-width:0; }
     .card-title    { font-weight:600; font-size:13px; color:var(--text); }
     .card-subtitle { font-size:11px; color:var(--text-dim); margin-top:1px; font-family:var(--mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .card-resource { font-size:10px; color:var(--text-faint); margin-top:1px; font-family:var(--mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .card-status-dot { width:7px; height:7px; border-radius:50%; background:var(--text-faint); flex-shrink:0; transition:all .3s; }
     .card.pending   .card-status-dot { background:var(--amber); animation:pulse 2s ease-in-out infinite; }
     .card.connected .card-status-dot { background:var(--green); animation:none; }
@@ -4015,14 +4016,21 @@ function _scopeChSelOpts(nCh) {
   return Array.from({length:nCh},(_,i)=>`<option value="${i+1}">CH${i+1}</option>`).join("");
 }
 
-function scopeSetChannelCount(sel) {
-  const n = parseInt(sel.value);
+function _setScopeChannelCount(n) {
   const grid = document.getElementById("scope-ch-grid");
-  const hasLabel = grid ? grid.dataset.hasLabel === "1" : false;
-  if (grid) grid.innerHTML = _scopeChRowsHTML(n, hasLabel);
+  if (!grid) return;
+  const hasLabel = grid.dataset.hasLabel === "1";
+  grid.innerHTML = _scopeChRowsHTML(n, hasLabel);
   // update channel selector in the add-measurement row
   const addCh = document.getElementById("scope-add-ch-sel");
   if (addCh) addCh.innerHTML = _scopeChSelOpts(n);
+  // keep the "Number of channels" dropdown in sync (no-op if n isn't one of its options)
+  const countSel = document.getElementById("scope-ch-count-sel");
+  if (countSel) countSel.value = String(n);
+}
+
+function scopeSetChannelCount(sel) {
+  _setScopeChannelCount(parseInt(sel.value));
 }
 
 let _scopeMeasCounter = 0;
@@ -4123,7 +4131,7 @@ function buildScopeCard(instr) {
     <div class="card-body scope-controls">
       <div class="section-label-row">
         <span class="section-label">Channels</span>
-        <select class="scope-sel" style="flex:0 0 auto;width:auto;" title="Number of channels"
+        <select class="scope-sel" id="scope-ch-count-sel" style="flex:0 0 auto;width:auto;" title="Number of channels"
                 onchange="scopeSetChannelCount(this)">${chCountOpts}</select>
         <button class="btn btn-ghost" style="padding:3px 8px;font-size:10px;flex-shrink:0;"
                 onclick="doScopeSync()" title="Read current settings from scope">↻ Sync</button>
@@ -4235,6 +4243,15 @@ function applyScopeState(s) {
   // Timebase
   const tbSel = document.getElementById("scope-tb-sel");
   if (tbSel && s.timebase_scale != null) _setSelectNearest(tbSel, s.timebase_scale, SCOPE_TDIV_VALS);
+
+  // The backend probes channels until one doesn't respond, so s.channels.length
+  // is the scope's real channel count — reshape the card to match (e.g. a
+  // 2-channel EDUX1052A shouldn't keep showing CH3/CH4 rows from the generic
+  // family default of 4).
+  const realCount = (s.channels || []).length;
+  const grid = document.getElementById("scope-ch-grid");
+  const curCount = grid ? grid.querySelectorAll(".scope-ch-row").length : 0;
+  if (realCount > 0 && realCount !== curCount) _setScopeChannelCount(realCount);
 
   // Per-channel
   (s.channels || []).forEach(({ch, display, scale, coupling, probe}) => {
@@ -4819,6 +4836,7 @@ function buildGenericCard(instr) {
       <div class="card-title-wrap">
         <div class="card-title">${escHtml(instr.type||"Unknown")}</div>
         <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
+        <div class="card-resource">${escHtml(instr.resource||"")}</div>
       </div>
       ${hasFamily ? `<button class="btn btn-ghost" title="SCPI command reference" data-family="${escHtml(instr.family_id||'')}" data-model="${escHtml(instr.model||'')}" onclick="openScpiRefModal(this.dataset.family,this.dataset.model)" style="font-size:10px;padding:2px 6px;flex-shrink:0;">SCPI REF</button>` : ''}
       <div class="card-status-dot"></div>
@@ -4861,11 +4879,13 @@ function _titleWrap(instr, typeLabel) {
     return `<div class="card-title-wrap">
       <div class="card-title">${escHtml(instr.nickname)}</div>
       <div class="card-subtitle">${escHtml(typeLabel)} · ${escHtml(instr.model||"—")}</div>
+      <div class="card-resource">${escHtml(instr.resource||"")}</div>
     </div>`;
   }
   return `<div class="card-title-wrap">
     <div class="card-title">${escHtml(typeLabel)}</div>
     <div class="card-subtitle">${escHtml(instr.model||"—")}</div>
+    <div class="card-resource">${escHtml(instr.resource||"")}</div>
   </div>`;
 }
 function _chdr(instr, iCls, iChar, title) {

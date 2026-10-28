@@ -297,15 +297,29 @@ def api_scope_sync():
             except Exception:
                 pass
 
-            # Per-channel: display, scale, coupling, probe  (query up to 4)
+            # Per-channel: display, scale, coupling, probe (query up to 4).
+            # Channel count isn't known up front — families group many models
+            # (e.g. EDUX1052A has 2 channels, DSOX1204A has 4) — so probe each
+            # channel's existence with a short timeout first and stop at the
+            # first one that doesn't respond, instead of letting a query to a
+            # nonexistent channel eat the full resource timeout four times over.
             for ch in range(1, 5):
                 ch_state: dict = {"ch": ch}
                 try:
-                    for act, scpi in get_command(fam, "channel_display", ch=ch):
-                        if act == "query":
-                            ch_state["display"] = res.query(scpi).strip() in ("1", "ON")
-                except Exception:
-                    pass
+                    display_steps = get_command(fam, "channel_display", ch=ch)
+                except KeyError:
+                    display_steps = None
+                if display_steps is not None:
+                    orig_timeout = res.timeout
+                    try:
+                        res.timeout = 1500
+                        for act, scpi in display_steps:
+                            if act == "query":
+                                ch_state["display"] = res.query(scpi).strip() in ("1", "ON")
+                    except Exception:
+                        break   # this channel didn't respond — higher ones won't either
+                    finally:
+                        res.timeout = orig_timeout
                 for op, kw in [("channel_scale",    {"value": 1}),
                                ("channel_coupling", {"coupling": "DC"}),
                                ("channel_probe",    {"attenuation": 1})]:
